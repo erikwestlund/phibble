@@ -1,0 +1,105 @@
+---
+title: "The Table contract"
+---
+
+`Phibble\Contracts\Table` is the interface that every table backend
+implements. phplyr's verbs call its methods, so a pipeline runs unchanged on
+any backend. phibble ships two implementations: `Frame`, which holds data in
+PHP arrays, and `SqlTable`, which compiles verbs to SQL. phpolars implements it
+over Polars.
+
+This page is for authors of backends. It lists the rules that every
+implementation follows and the semantics of each method.
+
+## Rules
+
+- **Immutability.** Every method returns a new table and leaves the original
+  unchanged.
+- **Return types.** Verbs are declared to return `Table`. A backend may return
+  a different implementation. `SqlTable` returns a `Frame` when it falls back to
+  memory for a closure. `Frame` declares `static`.
+- **NA.** PHP `null` is NA in every column type.
+- **Grouping.** `groupBy()` records grouping columns as metadata. `filter()`,
+  `mutate()`, `mutateGroups()`, `filterGroups()`, `summarise()`, and
+  `eachGroup()` work per group. The other verbs keep the grouping.
+- **Group order.** Groups are visited in sorted key order, as in dplyr:
+  ascending, factors by level order, NA last, and strings in byte order.
+  `filter()`, `mutate()`, and `arrange()` keep the input row order.
+- **Rowwise tables.** `rowwise()` makes every row its own group, in row order.
+  `groups()` returns its id columns.
+- **Row closures.** A row closure receives `(Phibble\Row $row, Table $group)`.
+  `$group` is the row's group, or the whole table when ungrouped.
+- **Expressions.** Wherever a verb accepts a closure, it also accepts a
+  `Phibble\Expr\Expr`, evaluated per group with the semantics in the
+  [expression reference](expr.qmd).
+- **Errors.** An unknown column name throws
+  `Phibble\Exception\ColumnNotFound`.
+- **Countable and iterable.** `count()` equals `nrow()`, and iterating yields
+  one `Phibble\Row` per row.
+
+## Methods
+
+### Shape and data
+
+| Method | Returns |
+| --- | --- |
+| `columns()` | Column names in order. |
+| `types()` | Column name to `Phibble\Type`. |
+| `nrow()`, `ncol()` | Row and column counts. |
+| `column($name)` | One column as a list. Factors return their labels. |
+| `toRows()` | A list of associative arrays. |
+| `toColumns()` | An array of lists by column name. |
+| `collect()` | The rows as an in-memory `Frame`. A `Frame` returns itself. |
+
+### Verbs
+
+| Method | Semantics |
+| --- | --- |
+| `select($names)` | Keeps the named columns in the given order. Grouping columns are always kept. |
+| `filter($predicate)` | Keeps rows where the closure or expression is true. NA counts as false. |
+| `filterGroups($fn)` | Runs `$fn` once per group with the group's table. It returns one value per row, and truthy values keep the row. |
+| `mutate($columns)` | Adds or replaces columns. A value is a row closure, an expression, a list with one value per row, or a scalar. Later entries see earlier ones. Replaced columns keep their position. |
+| `mutateGroups($columns)` | Like `mutate()`, but a closure runs once per group and returns a list for the group's rows or a scalar. This is the primitive for window functions. |
+| `rename($map)` | Renames columns, with `new => old` entries as in dplyr. |
+| `arrange($keys)` | Sorts stably. Keys are names, <code>[name, &#39;asc&#39;&#124;&#39;desc&#39;]</code> pairs, or expressions, and NA sorts last in both directions. It ignores grouping. |
+| `groupBy($names)`, `ungroup()`, `groups()` | Set, clear, or read the grouping columns. |
+| `rowwise($idColumns)`, `isRowwise()` | Set or read rowwise mode. `groupBy()` and `ungroup()` clear it. |
+| `eachGroup()` | Yields `['key' => [...], 'table' => Table]` for each group, with ungrouped tables. An ungrouped table yields one group with an empty key. |
+| `summarise($aggregates)` | Returns one row per group: the keys, then one column per entry. Each entry is a closure given the group's table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. `Frame` and `SqlTable` take dplyr's `.groups` as an optional second argument. |
+| `distinct($names)` | Keeps the first row of each combination of the named columns (and the grouping columns), and only those columns. An empty list means all columns. |
+| `take($indices)` | Rows by 0-based position, in the given order. A `null` index gives an all-NA row. Keeps types, factor levels, and grouping. |
+| `slice($offset, $length)`, `head($n)` | Rows by position. These ignore grouping. |
+| `join($other, $by, $type, ...)` | Joins with dplyr 1.1 semantics, described below. |
+
+### Joins
+
+`join()` takes the other table, a list of `[leftColumn, rightColumn]` key
+pairs, and the join type: `inner`, `left`, `right`, `full`, `semi`, `anti`, or
+`cross`. A bare column name means the same name on both sides, and a cross join
+takes no keys.
+
+- **Columns.** The result has x's columns, then y's columns other than its keys.
+  Clashing names get the suffixes, `.x` and `.y` by default. With `keep: true`,
+  y's keys are kept too.
+- **Keys.** Without `keep`, the key columns come from x. For rows that only y
+  has (right and full joins), they are filled from y's keys.
+- **Rows.** Rows follow x's order, and each x row's matches follow y's order.
+  Right and full joins then add y's unmatched rows in y's order. Semi and anti
+  joins keep x's rows and columns and never duplicate rows.
+- **Matching.** NA keys match each other unless `naMatches: false`. `1` matches
+  `1.0`, and a factor matches text by its label.
+- **Options.** `multiple` picks `all`, `any`, `first`, or `last` match per x
+  row. `relationship` (`one-to-one`, `one-to-many`, `many-to-one`, or
+  `many-to-many`) throws when the data violates it. Without it, an unexpected
+  many-to-many join raises a warning, as dplyr does. `unmatched: 'error'`
+  throws when the join would drop rows.
+- **Grouping.** The result keeps x's grouping.
+
+## Testing a backend
+
+The simplest test of a backend is to run the same operations on the backend
+and on `Frame` and compare the results. `tests/SqlTest.php` does this for
+`SqlTable`. It loads the same data into a database, runs each operation both
+ways, and compares the collected rows. It also runs every case in
+`tests/fixtures/expr/expected.json`, the dplyr results that `tests/r/expr.R`
+produces, so each backend is checked against R as well as against `Frame`.

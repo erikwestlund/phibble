@@ -1,65 +1,70 @@
 # phibble
 
-A typed, immutable, in-memory data frame for PHP 8.5. It is the shared table type for phplyr, phpolars, php-stats and cmdstanphp.
+phibble is a port of R's tibble to PHP 8.5, with readr-style input and output.
+A `Frame` holds typed columns, treats `null` as NA, and returns a new frame
+from every operation. It is the shared table type for
+[phplyr](https://github.com/erikwestlund/phplyr),
+[php-stats](https://github.com/erikwestlund/php-stats), phpolars, and
+cmdstanphp.
+
+Documentation: <https://erikwestlund.github.io/phibble/>
+
+## Install
+
+```bash
+composer require erikwestlund/phibble
+```
+
+phibble needs PHP 8.5 and its PDO extension.
+
+## Example
 
 ```php
 use Phibble\Frame;
-use Phibble\Row;
+use function Phibble\Expr\{col, mean, n};
 
 $penguins = Frame::fromCsv('penguins.csv');
 
-$penguins
-    |> (fn ($f) => $f->filter(fn (Row $r) => $r->body_mass_g !== null))
-    |> (fn ($f) => $f->groupBy(['species']))
-    |> (fn ($f) => $f->summarise(['mass' => fn ($g) => stats_mean($g->column('body_mass_g'))]));
+echo $penguins
+    ->filter(col('body_mass')->isNa()->not())
+    ->groupBy(['species'])
+    ->summarise(['n' => n(), 'mass' => mean(col('body_mass'))]);
 ```
 
-## Model
-
-- **Types:** `float`, `int`, `bool`, `string`, `factor` and `date` (`DateTimeImmutable`). Types are inferred on load. Use `cast()`, `asFactor()` or a `$types` argument to set them yourself.
-- **NA:** PHP `null`.
-- **Immutable:** every operation returns a new frame.
-- **Rows:** `Phibble\Row` is read-only and supports both `$r->price` and `$r['price']`.
-- **Grouping:** grouping is metadata. `groupBy()` records the key columns, and `filter`, `mutate` and `summarise` act per group. Row closures receive `(Row $row, Table $group)`, so a grouped mutate can use group statistics:
-  `mutate(['dev' => fn ($r, $g) => $r->x - stats_mean($g->column('x'))])`.
-
-## The Table contract
-
-`Phibble\Contracts\Table` is the interface every backend implements: this in-memory `Frame`, phpolars, and a later lazy SQL table. phplyr codes against it.
-
-It provides:
-- `columns`, `types`, `nrow`, `ncol` and `column`
-- the verbs `select`, `filter`, `mutate`, `rename` (`new => old`), `arrange`, `groupBy`, `ungroup`, `groups`, `eachGroup`, `summarise`, `distinct`, `slice` and `head`
-- `toRows`, `toColumns` and `collect`
-- `Countable`, and iteration over `Row`s
-
-## Loading data
-
-```php
-Frame::fromRows([['a' => 1, 'b' => 'x'], ...]);
-Frame::fromColumns(['a' => [1, 2], 'b' => ['x', 'y']], types: ['b' => 'factor']);
-Frame::fromCsv('data.csv', types: ['zip' => 'string'], na: ['', 'NA']);
-Frame::fromPdo($pdo, 'select * from visits where clinic = ?', [3]);
-Frame::fromQuery(Visit::where('clinic', 3));          // Laravel query or Eloquent builder
-Frame::fromQuery($dbal->createQueryBuilder()->...);   // Doctrine DBAL QueryBuilder
-Frame::concat([$a, $b]);                               // stack by column name
+```
+# A tibble: 3 × 3
+  species       n  mass
+  <chr>     <int> <dbl>
+1 Adelie      151 3701.
+2 Chinstrap    68 3733.
+3 Gentoo      123 5076.
 ```
 
-Query builders are duck-typed, so phibble has no dependency on Laravel or Doctrine. Each data source implements `Phibble\Source\Source`. `PdoSource` exposes its PDO connection, SQL and bindings, so a later lazy SQL backend can compile verbs into the query.
+## Features
 
-## Handing data to php-stats
-
-```php
-$fit = stats_ols($frame->toMatrix(['age', 'dose']), $frame->toVector('response'));
-```
-
-`toMatrix()` returns rows of floats with NA as `null`; bool columns become 0 and 1.
+- **tibble:** `tibble()`, `tribble()`, `as_tibble()`, `addRow()`,
+  `addColumn()`, `enframe()`, `deframe()`, name repair, strict column access,
+  and printing and `glimpse()` that match tibble's output.
+- **Types:** float, int, bool, string, factor (with ordered factors and the
+  forcats functions), date, datetime, and list-columns. Casts follow R's
+  `as.*()` rules.
+- **Input and output:** CSV with readr's options and type guessing, JSON,
+  PDO queries, Laravel and Doctrine query builders, and Laravel collections.
+- **Verbs:** `select`, `filter`, `mutate`, `arrange`, `groupBy`, `summarise`,
+  `distinct`, `join`, `nest`, and `unnest`, with dplyr 1.1 semantics.
+- **Expressions:** `Phibble\Expr` describes computations as inspectable,
+  serializable trees that follow dplyr's semantics.
+- **SQL tables:** `SqlTable` compiles verbs to SQL for SQLite, PostgreSQL, and
+  MySQL, like dbplyr.
+- **The Table contract:** `Phibble\Contracts\Table` lets other backends, such
+  as phpolars, run the same pipelines.
 
 ## Development
 
-```sh
+```bash
 composer install
-php85 vendor/bin/pest
+php vendor/bin/pest
 ```
 
-Column storage sits behind `Phibble\Column\Column`, so another backend can supply its own storage. For now only plain PHP arrays are implemented.
+See the [development guide](https://erikwestlund.github.io/phibble/development.html)
+for the R comparison scripts, database tests, and documentation build.

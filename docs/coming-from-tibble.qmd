@@ -1,0 +1,100 @@
+---
+title: "Coming from tibble"
+---
+
+phibble follows tibble, readr, and forcats closely. Function names become
+camelCase methods on `Frame`, R's named arguments become PHP named arguments,
+and `NULL`/`NA` become PHP `null`. The tables below map the R functions to
+their phibble equivalents.
+
+## tibble
+
+| R | phibble |
+| --- | --- |
+| `tibble(x = 1:3, y = x * 2)` | `tibble(x: [1, 2, 3], y: fn ($t) => ...)` |
+| `tribble(~x, ~y, 1, "a")` | `tribble(['x', 'y'], [1, 'a'])` or `tribble(['x', 'y'], 1, 'a')` |
+| `as_tibble(x)` | `as_tibble($x)` or `Frame::asTibble($x)` |
+| `add_row(df, x = 1, .before = 2)` | `$df->addRow(['x' => 1], before: 1)` |
+| `add_column(df, z = 0, .after = "x")` | `$df->addColumn(['z' => 0], after: 'x')` |
+| `enframe(x)`, `deframe(df)` | `enframe($x)`, `$df->deframe()` |
+| `glimpse(df)` | `echo $df->glimpse()` |
+| `print(df, n = 30)` | `echo $df->format(n: 30)` |
+| `df$x`, `df[["x"]]` | `$df->x`, `$df['x']` |
+| `nrow(df)`, `ncol(df)`, `names(df)` | `$df->nrow()`, `$df->ncol()`, `$df->columns()` |
+| `.name_repair = "unique"` | `nameRepair: 'unique'` (also `check_unique`, `universal`, `minimal`) |
+
+In a `tibble()` call, a closure receives the frame built so far and returns a
+list or a single value. Only single values are recycled, and incompatible
+lengths throw with tibble's message.
+
+## readr
+
+| R | phibble |
+| --- | --- |
+| `read_csv(file)` | `Frame::fromCsv($file)` |
+| `read_delim(file, delim = ";")` | `Frame::fromCsv($file, delimiter: ';')` |
+| `read_csv(I("a,b\n1,2"))` | `Frame::fromCsvString("a,b\n1,2")` |
+| `col_types = "icd"` | `types: 'icd'` |
+| `col_types = cols(x = col_factor())` | `types: ['x' => 'factor']` |
+| `col_select`, `col_names`, `skip`, `n_max` | `select:`, `colNames:`, `skip:`, `nMax:` |
+| `na`, `comment`, `trim_ws`, `guess_max` | `na:`, `comment:`, `trimWs:`, `guessMax:` |
+| `locale(decimal_mark = ",")` | `decimalMark: ','`, `groupingMark: '.'` |
+| `write_csv(df, file)` | `$df->writeCsv($file)` |
+| `format_csv(df)` | `$df->toCsv()` |
+
+## forcats
+
+Factor functions are methods that take the column name first.
+
+| R | phibble |
+| --- | --- |
+| `factor(x)`, `factor(x, levels = l)` | `$df->asFactor('x')`, `$df->asFactor('x', $l)` |
+| `ordered(x, levels = l)` | `$df->asOrdered('x', $l)` |
+| `levels(x)` | `$df->levels('x')` |
+| `fct_relevel(x, "b")` | `$df->fctRelevel('x', ['b'])` |
+| `fct_rev`, `fct_inorder`, `fct_infreq` | `fctRev`, `fctInorder`, `fctInfreq` |
+| `fct_reorder(x, y)` | `$df->fctReorder('x', 'y')` |
+| `fct_recode(x, new = "old")` | `$df->fctRecode('x', ['new' => 'old'])` |
+| `fct_collapse(x, ab = c("a", "b"))` | `$df->fctCollapse('x', ['ab' => ['a', 'b']])` |
+| `fct_drop(x)`, `droplevels(df)` | `$df->fctDrop('x')`, `$df->fctDrop()` |
+
+## dplyr and tidyr basics
+
+phibble's methods cover the verbs that other backends need to implement
+natively. [phplyr](https://github.com/erikwestlund/phplyr) provides the full
+dplyr and tidyr interface as pipe-able functions.
+
+| R | phibble |
+| --- | --- |
+| `filter`, `mutate`, `select`, `rename`, `arrange` | methods of the same names |
+| `rename(df, new = old)` | `$df->rename(['new' => 'old'])` |
+| `group_by`, `ungroup`, `rowwise` | `groupBy`, `ungroup`, `rowwise` |
+| `summarise(.groups = "drop")` | `$df->summarise([...], 'drop')` |
+| `left_join(x, y, by = "k")` | `$x->join($y, ['k'], 'left')` |
+| `left_join(x, y, by = c("a" = "b"))` | `$x->join($y, [['a', 'b']], 'left')` |
+| `bind_rows`, `bind_cols` | `Frame::concat([...])`, `Frame::bindCols([...])` |
+| `nest(df, data = c(x, y))`, `unnest(df, data)` | `$df->nest(['x', 'y'])`, `$df->unnest('data')` |
+| `drop_na(df, x)` | `$df->dropNa(['x'])` |
+
+## Differences
+
+phibble differs from R in these places:
+
+- **Whole numbers guess as int.** readr guesses `1,2,3` as double. phibble
+  guesses int, which suits PHP. Pass `types: 'd'` to read a double.
+- **Positions are 0-based.** `addRow(before:)`, `addColumn(before:)`,
+  `take()`, `slice()`, and `row()` count rows and columns from 0.
+- **String functions use fixed patterns.** `str_detect()`, `str_starts()`,
+  `str_ends()`, `str_replace()`, and `str_replace_all()` match literal text.
+  SQL backends have no portable regular expressions.
+- **There is no time-of-day type.** readr's `hms` columns and the `t` column
+  type stay strings.
+- **JSON keeps null values.** jsonlite drops NA fields from records.
+  `toJson()` writes them as `null`.
+- **Datetimes are UTC.** Text without an offset is read as UTC, and text with
+  an offset is converted to UTC, as readr does.
+- **Strings sort in byte order.** Sorting, grouping, and factor levels use the C
+  locale, as dplyr's `arrange()` does. Base R's `factor()` uses the system
+  locale, which can order mixed-case levels differently.
+- **Packed data frame columns are not supported.** An unnamed table in
+  `tibble()` is spliced into columns. A named one throws.

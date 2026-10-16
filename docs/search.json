@@ -1,0 +1,615 @@
+[
+  {
+    "objectID": "types.html",
+    "href": "types.html",
+    "title": "Types",
+    "section": "",
+    "text": "Every column has one type from the Phibble\\Type enum. The print header shows tibble’s abbreviation for each type.\n\n\n\n\n\n\n\n\nType\nValues\nPrinted as\n\n\n\n\nType::Float\nfloat\n&lt;dbl&gt;\n\n\nType::Int\nint\n&lt;int&gt;\n\n\nType::Bool\nbool\n&lt;lgl&gt;\n\n\nType::String\nstring\n&lt;chr&gt;\n\n\nType::Factor\nlevel labels, stored as codes\n&lt;fct&gt;, or &lt;ord&gt; when ordered\n\n\nType::Date\nDateTimeImmutable at midnight UTC\n&lt;date&gt;\n\n\nType::DateTime\nDateTimeImmutable\n&lt;dttm&gt;\n\n\nType::List\nany PHP value, including frames\n&lt;list&gt;\n\n\n\nnull is NA in every type. $frame-&gt;types() returns the types by column name and $frame-&gt;type('x') returns one.",
+    "crumbs": [
+      "Guides",
+      "Types"
+    ]
+  },
+  {
+    "objectID": "types.html#column-types",
+    "href": "types.html#column-types",
+    "title": "Types",
+    "section": "",
+    "text": "Every column has one type from the Phibble\\Type enum. The print header shows tibble’s abbreviation for each type.\n\n\n\n\n\n\n\n\nType\nValues\nPrinted as\n\n\n\n\nType::Float\nfloat\n&lt;dbl&gt;\n\n\nType::Int\nint\n&lt;int&gt;\n\n\nType::Bool\nbool\n&lt;lgl&gt;\n\n\nType::String\nstring\n&lt;chr&gt;\n\n\nType::Factor\nlevel labels, stored as codes\n&lt;fct&gt;, or &lt;ord&gt; when ordered\n\n\nType::Date\nDateTimeImmutable at midnight UTC\n&lt;date&gt;\n\n\nType::DateTime\nDateTimeImmutable\n&lt;dttm&gt;\n\n\nType::List\nany PHP value, including frames\n&lt;list&gt;\n\n\n\nnull is NA in every type. $frame-&gt;types() returns the types by column name and $frame-&gt;type('x') returns one.",
+    "crumbs": [
+      "Guides",
+      "Types"
+    ]
+  },
+  {
+    "objectID": "types.html#inference",
+    "href": "types.html#inference",
+    "title": "Types",
+    "section": "Inference",
+    "text": "Inference\nphibble infers a column’s type from its PHP values the way R’s c() combines values:\n\nBools and ints combine to int, and ints and floats combine to float.\nAny string makes the column a string column, and the other values are converted to text.\nDateTimeInterface values make a datetime column.\nArrays and other objects make a list-column.\nA column that is entirely NA is bool, R’s logical type.\n\n$frame = Frame::fromColumns([\n    'logical' =&gt; [true, false, null],\n    'whole' =&gt; [1, 2, null],\n    'mixed' =&gt; [1, 2.5, null],\n    'with_bool' =&gt; [true, 2, 3],\n    'text' =&gt; ['a', 1, null],\n    'when' =&gt; [new DateTimeImmutable('2024-03-01 09:30'), null, null],\n    'nested' =&gt; [[1, 2], [3], null],\n    'empty' =&gt; [null, null, null],\n]);\n\necho $frame-&gt;glimpse();\nRows: 3\nColumns: 8\n$ logical   &lt;lgl&gt; TRUE, FALSE, NA\n$ whole     &lt;int&gt; 1, 2, NA\n$ mixed     &lt;dbl&gt; 1.0, 2.5, NA\n$ with_bool &lt;int&gt; 1, 2, 3\n$ text      &lt;chr&gt; \"a\", \"1\", NA\n$ when      &lt;dttm&gt; 2024-03-01 09:30:00, NA, NA\n$ nested    &lt;list&gt; &lt;1, 2&gt;, 3, &lt;NULL&gt;\n$ empty     &lt;lgl&gt; NA, NA, NA\nText read from CSV files and databases is guessed differently. The input and output guide describes that.",
+    "crumbs": [
+      "Guides",
+      "Types"
+    ]
+  },
+  {
+    "objectID": "types.html#casts",
+    "href": "types.html#casts",
+    "title": "Types",
+    "section": "Casts",
+    "text": "Casts\ncast() converts columns to other types. Conversions follow R’s as.*() functions. A value that cannot be converted becomes NA, and phibble raises one E_USER_WARNING per column, as R does with “NAs introduced by coercion”.\n\nFloats convert to int by truncating toward zero.\n\"TRUE\", \"true\", \"T\", and \"True\" convert to true. \"yes\" and \"1\" do not.\nFloats convert to text with up to 15 significant digits, in fixed or scientific notation, whichever is shorter.\n\nset_error_handler(function (int $level, string $message): bool {\n    echo \"Warning: {$message}\\n\";\n\n    return true;\n});\n\n$frame = Frame::fromColumns([\n    'x' =&gt; [2.7, -2.7, '3.9', 'abc'],\n    'flag' =&gt; ['TRUE', 'T', 'yes', '0'],\n    'n' =&gt; [1.0, 0.1 + 0.2, 1e5, 1 / 3],\n]);\n\n$cast = $frame-&gt;cast(['x' =&gt; 'int', 'flag' =&gt; 'bool', 'n' =&gt; 'string']);\n\necho $cast;\nWarning: NAs introduced by coercion to int in column 'x' (1 value).\nWarning: NAs introduced by coercion to bool in column 'flag' (2 values).\n# A tibble: 4 × 3\n      x flag  n                \n  &lt;int&gt; &lt;lgl&gt; &lt;chr&gt;            \n1     2 TRUE  1                \n2    -2 TRUE  0.3              \n3     3 NA    1e+05            \n4    NA NA    0.333333333333333\nA factor converts to int or float as its 1-based level codes, as as.integer(factor) does in R. Converting it to text gives its labels. Dates convert to numbers as days since 1970-01-01, and datetimes as seconds since the epoch.",
+    "crumbs": [
+      "Guides",
+      "Types"
+    ]
+  },
+  {
+    "objectID": "types.html#factors",
+    "href": "types.html#factors",
+    "title": "Types",
+    "section": "Factors",
+    "text": "Factors\nA factor column stores an ordered list of level labels and one code per row. asFactor() sorts the unique values to make the levels unless levels are given. Numbers sort numerically and text sorts in byte order. Values that are not among explicit levels become NA.\nlevels() returns the labels. storage('x')-&gt;codes() returns the codes, which are 0-based indexes into the levels. An ordered factor sorts by level position.\n$penguins = Frame::fromCsv('penguins.csv')-&gt;asFactor('species');\n\necho json_encode($penguins-&gt;levels('species')), \"\\n\";\necho json_encode(array_slice($penguins-&gt;storage('species')-&gt;codes(), 150, 5)), \"\\n\";\n\n$sizes = tibble(size: ['small', 'large', 'medium', 'small'])\n    -&gt;asOrdered('size', ['small', 'medium', 'large']);\n\necho $sizes-&gt;arrange(['size']), \"\\n\";\nvar_dump($sizes-&gt;isOrdered('size'));\n[\"Adelie\",\"Chinstrap\",\"Gentoo\"]\n[0,0,2,2,2]\n# A tibble: 4 × 1\n  size  \n  &lt;ord&gt; \n1 small \n2 small \n3 medium\n4 large \nbool(true)\nThe forcats functions are fct* methods. Each returns a new frame with the column’s levels changed.\n\n\n\n\n\n\n\nMethod\nEffect\n\n\n\n\nfctRelevel($col, $levels, after: 0)\nMoves the given levels to the front, or after a position.\n\n\nfctLevels($col, $levels)\nSets the full level order.\n\n\nfctRev($col)\nReverses the level order.\n\n\nfctInorder($col)\nOrders levels by first appearance.\n\n\nfctInfreq($col)\nOrders levels by frequency, most common first.\n\n\nfctReorder($col, $by, $summary)\nOrders levels by a summary of another column, the median by default.\n\n\nfctRecode($col, ['new' =&gt; 'old'])\nRenames levels.\n\n\nfctCollapse($col, ['new' =&gt; ['a', 'b']])\nMerges levels.\n\n\nfctDrop($col)\nRemoves levels that no row uses.\n\n\n\n$penguins = Frame::fromCsv('penguins.csv')-&gt;asFactor('species');\n\n$show = fn (string $label, Frame $f) =&gt; print(str_pad($label, 26).json_encode($f-&gt;levels('species')).\"\\n\");\n\n$show('sorted (default)', $penguins);\n$show('fctRelevel Gentoo', $penguins-&gt;fctRelevel('species', ['Gentoo']));\n$show('fctInfreq', $penguins-&gt;fctInfreq('species'));\n$show('fctReorder by body_mass', $penguins-&gt;fctReorder('species', 'body_mass', fn ($xs) =&gt; array_sum(array_filter($xs)) / count(array_filter($xs))));\n$show('fctRev', $penguins-&gt;fctRev('species'));\n$show('fctRecode', $penguins-&gt;fctRecode('species', ['Chinstrap penguin' =&gt; 'Chinstrap']));\n$show('fctCollapse', $penguins-&gt;fctCollapse('species', ['brush-tailed' =&gt; ['Adelie', 'Gentoo']]));\nsorted (default)          [\"Adelie\",\"Chinstrap\",\"Gentoo\"]\nfctRelevel Gentoo         [\"Gentoo\",\"Adelie\",\"Chinstrap\"]\nfctInfreq                 [\"Adelie\",\"Gentoo\",\"Chinstrap\"]\nfctReorder by body_mass   [\"Adelie\",\"Chinstrap\",\"Gentoo\"]\nfctRev                    [\"Gentoo\",\"Chinstrap\",\"Adelie\"]\nfctRecode                 [\"Adelie\",\"Chinstrap penguin\",\"Gentoo\"]\nfctCollapse               [\"brush-tailed\",\"Chinstrap\"]",
+    "crumbs": [
+      "Guides",
+      "Types"
+    ]
+  },
+  {
+    "objectID": "types.html#dates-and-datetimes",
+    "href": "types.html#dates-and-datetimes",
+    "title": "Types",
+    "section": "Dates and datetimes",
+    "text": "Dates and datetimes\nA date column holds DateTimeImmutable values at midnight UTC. A datetime column holds DateTimeImmutable values with their time and time zone. CSV text in ISO 8601 form is parsed as a date when it has no time, and as a datetime otherwise. Text without an offset is read as UTC.\n$visits = Frame::fromCsvString(&lt;&lt;&lt;'CSV'\n    day,checked_in\n    2024-01-02,2024-01-02T09:15:00Z\n    2024-01-03,2024-01-03 14:40:00\n    CSV);\n\necho $visits, \"\\n\";\necho $visits-&gt;cast(['day' =&gt; 'float', 'checked_in' =&gt; 'float']);\n# A tibble: 2 × 2\n  day        checked_in         \n  &lt;date&gt;     &lt;dttm&gt;             \n1 2024-01-02 2024-01-02 09:15:00\n2 2024-01-03 2024-01-03 14:40:00\n# A tibble: 2 × 2\n    day checked_in\n  &lt;dbl&gt;      &lt;dbl&gt;\n1 19724 1704186900\n2 19725 1704292800",
+    "crumbs": [
+      "Guides",
+      "Types"
+    ]
+  },
+  {
+    "objectID": "types.html#list-columns",
+    "href": "types.html#list-columns",
+    "title": "Types",
+    "section": "List-columns",
+    "text": "List-columns\nA list-column holds any PHP value in each row, such as arrays or other frames. nest() collapses columns into a list-column of frames, one row per unique combination of the remaining columns. unnest() expands it again.\n$penguins = Frame::fromCsv('penguins.csv')-&gt;select(['species', 'island', 'body_mass']);\n\n$nested = $penguins-&gt;nest(['island', 'body_mass'], into: 'data');\necho $nested, \"\\n\";\n\n$sizes = $nested-&gt;mutate(['n' =&gt; fn ($r) =&gt; $r-&gt;data-&gt;nrow()]);\necho $sizes-&gt;select(['species', 'n']), \"\\n\";\n\necho $nested-&gt;unnest('data')-&gt;head(3);\n# A tibble: 3 × 2\n  species   data              \n  &lt;chr&gt;     &lt;list&gt;            \n1 Adelie    &lt;tibble [152 × 2]&gt;\n2 Gentoo    &lt;tibble [124 × 2]&gt;\n3 Chinstrap &lt;tibble [68 × 2]&gt; \n# A tibble: 3 × 2\n  species       n\n  &lt;chr&gt;     &lt;int&gt;\n1 Adelie      152\n2 Gentoo      124\n3 Chinstrap    68\n# A tibble: 3 × 3\n  species island    body_mass\n  &lt;chr&gt;   &lt;chr&gt;         &lt;int&gt;\n1 Adelie  Torgersen      3750\n2 Adelie  Torgersen      3800\n3 Adelie  Torgersen      3250",
+    "crumbs": [
+      "Guides",
+      "Types"
+    ]
+  },
+  {
+    "objectID": "types.html#model-data",
+    "href": "types.html#model-data",
+    "title": "Types",
+    "section": "Model data",
+    "text": "Model data\ntoModelData() returns columns in the form the php-stats model functions read. Numbers, bools, and strings are plain lists. Dates and datetimes become days and seconds since the epoch. A factor becomes an array with its levels, its 0-based codes, and whether it is ordered, so a model keeps the frame’s level order, including unused levels. A list-column throws.\n$frame = tibble(\n    mass: [3750.0, 3800.0, null],\n    male: [true, false, true],\n    species: ['Adelie', 'Gentoo', 'Adelie'],\n)-&gt;asFactor('species', ['Adelie', 'Chinstrap', 'Gentoo']);\n\necho json_encode($frame-&gt;toModelData(), JSON_PRETTY_PRINT), \"\\n\";\n{\n    \"mass\": [\n        3750,\n        3800,\n        null\n    ],\n    \"male\": [\n        true,\n        false,\n        true\n    ],\n    \"species\": {\n        \"levels\": [\n            \"Adelie\",\n            \"Chinstrap\",\n            \"Gentoo\"\n        ],\n        \"codes\": [\n            0,\n            2,\n            0\n        ],\n        \"ordered\": false\n    }\n}",
+    "crumbs": [
+      "Guides",
+      "Types"
+    ]
+  },
+  {
+    "objectID": "io.html",
+    "href": "io.html",
+    "title": "Reading and writing data",
+    "section": "",
+    "text": "Frame::fromCsv() reads delimited text the way readr’s read_csv() and read_delim() do. It takes a path (files ending in .gz are decompressed) or an open stream. Frame::fromCsvString() reads from a string.\nreadr’s options are named arguments in camelCase:\n\n\n\n\n\n\n\n\nOption\nDefault\nMeaning\n\n\n\n\ntypes\nguess\nColumn types, as a compact string or by name.\n\n\ndelimiter\n','\nThe field separator.\n\n\nna\n['', 'NA']\nText that is read as NA.\n\n\ncolNames\ntrue\ntrue reads a header row, false names columns X1, X2, and so on, and a list gives the names.\n\n\nselect\nall\nColumns to keep, in this order.\n\n\nskip\n0\nLines to skip before the header.\n\n\nnMax\nall\nThe most rows to read.\n\n\ncomment\n''\nLines starting with this text are skipped.\n\n\nquote\n'\"'\nThe quoting character.\n\n\ntrimWs\ntrue\nTrim spaces around unquoted values.\n\n\nskipEmptyRows\ntrue\nSkip blank lines.\n\n\nguessMax\n1000\nRows used to guess types.\n\n\nnameRepair\n'unique'\nHow to repair empty or duplicated names.\n\n\ndecimalMark, groupingMark\n'.', none\nNumber formatting, as in readr’s locale().\n\n\n\n$text = &lt;&lt;&lt;'CSV'\n    # exported 2024-06-01\n    id;zip;score;visited\n    1;02134;3,5;2024-05-01\n    2;10001;-;2024-05-03\n    3;94110;4,25;2024-05-04\n    CSV;\n\n$frame = Frame::fromCsvString(\n    $text,\n    types: ['zip' =&gt; 'c'],\n    delimiter: ';',\n    na: ['-'],\n    comment: '#',\n    decimalMark: ',',\n);\n\necho $frame;\n# A tibble: 3 × 4\n     id zip   score visited   \n  &lt;int&gt; &lt;chr&gt; &lt;dbl&gt; &lt;date&gt;    \n1     1 02134  3.5  2024-05-01\n2     2 10001 NA    2024-05-03\n3     3 94110  4.25 2024-05-04",
+    "crumbs": [
+      "Guides",
+      "Reading and writing data"
+    ]
+  },
+  {
+    "objectID": "io.html#csv-files",
+    "href": "io.html#csv-files",
+    "title": "Reading and writing data",
+    "section": "",
+    "text": "Frame::fromCsv() reads delimited text the way readr’s read_csv() and read_delim() do. It takes a path (files ending in .gz are decompressed) or an open stream. Frame::fromCsvString() reads from a string.\nreadr’s options are named arguments in camelCase:\n\n\n\n\n\n\n\n\nOption\nDefault\nMeaning\n\n\n\n\ntypes\nguess\nColumn types, as a compact string or by name.\n\n\ndelimiter\n','\nThe field separator.\n\n\nna\n['', 'NA']\nText that is read as NA.\n\n\ncolNames\ntrue\ntrue reads a header row, false names columns X1, X2, and so on, and a list gives the names.\n\n\nselect\nall\nColumns to keep, in this order.\n\n\nskip\n0\nLines to skip before the header.\n\n\nnMax\nall\nThe most rows to read.\n\n\ncomment\n''\nLines starting with this text are skipped.\n\n\nquote\n'\"'\nThe quoting character.\n\n\ntrimWs\ntrue\nTrim spaces around unquoted values.\n\n\nskipEmptyRows\ntrue\nSkip blank lines.\n\n\nguessMax\n1000\nRows used to guess types.\n\n\nnameRepair\n'unique'\nHow to repair empty or duplicated names.\n\n\ndecimalMark, groupingMark\n'.', none\nNumber formatting, as in readr’s locale().\n\n\n\n$text = &lt;&lt;&lt;'CSV'\n    # exported 2024-06-01\n    id;zip;score;visited\n    1;02134;3,5;2024-05-01\n    2;10001;-;2024-05-03\n    3;94110;4,25;2024-05-04\n    CSV;\n\n$frame = Frame::fromCsvString(\n    $text,\n    types: ['zip' =&gt; 'c'],\n    delimiter: ';',\n    na: ['-'],\n    comment: '#',\n    decimalMark: ',',\n);\n\necho $frame;\n# A tibble: 3 × 4\n     id zip   score visited   \n  &lt;int&gt; &lt;chr&gt; &lt;dbl&gt; &lt;date&gt;    \n1     1 02134  3.5  2024-05-01\n2     2 10001 NA    2024-05-03\n3     3 94110  4.25 2024-05-04",
+    "crumbs": [
+      "Guides",
+      "Reading and writing data"
+    ]
+  },
+  {
+    "objectID": "io.html#column-types",
+    "href": "io.html#column-types",
+    "title": "Reading and writing data",
+    "section": "Column types",
+    "text": "Column types\ntypes accepts readr’s compact string, with one letter per column:\n\n\n\n\n\n\n\nLetter\nType\n\n\n\n\nc\nstring\n\n\ni\nint\n\n\nd\nfloat\n\n\nn\nfloat, reading numbers with grouping marks and other characters\n\n\nl\nbool\n\n\nf\nfactor\n\n\nD\ndate\n\n\nT\ndatetime\n\n\nt\nstring (phibble has no time-of-day type)\n\n\n?\nguess\n\n\n_ or -\nskip the column\n\n\n\ntypes also accepts an array by column name. A value is a Type, a type name such as 'factor', or a letter. The key .default sets the type of every column not named.\n$penguins = Frame::fromCsv('penguins.csv', types: 'ffddii_i');\necho $penguins-&gt;glimpse(), \"\\n\";\n\n$some = Frame::fromCsv('penguins.csv', types: ['species' =&gt; 'factor', '.default' =&gt; '_'], select: ['species']);\necho $some-&gt;glimpse();\nRows: 344\nColumns: 7\n$ species     &lt;fct&gt; Adelie, Adelie, Adelie, Adelie, Adelie, Adelie, Adelie, Ad…\n$ island      &lt;fct&gt; Torgersen, Torgersen, Torgersen, Torgersen, Torgersen, Tor…\n$ bill_len    &lt;dbl&gt; 39.1, 39.5, 40.3, NA, 36.7, 39.3, 38.9, 39.2, 34.1, 42.0, …\n$ bill_dep    &lt;dbl&gt; 18.7, 17.4, 18.0, NA, 19.3, 20.6, 17.8, 19.6, 18.1, 20.2, …\n$ flipper_len &lt;int&gt; 181, 186, 195, NA, 193, 190, 181, 195, 193, 190, 186, 180,…\n$ body_mass   &lt;int&gt; 3750, 3800, 3250, NA, 3450, 3650, 3625, 4675, 3475, 4250, …\n$ year        &lt;int&gt; 2007, 2007, 2007, 2007, 2007, 2007, 2007, 2007, 2007, 2007…\nRows: 344\nColumns: 1\n$ species &lt;fct&gt; Adelie, Adelie, Adelie, Adelie, Adelie, Adelie, Adelie, Adelie…",
+    "crumbs": [
+      "Guides",
+      "Reading and writing data"
+    ]
+  },
+  {
+    "objectID": "io.html#guessing",
+    "href": "io.html#guessing",
+    "title": "Reading and writing data",
+    "section": "Guessing",
+    "text": "Guessing\nWithout explicit types, phibble guesses each column from up to guessMax rows, sampled the way readr 2 samples them. A column is:\n\nbool if every value is T, F, TRUE, FALSE, True, False, true, or false,\nint if every value is a whole number (readr guesses double here),\nfloat if every value is a number, including Inf and NaN,\ndate if every value is an ISO 8601 date,\ndatetime if every value is an ISO 8601 date and time,\nstring otherwise.\n\nNumbers with leading zeros such as 007 stay strings, as in readr.\nWhen a value cannot be parsed as its column’s type, or a row has the wrong number of fields, phibble still returns the data. The value becomes NA, and the read raises one E_USER_WARNING that lists the problems.\nset_error_handler(function (int $level, string $message): bool {\n    echo \"Warning: {$message}\\n\";\n\n    return true;\n});\n\n$frame = Frame::fromCsvString(\"id,score\\n1,2.5\\n2,oops\\n3\\n\", types: ['score' =&gt; 'double']);\n\necho $frame;\nWarning: One or more parsing issues: row 4: expected 2 columns, got 1; column 'score': 1 value could not be parsed as float.\n# A tibble: 3 × 2\n     id score\n  &lt;int&gt; &lt;dbl&gt;\n1     1   2.5\n2     2  NA  \n3     3  NA",
+    "crumbs": [
+      "Guides",
+      "Reading and writing data"
+    ]
+  },
+  {
+    "objectID": "io.html#writing-csv",
+    "href": "io.html#writing-csv",
+    "title": "Reading and writing data",
+    "section": "Writing CSV",
+    "text": "Writing CSV\nwriteCsv($path) writes a file and toCsv() returns the text. The format follows readr’s write_csv(). Values are quoted only when needed, NA is written as NA, logicals as TRUE and FALSE, dates in ISO 8601, and datetimes in UTC with a Z. Factors are written as their labels, and list-columns throw.\n$frame = tribble(\n    ['name', 'note', 'score', 'seen'],\n    ['Ana', 'likes \"quotes\"', 1e5, true],\n    ['Ben', 'a, b', null, false],\n);\n\necho $frame-&gt;toCsv();\nname,note,score,seen\nAna,\"likes \"\"quotes\"\"\",100000,TRUE\nBen,\"a, b\",NA,FALSE\nThe options are delimiter, na, append, colNames, quote ('needed', 'all', or 'none'), escape, and eol.",
+    "crumbs": [
+      "Guides",
+      "Reading and writing data"
+    ]
+  },
+  {
+    "objectID": "io.html#json",
+    "href": "io.html#json",
+    "title": "Reading and writing data",
+    "section": "JSON",
+    "text": "JSON\ntoJson() writes a list of records, and toJson('columns') writes an object of columns. NA is written as null and kept in every record. Frame::fromJson() reads either shape and detects which one it has.\n$frame = tibble(id: [1, 2], score: [2.5, null]);\n\necho $frame-&gt;toJson(), \"\\n\";\necho $frame-&gt;toJson('columns'), \"\\n\";\n\necho Frame::fromJson('{\"id\": [1, 2], \"ok\": [true, null]}');\n[{\"id\":1,\"score\":2.5},{\"id\":2,\"score\":null}]\n{\"id\":[1,2],\"score\":[2.5,null]}\n# A tibble: 2 × 2\n     id ok   \n  &lt;int&gt; &lt;lgl&gt;\n1     1 TRUE \n2     2 NA",
+    "crumbs": [
+      "Guides",
+      "Reading and writing data"
+    ]
+  },
+  {
+    "objectID": "io.html#databases",
+    "href": "io.html#databases",
+    "title": "Reading and writing data",
+    "section": "Databases",
+    "text": "Databases\nFrame::fromPdo() runs a query with positional or named bindings and loads the result. Drivers that return numbers as text, as MySQL’s does, are handled by parsing all-text columns with the CSV guessing rules.\n$pdo = new PDO('sqlite::memory:');\n$pdo-&gt;exec('CREATE TABLE visits (id INTEGER, clinic TEXT, bp REAL, seen TEXT)');\n$pdo-&gt;exec(\"INSERT INTO visits VALUES (1, 'north', 121.5, '2024-05-01'), (2, 'south', NULL, '2024-05-02'), (3, 'north', 133.0, '2024-05-02')\");\n\n$frame = Frame::fromPdo($pdo, 'SELECT * FROM visits WHERE clinic = ?', ['north']);\n\necho $frame;\n# A tibble: 2 × 4\n     id clinic    bp seen      \n  &lt;int&gt; &lt;chr&gt;  &lt;dbl&gt; &lt;date&gt;    \n1     1 north   122. 2024-05-01\n2     3 north   133  2024-05-02\nFrame::fromQuery() loads a query builder without depending on its library:\n\nA Laravel query builder, Eloquent builder, or relation is read through toSql(), getBindings(), and its connection’s PDO object.\nA Doctrine DBAL QueryBuilder is read through getSQL() and getParameters(). Pass a PDO or DBAL connection as the second argument to run the SQL through PDO. Without one, the builder runs the query itself.\n\nTo keep a query in the database and run verbs there, use a SQL table instead.",
+    "crumbs": [
+      "Guides",
+      "Reading and writing data"
+    ]
+  },
+  {
+    "objectID": "io.html#laravel-collections",
+    "href": "io.html#laravel-collections",
+    "title": "Reading and writing data",
+    "section": "Laravel collections",
+    "text": "Laravel collections\nFrame::fromCollection() reads any object with an all() or toArray() method, such as a Laravel Collection. The items may be arrays, objects, or Eloquent models. toCollection() returns an Illuminate\\Support\\Collection of row arrays and throws when Laravel is not installed.\n// Any object with all() or toArray() works, such as a Laravel Collection\n// of arrays or Eloquent models. This stand-in avoids a Laravel dependency.\n$collection = new class\n{\n    public function all(): array\n    {\n        return [\n            ['id' =&gt; 1, 'name' =&gt; 'Ana'],\n            (object) ['id' =&gt; 2, 'name' =&gt; 'Ben'],\n        ];\n    }\n};\n\necho Frame::fromCollection($collection);\n# A tibble: 2 × 2\n     id name \n  &lt;int&gt; &lt;chr&gt;\n1     1 Ana  \n2     2 Ben",
+    "crumbs": [
+      "Guides",
+      "Reading and writing data"
+    ]
+  },
+  {
+    "objectID": "getting-started.html",
+    "href": "getting-started.html",
+    "title": "Getting started",
+    "section": "",
+    "text": "The examples on this site import the frame class and phibble’s functions like this:\nuse Phibble\\Frame;\nuse function Phibble\\{tibble, tribble};\nuse function Phibble\\Expr\\{col, desc, mean, n};\nPhibble\\Expr has functions named min, max, sum, round, abs, log, and a few others that share names with PHP built-ins. In a file that imports them, a bare round($x) calls phibble’s expression helper. Write \\round($x) for PHP’s function.",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#imports",
+    "href": "getting-started.html#imports",
+    "title": "Getting started",
+    "section": "",
+    "text": "The examples on this site import the frame class and phibble’s functions like this:\nuse Phibble\\Frame;\nuse function Phibble\\{tibble, tribble};\nuse function Phibble\\Expr\\{col, desc, mean, n};\nPhibble\\Expr has functions named min, max, sum, round, abs, log, and a few others that share names with PHP built-ins. In a file that imports them, a bare round($x) calls phibble’s expression helper. Write \\round($x) for PHP’s function.",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#building-frames",
+    "href": "getting-started.html#building-frames",
+    "title": "Getting started",
+    "section": "Building frames",
+    "text": "Building frames\ntibble() builds a frame column by column. Each named argument is a column. A list gives one value per row, and a single value is repeated for every row. A closure receives the frame built so far, so a column can be computed from earlier ones.\n$scores = tibble(\n    student: ['ana', 'ben', 'cy'],\n    score: [81.5, 74.0, null],\n    passed: fn (Frame $t) =&gt; array_map(fn ($s) =&gt; $s === null ? null : $s &gt;= 75, $t['score']),\n    term: 'fall',\n);\n\necho $scores;\n# A tibble: 3 × 4\n  student score passed term \n  &lt;chr&gt;   &lt;dbl&gt; &lt;lgl&gt;  &lt;chr&gt;\n1 ana      81.5 TRUE   fall \n2 ben      74   FALSE  fall \n3 cy       NA   NA     fall\ntribble() takes the column names first and then one list per row, which is easier to read for small literal tables:\n$sites = tribble(\n    ['site', 'lat', 'opened'],\n    ['north', 44.9, 2019],\n    ['south', 41.2, 2021],\n);\n\necho $sites;\n# A tibble: 2 × 3\n  site    lat opened\n  &lt;chr&gt; &lt;dbl&gt;  &lt;int&gt;\n1 north  44.9   2019\n2 south  41.2   2021\nFrame::fromRows() takes a list of associative arrays. Keys missing from a row are NA. Frame::fromColumns() takes an array of columns and accepts explicit types.\n$rows = Frame::fromRows([\n    ['id' =&gt; 1, 'dose' =&gt; 2.5, 'arm' =&gt; 'a'],\n    ['id' =&gt; 2, 'arm' =&gt; 'b'],\n]);\n$cols = Frame::fromColumns(['id' =&gt; [1, 2], 'arm' =&gt; ['a', 'b']], types: ['arm' =&gt; 'factor']);\n\necho $rows, \"\\n\\n\", $cols;\n# A tibble: 2 × 3\n     id  dose arm  \n  &lt;int&gt; &lt;dbl&gt; &lt;chr&gt;\n1     1   2.5 a    \n2     2  NA   b    \n\n# A tibble: 2 × 2\n     id arm  \n  &lt;int&gt; &lt;fct&gt;\n1     1 a    \n2     2 b\nFrame::fromCsv() reads a CSV file and guesses each column’s type. The input and output guide covers its options.",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#printing",
+    "href": "getting-started.html#printing",
+    "title": "Getting started",
+    "section": "Printing",
+    "text": "Printing\necho $frame prints the frame the way tibble does. The header gives the size, each column shows its type, and frames with more than 20 rows show the first 10. Numbers show three significant digits and NA prints as NA (or &lt;NA&gt; in text columns).\n$penguins = Frame::fromCsv('penguins.csv');\n\necho $penguins;\n# A tibble: 344 × 8\n   species island    bill_len bill_dep flipper_len body_mass sex     year\n   &lt;chr&gt;   &lt;chr&gt;        &lt;dbl&gt;    &lt;dbl&gt;       &lt;int&gt;     &lt;int&gt; &lt;chr&gt;  &lt;int&gt;\n 1 Adelie  Torgersen     39.1     18.7         181      3750 male    2007\n 2 Adelie  Torgersen     39.5     17.4         186      3800 female  2007\n 3 Adelie  Torgersen     40.3     18           195      3250 female  2007\n 4 Adelie  Torgersen     NA       NA            NA        NA &lt;NA&gt;    2007\n 5 Adelie  Torgersen     36.7     19.3         193      3450 female  2007\n 6 Adelie  Torgersen     39.3     20.6         190      3650 male    2007\n 7 Adelie  Torgersen     38.9     17.8         181      3625 female  2007\n 8 Adelie  Torgersen     39.2     19.6         195      4675 male    2007\n 9 Adelie  Torgersen     34.1     18.1         193      3475 &lt;NA&gt;    2007\n10 Adelie  Torgersen     42       20.2         190      4250 &lt;NA&gt;    2007\n# ℹ 334 more rows\nglimpse() returns one line per column, which suits wide frames:\n$penguins = Frame::fromCsv('penguins.csv');\n\necho $penguins-&gt;glimpse();\nRows: 344\nColumns: 8\n$ species     &lt;chr&gt; \"Adelie\", \"Adelie\", \"Adelie\", \"Adelie\", \"Adelie\", \"Adelie\"…\n$ island      &lt;chr&gt; \"Torgersen\", \"Torgersen\", \"Torgersen\", \"Torgersen\", \"Torge…\n$ bill_len    &lt;dbl&gt; 39.1, 39.5, 40.3, NA, 36.7, 39.3, 38.9, 39.2, 34.1, 42.0, …\n$ bill_dep    &lt;dbl&gt; 18.7, 17.4, 18.0, NA, 19.3, 20.6, 17.8, 19.6, 18.1, 20.2, …\n$ flipper_len &lt;int&gt; 181, 186, 195, NA, 193, 190, 181, 195, 193, 190, 186, 180,…\n$ body_mass   &lt;int&gt; 3750, 3800, 3250, NA, 3450, 3650, 3625, 4675, 3475, 4250, …\n$ sex         &lt;chr&gt; \"male\", \"female\", \"female\", NA, \"female\", \"male\", \"female\"…\n$ year        &lt;int&gt; 2007, 2007, 2007, 2007, 2007, 2007, 2007, 2007, 2007, 2007…\nformat(n: 30, width: 120) prints more rows or a wider table.",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#types-and-na",
+    "href": "getting-started.html#types-and-na",
+    "title": "Getting started",
+    "section": "Types and NA",
+    "text": "Types and NA\nEach column has one type from the Phibble\\Type enum: Float, Int, Bool, String, Factor, Date, DateTime, or List. Types are inferred from the values, and PHP null is NA in every type. The types guide describes inference, casts, and factors.",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#reading-values",
+    "href": "getting-started.html#reading-values",
+    "title": "Getting started",
+    "section": "Reading values",
+    "text": "Reading values\nA column reads as a PHP list with $frame-&gt;name, $frame['name'], or $frame-&gt;column('name'). Rows are Phibble\\Row objects, which read values as properties or array keys. Iterating a frame yields its rows. An unknown column name throws Phibble\\Exception\\ColumnNotFound; names are never matched partially.\n$frame = tibble(x: [1, 2, 3], y: ['a', 'b', 'c']);\n\nvar_dump($frame-&gt;x === $frame['x']);\necho json_encode($frame-&gt;column('y')), \"\\n\";\n\n$row = $frame-&gt;row(1);\necho $row-&gt;x, ' ', $row['y'], \"\\n\";\n\nforeach ($frame as $i =&gt; $row) {\n    echo \"{$i}: {$row-&gt;y}\\n\";\n}\n\ntry {\n    $frame-&gt;z;\n} catch (Phibble\\Exception\\ColumnNotFound $e) {\n    echo $e-&gt;getMessage(), \"\\n\";\n}\nbool(true)\n[\"a\",\"b\",\"c\"]\n2 b\n0: a\n1: b\n2: c\nColumn 'z' not found. Available columns: x, y.",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#verbs",
+    "href": "getting-started.html#verbs",
+    "title": "Getting started",
+    "section": "Verbs",
+    "text": "Verbs\nFrames have the dplyr verbs as methods: select(), filter(), mutate(), rename(), arrange(), groupBy(), summarise(), distinct(), slice(), head(), and join(). Each returns a new frame.\nfilter() and mutate() accept a row closure, which receives a Row and returns a value. arrange() takes column names, or [name, 'desc'] pairs.\n$penguins = Frame::fromCsv('penguins.csv');\n\n$heavy = $penguins\n    -&gt;select(['species', 'island', 'body_mass', 'year'])\n    -&gt;filter(fn ($r) =&gt; $r-&gt;body_mass !== null && $r-&gt;body_mass &gt; 5500)\n    -&gt;mutate(['kg' =&gt; fn ($r) =&gt; $r-&gt;body_mass / 1000])\n    -&gt;arrange([['body_mass', 'desc']])\n    -&gt;head(5);\n\necho $heavy;\n# A tibble: 5 × 5\n  species island body_mass  year    kg\n  &lt;chr&gt;   &lt;chr&gt;      &lt;int&gt; &lt;int&gt; &lt;dbl&gt;\n1 Gentoo  Biscoe      6300  2007  6.3 \n2 Gentoo  Biscoe      6050  2007  6.05\n3 Gentoo  Biscoe      6000  2008  6   \n4 Gentoo  Biscoe      6000  2009  6   \n5 Gentoo  Biscoe      5950  2008  5.95\nThe same verbs accept expressions built with col() and the helper functions. Expressions are evaluated a whole column at a time, and they are the form that SQL and Polars backends can translate.\n$penguins = Frame::fromCsv('penguins.csv');\n\n$heavy = $penguins\n    -&gt;select(['species', 'island', 'body_mass', 'year'])\n    -&gt;filter(col('body_mass')-&gt;gt(5500))\n    -&gt;mutate(['kg' =&gt; col('body_mass')-&gt;div(1000)])\n    -&gt;arrange([desc(col('body_mass'))])\n    -&gt;head(5);\n\necho $heavy;\n# A tibble: 5 × 5\n  species island body_mass  year    kg\n  &lt;chr&gt;   &lt;chr&gt;      &lt;int&gt; &lt;int&gt; &lt;dbl&gt;\n1 Gentoo  Biscoe      6300  2007  6.3 \n2 Gentoo  Biscoe      6050  2007  6.05\n3 Gentoo  Biscoe      6000  2008  6   \n4 Gentoo  Biscoe      6000  2009  6   \n5 Gentoo  Biscoe      5950  2008  5.95",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#groups",
+    "href": "getting-started.html#groups",
+    "title": "Getting started",
+    "section": "Groups",
+    "text": "Groups\ngroupBy() records grouping columns on the frame. summarise() returns one row per group, with groups in sorted order and NA last, as dplyr does. With several grouping columns, the result keeps all but the last.\n$penguins = Frame::fromCsv('penguins.csv');\n\n$summary = $penguins\n    -&gt;filter(col('body_mass')-&gt;isNa()-&gt;not())\n    -&gt;groupBy(['species', 'sex'])\n    -&gt;summarise([\n        'n' =&gt; n(),\n        'mass' =&gt; mean(col('body_mass')),\n        'flipper' =&gt; median(col('flipper_len')),\n    ]);\n\necho $summary;\n# A tibble: 8 × 5\n# Groups:   species [3]\n  species   sex        n  mass flipper\n  &lt;chr&gt;     &lt;chr&gt;  &lt;int&gt; &lt;dbl&gt;   &lt;dbl&gt;\n1 Adelie    female    73 3369.    188 \n2 Adelie    male      73 4043.    193 \n3 Adelie    &lt;NA&gt;       5 3540     186 \n4 Chinstrap female    34 3527.    192 \n5 Chinstrap male      34 3939.    200.\n6 Gentoo    female    58 4680.    212 \n7 Gentoo    male      61 5485.    221 \n8 Gentoo    &lt;NA&gt;       4 4588.    216\nIn a grouped frame, filter() and mutate() work within each group. An aggregate inside mutate() is computed per group and repeated for each of the group’s rows:\n$penguins = Frame::fromCsv('penguins.csv')-&gt;dropNa(['body_mass']);\n\n$centered = $penguins\n    -&gt;groupBy(['species'])\n    -&gt;mutate(['vs_species' =&gt; col('body_mass')-&gt;sub(mean(col('body_mass')))])\n    -&gt;select(['species', 'body_mass', 'vs_species'])\n    -&gt;head(4);\n\necho $centered;\n# A tibble: 4 × 3\n# Groups:   species [1]\n  species body_mass vs_species\n  &lt;chr&gt;       &lt;int&gt;      &lt;dbl&gt;\n1 Adelie       3750       49.3\n2 Adelie       3800       99.3\n3 Adelie       3250     -451. \n4 Adelie       3450     -251.\nA row closure receives the row’s group as its second argument: fn (Row $r, Frame $group) =&gt; ....",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#distinct-rows-and-joins",
+    "href": "getting-started.html#distinct-rows-and-joins",
+    "title": "Getting started",
+    "section": "Distinct rows and joins",
+    "text": "Distinct rows and joins\ndistinct() keeps the first row of each combination of the given columns. join() takes the other table, the key columns, and the join type: inner, left, right, full, semi, anti, or cross. Joins follow dplyr 1.1, including its column naming and the rule that NA keys match each other.\n$penguins = Frame::fromCsv('penguins.csv');\n$islands = tribble(\n    ['island', 'area_km2'],\n    ['Biscoe', 6.1],\n    ['Dream', 0.9],\n);\n\n$joined = $penguins\n    -&gt;distinct(['species', 'island'])\n    -&gt;join($islands, ['island'], 'left');\n\necho $joined;\n# A tibble: 5 × 3\n  species   island    area_km2\n  &lt;chr&gt;     &lt;chr&gt;        &lt;dbl&gt;\n1 Adelie    Torgersen     NA  \n2 Adelie    Biscoe         6.1\n3 Adelie    Dream          0.9\n4 Gentoo    Biscoe         6.1\n5 Chinstrap Dream          0.9",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#immutability",
+    "href": "getting-started.html#immutability",
+    "title": "Getting started",
+    "section": "Immutability",
+    "text": "Immutability\nMethods never change the frame they are called on:\n$frame = tibble(x: [1, 2, 3]);\n$doubled = $frame-&gt;mutate(['x' =&gt; col('x')-&gt;mul(2)]);\n\necho json_encode($frame-&gt;x), ' ', json_encode($doubled-&gt;x), \"\\n\";\n[1,2,3] [2,4,6]",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "getting-started.html#the-pipe-operator",
+    "href": "getting-started.html#the-pipe-operator",
+    "title": "Getting started",
+    "section": "The pipe operator",
+    "text": "The pipe operator\nPHP 8.5’s |&gt; passes a value to a callable. Arrow functions let a pipeline of frame methods read from top to bottom. phplyr provides verbs that return such callables, so a phplyr pipeline needs no arrow functions.\n$penguins = Frame::fromCsv('penguins.csv');\n\n$counts = $penguins\n    |&gt; (fn (Frame $f) =&gt; $f-&gt;groupBy(['island']))\n    |&gt; (fn (Frame $f) =&gt; $f-&gt;summarise(['n' =&gt; n()]))\n    |&gt; (fn (Frame $f) =&gt; $f-&gt;arrange([desc(col('n'))]));\n\necho $counts;\n# A tibble: 3 × 2\n  island        n\n  &lt;chr&gt;     &lt;int&gt;\n1 Biscoe      168\n2 Dream       124\n3 Torgersen    52",
+    "crumbs": [
+      "Getting started"
+    ]
+  },
+  {
+    "objectID": "development.html",
+    "href": "development.html",
+    "title": "Development",
+    "section": "",
+    "text": "The test suite uses Pest and needs PHP 8.5:\ncomposer install\nphp vendor/bin/pest\nThe tests that fit models need the php-stats extension and are skipped without it. To run them, load the extension:\nphp -d extension=/path/to/libphp_stats.dylib vendor/bin/pest",
+    "crumbs": [
+      "Development"
+    ]
+  },
+  {
+    "objectID": "development.html#tests",
+    "href": "development.html#tests",
+    "title": "Development",
+    "section": "",
+    "text": "The test suite uses Pest and needs PHP 8.5:\ncomposer install\nphp vendor/bin/pest\nThe tests that fit models need the php-stats extension and are skipped without it. To run them, load the extension:\nphp -d extension=/path/to/libphp_stats.dylib vendor/bin/pest",
+    "crumbs": [
+      "Development"
+    ]
+  },
+  {
+    "objectID": "development.html#comparing-with-r",
+    "href": "development.html#comparing-with-r",
+    "title": "Development",
+    "section": "Comparing with R",
+    "text": "Comparing with R\nMany tests compare phibble with R. Scripts in tests/r/ run the same operations in R and write the expected results to tests/fixtures/:\n\n\n\nScript\nChecks\n\n\n\n\ntests/r/print.R\nPrinting and glimpse() against tibble.\n\n\ntests/r/io.R\nCSV reading and writing against readr.\n\n\ntests/r/expr.R\nExpressions against dplyr.\n\n\n\nThe fixtures are committed, so the tests do not need R. After changing a script, regenerate its fixtures from the repository root, for example with Rscript tests/r/expr.R. The scripts need the tibble, readr, dplyr, stringr, and jsonlite packages.",
+    "crumbs": [
+      "Development"
+    ]
+  },
+  {
+    "objectID": "development.html#database-tests",
+    "href": "development.html#database-tests",
+    "title": "Development",
+    "section": "Database tests",
+    "text": "Database tests\ntests/SqlTest.php runs against an in-memory SQLite database. It also runs against PostgreSQL and MySQL when these environment variables hold PDO DSNs:\nexport PHIBBLE_TEST_PGSQL=\"pgsql:host=127.0.0.1;port=5432;dbname=postgres\"\nexport PHIBBLE_TEST_PGSQL_USER=postgres\nexport PHIBBLE_TEST_MYSQL=\"mysql:host=127.0.0.1;port=3306\"\nexport PHIBBLE_TEST_MYSQL_USER=root\nPHIBBLE_TEST_PGSQL_PASSWORD and PHIBBLE_TEST_MYSQL_PASSWORD set passwords. The tests only run SELECT statements over inline data and create no tables.",
+    "crumbs": [
+      "Development"
+    ]
+  },
+  {
+    "objectID": "development.html#documentation",
+    "href": "development.html#documentation",
+    "title": "Development",
+    "section": "Documentation",
+    "text": "Documentation\nThe site is a Quarto project in docs/. Every example is a PHP file in docs/examples/. bin/docs-examples runs each example with docs/data as the working directory and writes its code and output to docs/examples/_&lt;name&gt;.md, which the pages include. Quarto never runs PHP.\nbin/render-docs refreshes the examples, renders the site, and copies the result into docs/ for GitHub Pages:\nPHP=php85 bin/render-docs\nbin/docs-examples name refreshes one example. Set QUARTO when the quarto command is not on the path.",
+    "crumbs": [
+      "Development"
+    ]
+  },
+  {
+    "objectID": "coming-from-tibble.html",
+    "href": "coming-from-tibble.html",
+    "title": "Coming from tibble",
+    "section": "",
+    "text": "phibble follows tibble, readr, and forcats closely. Function names become camelCase methods on Frame, R’s named arguments become PHP named arguments, and NULL/NA become PHP null. The tables below map the R functions to their phibble equivalents.",
+    "crumbs": [
+      "Coming from tibble"
+    ]
+  },
+  {
+    "objectID": "coming-from-tibble.html#tibble",
+    "href": "coming-from-tibble.html#tibble",
+    "title": "Coming from tibble",
+    "section": "tibble",
+    "text": "tibble\n\n\n\n\n\n\n\nR\nphibble\n\n\n\n\ntibble(x = 1:3, y = x * 2)\ntibble(x: [1, 2, 3], y: fn ($t) =&gt; ...)\n\n\ntribble(~x, ~y, 1, \"a\")\ntribble(['x', 'y'], [1, 'a']) or tribble(['x', 'y'], 1, 'a')\n\n\nas_tibble(x)\nas_tibble($x) or Frame::asTibble($x)\n\n\nadd_row(df, x = 1, .before = 2)\n$df-&gt;addRow(['x' =&gt; 1], before: 1)\n\n\nadd_column(df, z = 0, .after = \"x\")\n$df-&gt;addColumn(['z' =&gt; 0], after: 'x')\n\n\nenframe(x), deframe(df)\nenframe($x), $df-&gt;deframe()\n\n\nglimpse(df)\necho $df-&gt;glimpse()\n\n\nprint(df, n = 30)\necho $df-&gt;format(n: 30)\n\n\ndf$x, df[[\"x\"]]\n$df-&gt;x, $df['x']\n\n\nnrow(df), ncol(df), names(df)\n$df-&gt;nrow(), $df-&gt;ncol(), $df-&gt;columns()\n\n\n.name_repair = \"unique\"\nnameRepair: 'unique' (also check_unique, universal, minimal)\n\n\n\nIn a tibble() call, a closure receives the frame built so far and returns a list or a single value. Only single values are recycled, and incompatible lengths throw with tibble’s message.",
+    "crumbs": [
+      "Coming from tibble"
+    ]
+  },
+  {
+    "objectID": "coming-from-tibble.html#readr",
+    "href": "coming-from-tibble.html#readr",
+    "title": "Coming from tibble",
+    "section": "readr",
+    "text": "readr\n\n\n\n\n\n\n\nR\nphibble\n\n\n\n\nread_csv(file)\nFrame::fromCsv($file)\n\n\nread_delim(file, delim = \";\")\nFrame::fromCsv($file, delimiter: ';')\n\n\nread_csv(I(\"a,b\\n1,2\"))\nFrame::fromCsvString(\"a,b\\n1,2\")\n\n\ncol_types = \"icd\"\ntypes: 'icd'\n\n\ncol_types = cols(x = col_factor())\ntypes: ['x' =&gt; 'factor']\n\n\ncol_select, col_names, skip, n_max\nselect:, colNames:, skip:, nMax:\n\n\nna, comment, trim_ws, guess_max\nna:, comment:, trimWs:, guessMax:\n\n\nlocale(decimal_mark = \",\")\ndecimalMark: ',', groupingMark: '.'\n\n\nwrite_csv(df, file)\n$df-&gt;writeCsv($file)\n\n\nformat_csv(df)\n$df-&gt;toCsv()",
+    "crumbs": [
+      "Coming from tibble"
+    ]
+  },
+  {
+    "objectID": "coming-from-tibble.html#forcats",
+    "href": "coming-from-tibble.html#forcats",
+    "title": "Coming from tibble",
+    "section": "forcats",
+    "text": "forcats\nFactor functions are methods that take the column name first.\n\n\n\n\n\n\n\nR\nphibble\n\n\n\n\nfactor(x), factor(x, levels = l)\n$df-&gt;asFactor('x'), $df-&gt;asFactor('x', $l)\n\n\nordered(x, levels = l)\n$df-&gt;asOrdered('x', $l)\n\n\nlevels(x)\n$df-&gt;levels('x')\n\n\nfct_relevel(x, \"b\")\n$df-&gt;fctRelevel('x', ['b'])\n\n\nfct_rev, fct_inorder, fct_infreq\nfctRev, fctInorder, fctInfreq\n\n\nfct_reorder(x, y)\n$df-&gt;fctReorder('x', 'y')\n\n\nfct_recode(x, new = \"old\")\n$df-&gt;fctRecode('x', ['new' =&gt; 'old'])\n\n\nfct_collapse(x, ab = c(\"a\", \"b\"))\n$df-&gt;fctCollapse('x', ['ab' =&gt; ['a', 'b']])\n\n\nfct_drop(x), droplevels(df)\n$df-&gt;fctDrop('x'), $df-&gt;fctDrop()",
+    "crumbs": [
+      "Coming from tibble"
+    ]
+  },
+  {
+    "objectID": "coming-from-tibble.html#dplyr-and-tidyr-basics",
+    "href": "coming-from-tibble.html#dplyr-and-tidyr-basics",
+    "title": "Coming from tibble",
+    "section": "dplyr and tidyr basics",
+    "text": "dplyr and tidyr basics\nphibble’s methods cover the verbs that other backends need to implement natively. phplyr provides the full dplyr and tidyr interface as pipe-able functions.\n\n\n\n\n\n\n\nR\nphibble\n\n\n\n\nfilter, mutate, select, rename, arrange\nmethods of the same names\n\n\nrename(df, new = old)\n$df-&gt;rename(['new' =&gt; 'old'])\n\n\ngroup_by, ungroup, rowwise\ngroupBy, ungroup, rowwise\n\n\nsummarise(.groups = \"drop\")\n$df-&gt;summarise([...], 'drop')\n\n\nleft_join(x, y, by = \"k\")\n$x-&gt;join($y, ['k'], 'left')\n\n\nleft_join(x, y, by = c(\"a\" = \"b\"))\n$x-&gt;join($y, [['a', 'b']], 'left')\n\n\nbind_rows, bind_cols\nFrame::concat([...]), Frame::bindCols([...])\n\n\nnest(df, data = c(x, y)), unnest(df, data)\n$df-&gt;nest(['x', 'y']), $df-&gt;unnest('data')\n\n\ndrop_na(df, x)\n$df-&gt;dropNa(['x'])",
+    "crumbs": [
+      "Coming from tibble"
+    ]
+  },
+  {
+    "objectID": "coming-from-tibble.html#differences",
+    "href": "coming-from-tibble.html#differences",
+    "title": "Coming from tibble",
+    "section": "Differences",
+    "text": "Differences\nphibble differs from R in these places:\n\nWhole numbers guess as int. readr guesses 1,2,3 as double. phibble guesses int, which suits PHP. Pass types: 'd' to read a double.\nPositions are 0-based. addRow(before:), addColumn(before:), take(), slice(), and row() count rows and columns from 0.\nString functions use fixed patterns. str_detect(), str_starts(), str_ends(), str_replace(), and str_replace_all() match literal text. SQL backends have no portable regular expressions.\nThere is no time-of-day type. readr’s hms columns and the t column type stay strings.\nJSON keeps null values. jsonlite drops NA fields from records. toJson() writes them as null.\nDatetimes are UTC. Text without an offset is read as UTC, and text with an offset is converted to UTC, as readr does.\nStrings sort in byte order. Sorting, grouping, and factor levels use the C locale, as dplyr’s arrange() does. Base R’s factor() uses the system locale, which can order mixed-case levels differently.\nPacked data frame columns are not supported. An unnamed table in tibble() is spliced into columns. A named one throws.",
+    "crumbs": [
+      "Coming from tibble"
+    ]
+  },
+  {
+    "objectID": "contract.html",
+    "href": "contract.html",
+    "title": "The Table contract",
+    "section": "",
+    "text": "Phibble\\Contracts\\Table is the interface that every table backend implements. phplyr’s verbs call its methods, so a pipeline runs unchanged on any backend. phibble ships two implementations: Frame, which holds data in PHP arrays, and SqlTable, which compiles verbs to SQL. phpolars implements it over Polars.\nThis page is for authors of backends. It lists the rules that every implementation follows and the semantics of each method.",
+    "crumbs": [
+      "For backend authors",
+      "The Table contract"
+    ]
+  },
+  {
+    "objectID": "contract.html#rules",
+    "href": "contract.html#rules",
+    "title": "The Table contract",
+    "section": "Rules",
+    "text": "Rules\n\nImmutability. Every method returns a new table and leaves the original unchanged.\nReturn types. Verbs are declared to return Table. A backend may return a different implementation. SqlTable returns a Frame when it falls back to memory for a closure. Frame declares static.\nNA. PHP null is NA in every column type.\nGrouping. groupBy() records grouping columns as metadata. filter(), mutate(), mutateGroups(), filterGroups(), summarise(), and eachGroup() work per group. The other verbs keep the grouping.\nGroup order. Groups are visited in sorted key order, as in dplyr: ascending, factors by level order, NA last, and strings in byte order. filter(), mutate(), and arrange() keep the input row order.\nRowwise tables. rowwise() makes every row its own group, in row order. groups() returns its id columns.\nRow closures. A row closure receives (Phibble\\Row $row, Table $group). $group is the row’s group, or the whole table when ungrouped.\nExpressions. Wherever a verb accepts a closure, it also accepts a Phibble\\Expr\\Expr, evaluated per group with the semantics in the expression reference.\nErrors. An unknown column name throws Phibble\\Exception\\ColumnNotFound.\nCountable and iterable. count() equals nrow(), and iterating yields one Phibble\\Row per row.",
+    "crumbs": [
+      "For backend authors",
+      "The Table contract"
+    ]
+  },
+  {
+    "objectID": "contract.html#methods",
+    "href": "contract.html#methods",
+    "title": "The Table contract",
+    "section": "Methods",
+    "text": "Methods\n\nShape and data\n\n\n\n\n\n\n\nMethod\nReturns\n\n\n\n\ncolumns()\nColumn names in order.\n\n\ntypes()\nColumn name to Phibble\\Type.\n\n\nnrow(), ncol()\nRow and column counts.\n\n\ncolumn($name)\nOne column as a list. Factors return their labels.\n\n\ntoRows()\nA list of associative arrays.\n\n\ntoColumns()\nAn array of lists by column name.\n\n\ncollect()\nThe rows as an in-memory Frame. A Frame returns itself.\n\n\n\n\n\nVerbs\n\n\n\n\n\n\n\nMethod\nSemantics\n\n\n\n\nselect($names)\nKeeps the named columns in the given order. Grouping columns are always kept.\n\n\nfilter($predicate)\nKeeps rows where the closure or expression is true. NA counts as false.\n\n\nfilterGroups($fn)\nRuns $fn once per group with the group’s table. It returns one value per row, and truthy values keep the row.\n\n\nmutate($columns)\nAdds or replaces columns. A value is a row closure, an expression, a list with one value per row, or a scalar. Later entries see earlier ones. Replaced columns keep their position.\n\n\nmutateGroups($columns)\nLike mutate(), but a closure runs once per group and returns a list for the group’s rows or a scalar. This is the primitive for window functions.\n\n\nrename($map)\nRenames columns, with new =&gt; old entries as in dplyr.\n\n\narrange($keys)\nSorts stably. Keys are names, [name, 'asc'|'desc'] pairs, or expressions, and NA sorts last in both directions. It ignores grouping.\n\n\ngroupBy($names), ungroup(), groups()\nSet, clear, or read the grouping columns.\n\n\nrowwise($idColumns), isRowwise()\nSet or read rowwise mode. groupBy() and ungroup() clear it.\n\n\neachGroup()\nYields ['key' =&gt; [...], 'table' =&gt; Table] for each group, with ungrouped tables. An ungrouped table yields one group with an empty key.\n\n\nsummarise($aggregates)\nReturns one row per group: the keys, then one column per entry. Each entry is a closure given the group’s table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. Frame and SqlTable take dplyr’s .groups as an optional second argument.\n\n\ndistinct($names)\nKeeps the first row of each combination of the named columns (and the grouping columns), and only those columns. An empty list means all columns.\n\n\ntake($indices)\nRows by 0-based position, in the given order. A null index gives an all-NA row. Keeps types, factor levels, and grouping.\n\n\nslice($offset, $length), head($n)\nRows by position. These ignore grouping.\n\n\njoin($other, $by, $type, ...)\nJoins with dplyr 1.1 semantics, described below.\n\n\n\n\n\nJoins\njoin() takes the other table, a list of [leftColumn, rightColumn] key pairs, and the join type: inner, left, right, full, semi, anti, or cross. A bare column name means the same name on both sides, and a cross join takes no keys.\n\nColumns. The result has x’s columns, then y’s columns other than its keys. Clashing names get the suffixes, .x and .y by default. With keep: true, y’s keys are kept too.\nKeys. Without keep, the key columns come from x. For rows that only y has (right and full joins), they are filled from y’s keys.\nRows. Rows follow x’s order, and each x row’s matches follow y’s order. Right and full joins then add y’s unmatched rows in y’s order. Semi and anti joins keep x’s rows and columns and never duplicate rows.\nMatching. NA keys match each other unless naMatches: false. 1 matches 1.0, and a factor matches text by its label.\nOptions. multiple picks all, any, first, or last match per x row. relationship (one-to-one, one-to-many, many-to-one, or many-to-many) throws when the data violates it. Without it, an unexpected many-to-many join raises a warning, as dplyr does. unmatched: 'error' throws when the join would drop rows.\nGrouping. The result keeps x’s grouping.",
+    "crumbs": [
+      "For backend authors",
+      "The Table contract"
+    ]
+  },
+  {
+    "objectID": "contract.html#testing-a-backend",
+    "href": "contract.html#testing-a-backend",
+    "title": "The Table contract",
+    "section": "Testing a backend",
+    "text": "Testing a backend\nThe simplest test of a backend is to run the same operations on the backend and on Frame and compare the results. tests/SqlTest.php does this for SqlTable. It loads the same data into a database, runs each operation both ways, and compares the collected rows. It also runs every case in tests/fixtures/expr/expected.json, the dplyr results that tests/r/expr.R produces, so each backend is checked against R as well as against Frame.",
+    "crumbs": [
+      "For backend authors",
+      "The Table contract"
+    ]
+  },
+  {
+    "objectID": "expr.html",
+    "href": "expr.html",
+    "title": "Expressions",
+    "section": "",
+    "text": "Phibble\\Expr describes a computation over columns as a tree of objects. The in-memory Frame evaluates the tree, SqlTable compiles it to SQL, and phpolars maps it to Polars expressions. An expression gives the same result on each backend because every backend implements the same list of functions with R’s semantics.\nA PHP closure can only be run. An expression can also be inspected, translated, and serialized. phibble’s verbs accept either, and a backend that cannot run a closure itself loads the rows and runs it in memory.",
+    "crumbs": [
+      "Guides",
+      "Expressions"
+    ]
+  },
+  {
+    "objectID": "expr.html#building-expressions",
+    "href": "expr.html#building-expressions",
+    "title": "Expressions",
+    "section": "Building expressions",
+    "text": "Building expressions\nAn expression has four kinds of nodes:\n\nCol reads a column: col('price').\nLit holds a literal value: lit(3), lit('north'), a date, or a list of values for in.\nCall applies a registered function to arguments.\nDesc marks a sort key or ranking as descending.\n\nMethods on any expression build operator calls. Arguments that are not expressions are wrapped in lit().\n\n\n\n\n\n\n\nMethod\nOperator\n\n\n\n\nadd, sub, mul, div, mod, pow\n+, -, *, /, %%, ^\n\n\nneg\nunary minus\n\n\neq, ne, lt, le, gt, ge\n==, !=, &lt;, &lt;=, &gt;, &gt;=\n\n\nand, or, not\n&, |, !\n\n\nisNa()\nis.na()\n\n\nisIn([...])\n%in%\n\n\nbetween($low, $high)\nbetween()\n\n\ndesc()\ndesc()\n\n\n\nFunctions in the Phibble\\Expr namespace build the other calls. Options are named arguments, as in mean(col('x'), na_rm: true) or lag(col('x'), n: 2, default: 0). var_() stands for var(), which is a reserved word in PHP. call('name', ...) builds a call to any registered function by name.\ncolumns() lists the columns an expression reads, and toArray() returns the tree as plain arrays:\n$heavy = col('body_mass')-&gt;gt(5000)-&gt;and(col('species')-&gt;isIn(['Gentoo', 'Chinstrap']));\n\necho json_encode($heavy-&gt;toArray(), JSON_PRETTY_PRINT), \"\\n\";\necho json_encode($heavy-&gt;columns()), \"\\n\";\n{\n    \"type\": \"call\",\n    \"fn\": \"&\",\n    \"args\": [\n        {\n            \"type\": \"call\",\n            \"fn\": \"&gt;\",\n            \"args\": [\n                {\n                    \"type\": \"col\",\n                    \"name\": \"body_mass\"\n                },\n                {\n                    \"type\": \"lit\",\n                    \"value\": 5000\n                }\n            ]\n        },\n        {\n            \"type\": \"call\",\n            \"fn\": \"in\",\n            \"args\": [\n                {\n                    \"type\": \"col\",\n                    \"name\": \"species\"\n                },\n                {\n                    \"type\": \"lit\",\n                    \"value\": [\n                        \"Gentoo\",\n                        \"Chinstrap\"\n                    ]\n                }\n            ]\n        }\n    ]\n}\n[\"body_mass\",\"species\"]",
+    "crumbs": [
+      "Guides",
+      "Expressions"
+    ]
+  },
+  {
+    "objectID": "expr.html#using-expressions-with-verbs",
+    "href": "expr.html#using-expressions-with-verbs",
+    "title": "Expressions",
+    "section": "Using expressions with verbs",
+    "text": "Using expressions with verbs\nEach verb evaluates expressions per group:\n\nfilter() keeps rows where the expression is true. NA counts as false.\nmutate() adds a column with one value per row. An aggregate such as mean() gives one value per group, which is repeated for each row of the group.\nsummarise() needs one value per group. Anything else throws a LengthException.\narrange() sorts by expressions over the whole table, ignoring groups. Wrap a key in desc() to sort it in descending order.\n\n$penguins = Frame::fromCsv('penguins.csv');\n\n$out = $penguins\n    -&gt;filter(is_na(col('body_mass'))-&gt;not())\n    -&gt;groupBy(['species'])\n    -&gt;mutate([\n        'z' =&gt; col('body_mass')-&gt;sub(mean(col('body_mass')))-&gt;div(sd(col('body_mass'))),\n        'rank' =&gt; min_rank(desc(col('body_mass'))),\n        'size' =&gt; case_when(\n            col('body_mass')-&gt;ge(5000), 'large',\n            col('body_mass')-&gt;ge(3500), 'medium',\n            default: 'small',\n        ),\n    ])\n    -&gt;filter(col('rank')-&gt;le(2))\n    -&gt;select(['species', 'body_mass', 'z', 'rank', 'size']);\n\necho $out;\n# A tibble: 6 × 5\n# Groups:   species [3]\n  species   body_mass     z  rank size  \n  &lt;chr&gt;         &lt;int&gt; &lt;dbl&gt; &lt;int&gt; &lt;chr&gt; \n1 Adelie         4725  2.23     2 medium\n2 Adelie         4775  2.34     1 medium\n3 Gentoo         6300  2.43     1 large \n4 Gentoo         6050  1.93     2 large \n5 Chinstrap      4550  2.13     2 medium\n6 Chinstrap      4800  2.78     1 medium\n$penguins = Frame::fromCsv('penguins.csv');\n\necho $penguins\n    -&gt;groupBy(['island'])\n    -&gt;summarise([\n        'n' =&gt; n(),\n        'mass' =&gt; mean(col('body_mass')),\n        'mass_rm' =&gt; mean(col('body_mass'), na_rm: true),\n        'q90' =&gt; quantile(col('body_mass'), 0.9, na_rm: true),\n        'species' =&gt; n_distinct(col('species')),\n        'any_heavy' =&gt; any(col('body_mass')-&gt;gt(6000), na_rm: true),\n    ]);\n# A tibble: 3 × 7\n  island        n  mass mass_rm   q90 species any_heavy\n  &lt;chr&gt;     &lt;int&gt; &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;   &lt;int&gt; &lt;lgl&gt;    \n1 Biscoe      168   NA    4716.  5670       2 TRUE     \n2 Dream       124 3713.   3713.  4300       2 FALSE    \n3 Torgersen    52   NA    3706.  4300       1 FALSE",
+    "crumbs": [
+      "Guides",
+      "Expressions"
+    ]
+  },
+  {
+    "objectID": "expr.html#functions",
+    "href": "expr.html#functions",
+    "title": "Expressions",
+    "section": "Functions",
+    "text": "Functions\nThe registry in Phibble\\Expr\\Functions::REGISTRY lists every function an expression may call, with its arguments and options. Calling anything else throws when the expression is built.\n\nScalar functions\nScalar functions return one value per row.\n\n\n\n\n\n\n\nFunction\nNotes\n\n\n\n\nis_na(x)\nTrue for NA and NaN.\n\n\nif_else(cond, true, false, missing:)\nmissing is used where cond is NA.\n\n\ncase_when(c1, v1, c2, v2, ..., default:)\nThe first true condition wins. NA conditions count as false.\n\n\ncoalesce(x, y, ...)\nThe first non-NA value.\n\n\nx-&gt;isIn([...])\nNever NA. NA is in the set only if NA is listed.\n\n\nbetween(x, low, high)\nInclusive. NA if any argument is NA.\n\n\nna_if(x, y)\nNA where x == y.\n\n\nnear(x, y, tol:)\nEquality within a tolerance.\n\n\nabs, sqrt, exp, log(x, base:), log10, floor, ceiling\nMath functions.\n\n\nround(x, digits:)\nRounds as R 4 does.\n\n\nas_int, as_float, as_string, as_bool\nCasts with R’s as.*() rules.\n\n\nstr_lower, str_upper, str_length, str_trim(x, side:)\nText functions.\n\n\nstr_sub(x, start, end)\n1-based and inclusive. Negative positions count from the end, as in stringr.\n\n\nstr_detect, str_starts, str_ends (with negate:)\nFixed patterns.\n\n\nstr_replace, str_replace_all\nFixed patterns. str_replace replaces the first match.\n\n\npaste0(...), paste(..., sep:)\nNA becomes the text NA, as in R.\n\n\n\n\n\nAggregates\nAn aggregate returns one value per group. Each takes na_rm:, which is false by default, so an aggregate over a group containing NA returns NA unless na_rm: true.\n\n\n\n\n\n\n\nFunction\nNotes\n\n\n\n\nn()\nRows in the group.\n\n\nsum, mean, median, min, max\nsum of no values is 0 and mean is NaN.\n\n\nsd, var_\nSample statistics, with n - 1.\n\n\nquantile(x, p), iqr(x)\nR’s default type 7. These throw on NA unless na_rm: true, as R does.\n\n\nn_distinct(x, ...)\nCounts NA as a value unless na_rm: true. Takes several columns.\n\n\nfirst, last, nth(x, n)\nTake default: and order_by:. Negative n counts from the end.\n\n\nany, all\nThree-valued, as in R.\n\n\n\n\n\nWindow functions\nA window function returns one value per row, computed over the rows of the group in row order.\n\n\n\n\n\n\n\nFunction\nNotes\n\n\n\n\nlag(x, n:, default:, order_by:), lead(...)\nShift values within the group.\n\n\nrow_number(x)\nRanks with ties broken by position. Without x, the row’s position.\n\n\nmin_rank, dense_rank, percent_rank, cume_dist\nNA values stay NA and are not counted. Pass desc(x) to rank in descending order.\n\n\nntile(x, n:)\nSplits rows into n groups of nearly equal size, larger groups first.\n\n\ncumsum, cumprod, cummean, cummin, cummax\nEvery value after the first NA is NA.\n\n\ncumall, cumany\nFollow dplyr’s NA rules.\n\n\nconsecutive_id(...)\nIncrements when any argument changes.\n\n\n\n$sales = tribble(\n    ['store', 'week', 'units'],\n    ['a', 1, 10], ['a', 2, 14], ['a', 3, 9],\n    ['b', 1, 7], ['b', 2, 7], ['b', 3, 12],\n);\n\necho $sales\n    -&gt;groupBy(['store'])\n    -&gt;mutate([\n        'prev' =&gt; lag(col('units')),\n        'change' =&gt; col('units')-&gt;sub(lag(col('units'))),\n        'running' =&gt; cumsum(col('units')),\n        'rank' =&gt; min_rank(desc(col('units'))),\n        'tile' =&gt; ntile(col('units'), n: 2),\n    ]);\n# A tibble: 6 × 8\n# Groups:   store [2]\n  store  week units  prev change running  rank  tile\n  &lt;chr&gt; &lt;int&gt; &lt;int&gt; &lt;int&gt;  &lt;int&gt;   &lt;int&gt; &lt;int&gt; &lt;int&gt;\n1 a         1    10    NA     NA      10     2     1\n2 a         2    14    10      4      24     1     2\n3 a         3     9    14     -5      33     3     1\n4 b         1     7    NA     NA       7     2     1\n5 b         2     7     7      0      14     2     1\n6 b         3    12     7      5      26     1     2",
+    "crumbs": [
+      "Guides",
+      "Expressions"
+    ]
+  },
+  {
+    "objectID": "expr.html#na-and-arithmetic",
+    "href": "expr.html#na-and-arithmetic",
+    "title": "Expressions",
+    "section": "NA and arithmetic",
+    "text": "NA and arithmetic\nExpressions follow R’s rules for missing values and arithmetic:\n\nArithmetic and comparisons with NA give NA.\n& and | use three-valued logic. FALSE & NA is false and TRUE | NA is true.\n/ and ^ always return floats. Division by zero gives Inf, -Inf, or NaN.\n%% takes the sign of the divisor, so -7 %% 3 is 2.\nround() takes, of the two candidates, the one closer to the stored value, and an exact tie goes to the even digit. round(2.5) is 2, and round(2.675, digits: 2) is 2.67 because 2.675 is stored as slightly less than 2.675.\nText compares and sorts in byte order.\n\n$frame = tibble(\n    a: [true, false, null, null],\n    b: [null, null, true, false],\n    x: [2.5, 0.5, -1.5, 2.675],\n    y: [1, null, 3, 4],\n);\n\necho $frame-&gt;mutate([\n    'and' =&gt; col('a')-&gt;and(col('b')),\n    'or' =&gt; col('a')-&gt;or(col('b')),\n    'sum' =&gt; col('y')-&gt;add(1),\n    'round' =&gt; Phibble\\Expr\\round(col('x')),\n    'round2' =&gt; Phibble\\Expr\\round(col('x'), digits: 2),\n    'mod' =&gt; lit(-7)-&gt;mod(3),\n    'cumsum' =&gt; cumsum(col('y')),\n]);\n# A tibble: 4 × 11\n  a     b         x     y and   or      sum round round2   mod cumsum\n  &lt;lgl&gt; &lt;lgl&gt; &lt;dbl&gt; &lt;int&gt; &lt;lgl&gt; &lt;lgl&gt; &lt;int&gt; &lt;dbl&gt;  &lt;dbl&gt; &lt;int&gt;  &lt;int&gt;\n1 TRUE  NA     2.5      1 NA    TRUE      2     2   2.5      2      1\n2 FALSE NA     0.5     NA FALSE NA       NA     0   0.5      2     NA\n3 NA    TRUE  -1.5      3 NA    TRUE      4    -2  -1.5      2     NA\n4 NA    FALSE  2.68     4 FALSE NA        5     3   2.67     2     NA",
+    "crumbs": [
+      "Guides",
+      "Expressions"
+    ]
+  },
+  {
+    "objectID": "expr.html#serialization",
+    "href": "expr.html#serialization",
+    "title": "Expressions",
+    "section": "Serialization",
+    "text": "Serialization\ntoArray() returns a JSON-friendly array, and Expr::fromArray() rebuilds the expression. Each node has a type key: col, lit, call, or desc. A call lists its positional arguments under args and its options under named. A date literal carries dtype (date or datetime).\n$expr = lag(col('score'), n: 2, default: 0, order_by: col('week'));\n$json = json_encode($expr-&gt;toArray());\n\necho $json, \"\\n\";\n\n$back = Phibble\\Expr\\Expr::fromArray(json_decode($json, true));\nvar_dump($back == $expr);\n{\"type\":\"call\",\"fn\":\"lag\",\"args\":[{\"type\":\"col\",\"name\":\"score\"}],\"named\":{\"n\":{\"type\":\"lit\",\"value\":2},\"default\":{\"type\":\"lit\",\"value\":0},\"order_by\":{\"type\":\"col\",\"name\":\"week\"}}}\nbool(true)\nThe test suite checks the in-memory evaluator against dplyr. The script tests/r/expr.R evaluates the same expressions in R and stores the results in tests/fixtures/expr/expected.json, which other backends can reuse.",
+    "crumbs": [
+      "Guides",
+      "Expressions"
+    ]
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "phibble",
+    "section": "",
+    "text": "phibble is a port of R’s tibble to PHP, with the readr-style input and output a data frame needs. A Frame holds typed columns, treats null as NA, and never changes in place: every operation returns a new frame.\nphibble is the shared table type of a small family of packages for statistics in PHP. The other packages read and return phibble tables:\nThe packages talk to each other through the Table contract. Frame is the in-memory implementation. SqlTable implements the same contract over a SQL query, so the verbs compile to SQL and run in the database.",
+    "crumbs": [
+      "phibble"
+    ]
+  },
+  {
+    "objectID": "index.html#install",
+    "href": "index.html#install",
+    "title": "phibble",
+    "section": "Install",
+    "text": "Install\nphibble needs PHP 8.5, which adds the |&gt; pipe operator.\ncomposer require erikwestlund/phibble\nphibble has no required dependencies beyond PHP’s PDO extension. It works with Laravel and Doctrine query builders without depending on either.",
+    "crumbs": [
+      "phibble"
+    ]
+  },
+  {
+    "objectID": "index.html#where-to-go-next",
+    "href": "index.html#where-to-go-next",
+    "title": "phibble",
+    "section": "Where to go next",
+    "text": "Where to go next\n\nGetting started covers building frames, printing, and the verbs.\nComing from tibble maps tibble, readr, and forcats functions to phibble and lists the places where phibble differs.\nTypes explains type inference, casts, factors, dates, and list-columns.\nReading and writing data covers CSV, JSON, databases, and Laravel collections.\nExpressions documents Phibble\\Expr, the inspectable expressions that every backend evaluates the same way.\nSQL tables documents SqlTable, which runs verbs in SQLite, PostgreSQL, or MySQL.\nThe Table contract is for authors of new backends.",
+    "crumbs": [
+      "phibble"
+    ]
+  },
+  {
+    "objectID": "sql.html",
+    "href": "sql.html",
+    "title": "SQL tables",
+    "section": "",
+    "text": "Phibble\\Sql\\SqlTable is a table backed by a SQL query, like dbplyr’s tbl(). It implements the same Table contract as Frame. Verbs called with expressions are compiled into SQL, and no query runs until the rows are needed. SQLite, PostgreSQL, and MySQL are supported.",
+    "crumbs": [
+      "Guides",
+      "SQL tables"
+    ]
+  },
+  {
+    "objectID": "sql.html#opening-a-table",
+    "href": "sql.html#opening-a-table",
+    "title": "SQL tables",
+    "section": "Opening a table",
+    "text": "Opening a table\ntbl($pdo, 'name') opens a table or view. tbl($pdo, 'SELECT ...', $bindings) starts from a query with positional (?) or named (:name) bindings. The same tables can be opened with SqlTable::table() and SqlTable::query(). SqlTable::fromQuery($builder) starts from a Laravel or Doctrine query builder, and SqlTable::fromSource($pdoSource) from a PdoSource.\nphibble reads the column names when the table is opened. It runs the query itself when the rows are needed: collect() returns a Frame, and toRows(), nrow(), iteration, and printing also run it.\nshowQuery() returns the SQL with ? placeholders, and bindings() returns their values in order.\n// Load penguins.csv into an in-memory SQLite database.\n$pdo = new PDO('sqlite::memory:');\n$pdo-&gt;exec('CREATE TABLE penguins (species TEXT, island TEXT, bill_len REAL, bill_dep REAL,\n    flipper_len INTEGER, body_mass INTEGER, sex TEXT, year INTEGER)');\n$insert = $pdo-&gt;prepare('INSERT INTO penguins VALUES (?, ?, ?, ?, ?, ?, ?, ?)');\nforeach (Frame::fromCsv('penguins.csv')-&gt;toRows() as $row) {\n    $insert-&gt;execute(array_values($row));\n}\n\n$penguins = tbl($pdo, 'penguins');\n\n$summary = $penguins\n    -&gt;filter(col('year')-&gt;eq(2008))\n    -&gt;groupBy(['species'])\n    -&gt;summarise(['n' =&gt; n(), 'mass' =&gt; mean(col('body_mass'), na_rm: true)]);\n\necho get_class($summary), \"\\n\\n\";\necho $summary-&gt;showQuery(), \"\\n\\n\";\necho json_encode($summary-&gt;bindings()), \"\\n\\n\";\necho $summary-&gt;collect();\nPhibble\\Sql\\SqlTable\n\nSELECT * FROM (SELECT \"species\", COUNT(*) AS \"n\", AVG(CAST(\"body_mass\" AS REAL)) AS \"mass\" FROM (SELECT * FROM (SELECT * FROM \"penguins\") AS q1 WHERE (\"year\" = ?)) AS q2 GROUP BY \"species\") AS q3 ORDER BY (\"species\" IS NULL), \"species\"\n\n[2008]\n\n# A tibble: 3 × 3\n  species       n  mass\n  &lt;chr&gt;     &lt;int&gt; &lt;dbl&gt;\n1 Adelie       50 3742 \n2 Chinstrap    18 3800 \n3 Gentoo       46 5020.\nEach verb wraps the previous query in a subquery, so each step’s SQL stays simple. Database planners usually flatten the nesting.",
+    "crumbs": [
+      "Guides",
+      "SQL tables"
+    ]
+  },
+  {
+    "objectID": "sql.html#what-compiles-to-sql",
+    "href": "sql.html#what-compiles-to-sql",
+    "title": "SQL tables",
+    "section": "What compiles to SQL",
+    "text": "What compiles to SQL\nThese verbs compile when their arguments are expressions or column names: select(), rename(), filter(), mutate(), arrange(), groupBy(), summarise(), distinct(), slice(), head(), and join().\nThe compiled SQL keeps R’s semantics:\n\nAn aggregate returns NA when its group contains NA, unless na_rm: true. SQL aggregates skip NULL, so phibble adds a check on the count of non-NULL values.\nCumulative functions return NA after the first NA.\nRanks leave NA rows unranked.\nisIn() never returns NA.\n/ returns a float, and division by zero gives NA.\nGroups in summarise() output are sorted, with NA last.",
+    "crumbs": [
+      "Guides",
+      "SQL tables"
+    ]
+  },
+  {
+    "objectID": "sql.html#when-the-table-falls-back-to-memory",
+    "href": "sql.html#when-the-table-falls-back-to-memory",
+    "title": "SQL tables",
+    "section": "When the table falls back to memory",
+    "text": "When the table falls back to memory\nSome arguments have no faithful SQL translation. A SqlTable then collects the rows and runs the verb in memory, and the verb returns a Frame. Results match Frame in either case. The fallbacks are:\n\nany PHP closure,\nround(), because SQL’s ROUND does not round half to even,\nas_string() and as_bool(),\nstr_replace(), which replaces only the first match,\npaste() and paste0() with arguments other than text literals, because SQL formats numbers differently from R,\nfirst(), last(), nth(), iqr(), cumprod(), and consecutive_id(),\nmedian() and quantile() outside PostgreSQL,\nquantile() without na_rm: true,\ntake(), eachGroup(), rowwise(), mutateGroups() with closures, and filterGroups(),\njoins with multiple, relationship, or unmatched set, joins between different connections, full joins in MySQL, and full joins with NA matching in PostgreSQL.\n\n$pdo = new PDO('sqlite::memory:');\n$t = tbl($pdo, 'SELECT 1 AS id, 2.5 AS x UNION ALL SELECT 2, 3.5');\n\n// Compiles to SQL.\necho get_class($t-&gt;mutate(['y' =&gt; col('x')-&gt;mul(2)])), \"\\n\";\n\n// round() rounds half to even in R, which SQL ROUND does not, so the rows\n// are collected and the expression runs in memory.\necho get_class($t-&gt;mutate(['y' =&gt; Phibble\\Expr\\round(col('x'))])), \"\\n\";\n\n// So does any closure.\necho get_class($t-&gt;filter(fn ($r) =&gt; $r-&gt;x &gt; 3)), \"\\n\";\n\necho $t-&gt;mutate(['y' =&gt; Phibble\\Expr\\round(col('x'))]);\nPhibble\\Sql\\SqlTable\nPhibble\\Frame\nPhibble\\Frame\n# A tibble: 2 × 3\n     id     x     y\n  &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt;\n1     1   2.5     2\n2     2   3.5     4",
+    "crumbs": [
+      "Guides",
+      "SQL tables"
+    ]
+  },
+  {
+    "objectID": "sql.html#window-functions",
+    "href": "sql.html#window-functions",
+    "title": "SQL tables",
+    "section": "Window functions",
+    "text": "Window functions\nGrouped mutate() and filter() compile aggregates and window functions to OVER (PARTITION BY ...). Window functions such as lag() and cumsum() need a row order. phibble uses the order set by arrange(), or the order_by: option of lag() and lead(). Without either, compiling throws and the table falls back to memory.\n$pdo = new PDO('sqlite::memory:');\n$sales = tbl($pdo, &lt;&lt;&lt;'SQL'\n    SELECT 'a' AS store, 1 AS week, 10 AS units\n    UNION ALL SELECT 'a', 2, 14 UNION ALL SELECT 'a', 3, 9\n    UNION ALL SELECT 'b', 1, 7 UNION ALL SELECT 'b', 2, NULL\n    SQL);\n\n$out = $sales\n    -&gt;groupBy(['store'])\n    -&gt;arrange(['store', 'week'])\n    -&gt;mutate([\n        'running' =&gt; cumsum(col('units')),\n        'of_best' =&gt; col('units')-&gt;div(max(col('units'), na_rm: true)),\n    ]);\n\necho $out-&gt;showQuery(), \"\\n\\n\";\necho $out-&gt;collect();\nSELECT * FROM (SELECT \"store\", \"week\", \"units\", \"running\", (CAST(\"units\" AS REAL) / NULLIF(MAX(\"units\") OVER (PARTITION BY \"store\"), 0)) AS \"of_best\" FROM (SELECT \"store\", \"week\", \"units\", (CASE WHEN COUNT(*) OVER (PARTITION BY \"store\" ORDER BY (\"store\" IS NULL), \"store\", (\"week\" IS NULL), \"week\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) &gt; COUNT(\"units\") OVER (PARTITION BY \"store\" ORDER BY (\"store\" IS NULL), \"store\", (\"week\" IS NULL), \"week\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) THEN NULL ELSE SUM(\"units\") OVER (PARTITION BY \"store\" ORDER BY (\"store\" IS NULL), \"store\", (\"week\" IS NULL), \"week\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) END) AS \"running\" FROM (SELECT 'a' AS store, 1 AS week, 10 AS units\nUNION ALL SELECT 'a', 2, 14 UNION ALL SELECT 'a', 3, 9\nUNION ALL SELECT 'b', 1, 7 UNION ALL SELECT 'b', 2, NULL) AS q1) AS q2) AS q3 ORDER BY (\"store\" IS NULL), \"store\", (\"week\" IS NULL), \"week\"\n\n# A tibble: 5 × 5\n# Groups:   store [2]\n  store  week units running of_best\n  &lt;chr&gt; &lt;int&gt; &lt;int&gt;   &lt;int&gt;   &lt;dbl&gt;\n1 a         1    10      10   0.714\n2 a         2    14      24   1    \n3 a         3     9      33   0.643\n4 b         1     7       7   1    \n5 b         2    NA      NA  NA",
+    "crumbs": [
+      "Guides",
+      "SQL tables"
+    ]
+  },
+  {
+    "objectID": "sql.html#joins",
+    "href": "sql.html#joins",
+    "title": "SQL tables",
+    "section": "Joins",
+    "text": "Joins\njoin() between two tables on the same PDO connection compiles to a SQL join. The output columns follow Frame::join(): x’s columns, then y’s other columns, with .x and .y suffixes on clashing names. NA keys match each other, as in dplyr, through IS in SQLite, IS NOT DISTINCT FROM in PostgreSQL, and &lt;=&gt; in MySQL. Pass naMatches: false for SQL’s usual equality. The order of rows from a SQL join is not defined, so call arrange() when it matters.\n$pdo = new PDO('sqlite::memory:');\n$visits = tbl($pdo, \"SELECT 1 AS clinic_id, 120 AS bp UNION ALL SELECT 2, 135 UNION ALL SELECT NULL, 128\");\n$clinics = tbl($pdo, \"SELECT 1 AS id, 'north' AS name UNION ALL SELECT NULL, 'unassigned'\");\n\n$joined = $visits-&gt;join($clinics, [['clinic_id', 'id']], 'left');\n\necho $joined-&gt;showQuery(), \"\\n\\n\";\necho $joined-&gt;arrange(['bp'])-&gt;collect();\nSELECT jq1x.\"clinic_id\" AS \"clinic_id\", jq1x.\"bp\" AS \"bp\", jq1y.\"name\" AS \"name\" FROM (SELECT 1 AS clinic_id, 120 AS bp UNION ALL SELECT 2, 135 UNION ALL SELECT NULL, 128) AS jq1x LEFT JOIN (SELECT 1 AS id, 'north' AS name UNION ALL SELECT NULL, 'unassigned') AS jq1y ON (jq1x.\"clinic_id\" IS jq1y.\"id\")\n\n# A tibble: 3 × 3\n  clinic_id    bp name      \n      &lt;int&gt; &lt;int&gt; &lt;chr&gt;     \n1         1   120 north     \n2        NA   128 unassigned\n3         2   135 &lt;NA&gt;",
+    "crumbs": [
+      "Guides",
+      "SQL tables"
+    ]
+  },
+  {
+    "objectID": "sql.html#dialects",
+    "href": "sql.html#dialects",
+    "title": "SQL tables",
+    "section": "Dialects",
+    "text": "Dialects\nDialect::for($pdo) chooses the dialect from the PDO driver. The dialects differ in identifier quoting, cast types, string functions, and NULL-safe equality. The SQL for one expression in each dialect:\nuse Phibble\\Sql\\Compiler;\nuse Phibble\\Sql\\MysqlDialect;\nuse Phibble\\Sql\\PostgresDialect;\nuse Phibble\\Sql\\SqliteDialect;\n\n$expressions = [\n    'mean, NA aware' =&gt; mean(col('bp')),\n    'ratio' =&gt; col('bp')-&gt;div(col('baseline')),\n    'contains' =&gt; str_detect(col('name'), 'north'),\n    'in, with NA' =&gt; col('arm')-&gt;isIn(['a', null]),\n];\n\nforeach ([new SqliteDialect(), new PostgresDialect(), new MysqlDialect()] as $dialect) {\n    echo \"-- {$dialect-&gt;name()}\\n\";\n    $compiler = new Compiler($dialect, mode: 'summary');\n    foreach ($expressions as $label =&gt; $expr) {\n        echo str_pad($label, 16), $compiler-&gt;compile($expr)-&gt;sql, \"\\n\";\n    }\n    echo \"\\n\";\n}\n\n$window = new Compiler(new PostgresDialect(), groups: ['clinic'], order: [[col('visit'), false]]);\necho $window-&gt;compile(cumsum(col('bp')))-&gt;sql, \"\\n\";\n-- SQLite\nmean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT(\"bp\") THEN NULL ELSE AVG(CAST(\"bp\" AS REAL)) END)\nratio           (CAST(\"bp\" AS REAL) / NULLIF(\"baseline\", 0))\ncontains        (INSTR(\"name\", ?) &gt; 0)\nin, with NA     (COALESCE(\"arm\" IN (?), FALSE) OR \"arm\" IS NULL)\n\n-- PostgreSQL\nmean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT(\"bp\") THEN NULL ELSE AVG(CAST(\"bp\" AS DOUBLE PRECISION)) END)\nratio           (CAST(\"bp\" AS DOUBLE PRECISION) / NULLIF(\"baseline\", 0))\ncontains        (POSITION(? IN \"name\") &gt; 0)\nin, with NA     (COALESCE(\"arm\" IN (?), FALSE) OR \"arm\" IS NULL)\n\n-- MySQL\nmean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT(`bp`) THEN NULL ELSE AVG(CAST(`bp` AS DOUBLE)) END)\nratio           (CAST(`bp` AS DOUBLE) / NULLIF(`baseline`, 0))\ncontains        (LOCATE(?, `name`) &gt; 0)\nin, with NA     (COALESCE(`arm` IN (?), FALSE) OR `arm` IS NULL)\n\n(CASE WHEN COUNT(*) OVER (PARTITION BY \"clinic\" ORDER BY (\"visit\" IS NULL), \"visit\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) &gt; COUNT(\"bp\") OVER (PARTITION BY \"clinic\" ORDER BY (\"visit\" IS NULL), \"visit\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) THEN NULL ELSE SUM(\"bp\") OVER (PARTITION BY \"clinic\" ORDER BY (\"visit\" IS NULL), \"visit\" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) END)\nThe test suite runs the dplyr reference cases through SqlTable on SQLite, and on PostgreSQL and MySQL when their DSNs are set. See Development.",
+    "crumbs": [
+      "Guides",
+      "SQL tables"
+    ]
+  }
+]

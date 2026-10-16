@@ -1,0 +1,132 @@
+---
+title: "Getting started"
+---
+
+## Imports
+
+The examples on this site import the frame class and phibble's functions like
+this:
+
+```php
+use Phibble\Frame;
+use function Phibble\{tibble, tribble};
+use function Phibble\Expr\{col, desc, mean, n};
+```
+
+`Phibble\Expr` has functions named `min`, `max`, `sum`, `round`, `abs`, `log`,
+and a few others that share names with PHP built-ins. In a file that imports
+them, a bare `round($x)` calls phibble's expression helper. Write `\round($x)`
+for PHP's function.
+
+## Building frames
+
+`tibble()` builds a frame column by column. Each named argument is a column.
+A list gives one value per row, and a single value is repeated for every row.
+A closure receives the frame built so far, so a column can be computed from
+earlier ones.
+
+{{< include examples/_tibble.md >}}
+
+`tribble()` takes the column names first and then one list per row, which is
+easier to read for small literal tables:
+
+{{< include examples/_tribble.md >}}
+
+`Frame::fromRows()` takes a list of associative arrays. Keys missing from a row
+are NA. `Frame::fromColumns()` takes an array of columns and accepts explicit
+types.
+
+{{< include examples/_from-rows.md >}}
+
+`Frame::fromCsv()` reads a CSV file and guesses each column's type. The
+[input and output guide](io.qmd) covers its options.
+
+## Printing
+
+`echo $frame` prints the frame the way tibble does. The header gives the size,
+each column shows its type, and frames with more than 20 rows show the first
+10. Numbers show three significant digits and NA prints as `NA` (or `<NA>` in
+text columns).
+
+{{< include examples/_read-csv.md >}}
+
+`glimpse()` returns one line per column, which suits wide frames:
+
+{{< include examples/_glimpse.md >}}
+
+`format(n: 30, width: 120)` prints more rows or a wider table.
+
+## Types and NA
+
+Each column has one type from the `Phibble\Type` enum: `Float`, `Int`, `Bool`,
+`String`, `Factor`, `Date`, `DateTime`, or `List`. Types are inferred from the
+values, and PHP `null` is NA in every type. The [types guide](types.qmd)
+describes inference, casts, and factors.
+
+## Reading values
+
+A column reads as a PHP list with `$frame->name`, `$frame['name']`, or
+`$frame->column('name')`. Rows are `Phibble\Row` objects, which read values as
+properties or array keys. Iterating a frame yields its rows. An unknown column
+name throws `Phibble\Exception\ColumnNotFound`; names are never matched
+partially.
+
+{{< include examples/_access.md >}}
+
+## Verbs
+
+Frames have the dplyr verbs as methods: `select()`, `filter()`, `mutate()`,
+`rename()`, `arrange()`, `groupBy()`, `summarise()`, `distinct()`, `slice()`,
+`head()`, and `join()`. Each returns a new frame.
+
+`filter()` and `mutate()` accept a row closure, which receives a `Row` and
+returns a value. `arrange()` takes column names, or `[name, 'desc']` pairs.
+
+{{< include examples/_verbs.md >}}
+
+The same verbs accept [expressions](expr.qmd) built with `col()` and the helper
+functions. Expressions are evaluated a whole column at a time, and they are the
+form that SQL and Polars backends can translate.
+
+{{< include examples/_verbs-expr.md >}}
+
+## Groups
+
+`groupBy()` records grouping columns on the frame. `summarise()` returns one
+row per group, with groups in sorted order and NA last, as dplyr does. With
+several grouping columns, the result keeps all but the last.
+
+{{< include examples/_tour.md >}}
+
+In a grouped frame, `filter()` and `mutate()` work within each group. An
+aggregate inside `mutate()` is computed per group and repeated for each of the
+group's rows:
+
+{{< include examples/_grouped.md >}}
+
+A row closure receives the row's group as its second argument:
+`fn (Row $r, Frame $group) => ...`.
+
+## Distinct rows and joins
+
+`distinct()` keeps the first row of each combination of the given columns.
+`join()` takes the other table, the key columns, and the join type: `inner`,
+`left`, `right`, `full`, `semi`, `anti`, or `cross`. Joins follow dplyr 1.1,
+including its column naming and the rule that NA keys match each other.
+
+{{< include examples/_join.md >}}
+
+## Immutability
+
+Methods never change the frame they are called on:
+
+{{< include examples/_immutable.md >}}
+
+## The pipe operator
+
+PHP 8.5's `|>` passes a value to a callable. Arrow functions let a pipeline of
+frame methods read from top to bottom. [phplyr](https://github.com/erikwestlund/phplyr)
+provides verbs that return such callables, so a phplyr pipeline needs no arrow
+functions.
+
+{{< include examples/_pipe.md >}}

@@ -1,0 +1,114 @@
+---
+title: "Types"
+---
+
+## Column types
+
+Every column has one type from the `Phibble\Type` enum. The print header shows
+tibble's abbreviation for each type.
+
+| Type | Values | Printed as |
+| --- | --- | --- |
+| `Type::Float` | `float` | `<dbl>` |
+| `Type::Int` | `int` | `<int>` |
+| `Type::Bool` | `bool` | `<lgl>` |
+| `Type::String` | `string` | `<chr>` |
+| `Type::Factor` | level labels, stored as codes | `<fct>`, or `<ord>` when ordered |
+| `Type::Date` | `DateTimeImmutable` at midnight UTC | `<date>` |
+| `Type::DateTime` | `DateTimeImmutable` | `<dttm>` |
+| `Type::List` | any PHP value, including frames | `<list>` |
+
+`null` is NA in every type. `$frame->types()` returns the types by column name
+and `$frame->type('x')` returns one.
+
+## Inference
+
+phibble infers a column's type from its PHP values the way R's `c()` combines
+values:
+
+- Bools and ints combine to int, and ints and floats combine to float.
+- Any string makes the column a string column, and the other values are
+  converted to text.
+- `DateTimeInterface` values make a datetime column.
+- Arrays and other objects make a list-column.
+- A column that is entirely NA is bool, R's logical type.
+
+{{< include examples/_infer.md >}}
+
+Text read from CSV files and databases is guessed differently. The
+[input and output guide](io.qmd) describes that.
+
+## Casts
+
+`cast()` converts columns to other types. Conversions follow R's `as.*()`
+functions. A value that cannot be converted becomes NA, and phibble raises one
+`E_USER_WARNING` per column, as R does with "NAs introduced by coercion".
+
+- Floats convert to int by truncating toward zero.
+- `"TRUE"`, `"true"`, `"T"`, and `"True"` convert to true. `"yes"` and `"1"` do
+  not.
+- Floats convert to text with up to 15 significant digits, in fixed or
+  scientific notation, whichever is shorter.
+
+{{< include examples/_casts.md >}}
+
+A factor converts to int or float as its 1-based level codes, as
+`as.integer(factor)` does in R. Converting it to text gives its labels. Dates
+convert to numbers as days since 1970-01-01, and datetimes as seconds since the
+epoch.
+
+## Factors
+
+A factor column stores an ordered list of level labels and one code per row.
+`asFactor()` sorts the unique values to make the levels unless levels are
+given. Numbers sort numerically and text sorts in byte order. Values that are
+not among explicit levels become NA.
+
+`levels()` returns the labels. `storage('x')->codes()` returns the codes, which
+are 0-based indexes into the levels. An ordered factor sorts by level position.
+
+{{< include examples/_factors.md >}}
+
+The forcats functions are `fct*` methods. Each returns a new frame with the
+column's levels changed.
+
+| Method | Effect |
+| --- | --- |
+| `fctRelevel($col, $levels, after: 0)` | Moves the given levels to the front, or after a position. |
+| `fctLevels($col, $levels)` | Sets the full level order. |
+| `fctRev($col)` | Reverses the level order. |
+| `fctInorder($col)` | Orders levels by first appearance. |
+| `fctInfreq($col)` | Orders levels by frequency, most common first. |
+| `fctReorder($col, $by, $summary)` | Orders levels by a summary of another column, the median by default. |
+| `fctRecode($col, ['new' => 'old'])` | Renames levels. |
+| `fctCollapse($col, ['new' => ['a', 'b']])` | Merges levels. |
+| `fctDrop($col)` | Removes levels that no row uses. |
+
+{{< include examples/_forcats.md >}}
+
+## Dates and datetimes
+
+A date column holds `DateTimeImmutable` values at midnight UTC. A datetime
+column holds `DateTimeImmutable` values with their time and time zone. CSV text
+in ISO 8601 form is parsed as a date when it has no time, and as a datetime
+otherwise. Text without an offset is read as UTC.
+
+{{< include examples/_dates.md >}}
+
+## List-columns
+
+A list-column holds any PHP value in each row, such as arrays or other frames.
+`nest()` collapses columns into a list-column of frames, one row per unique
+combination of the remaining columns. `unnest()` expands it again.
+
+{{< include examples/_list-columns.md >}}
+
+## Model data
+
+`toModelData()` returns columns in the form the php-stats model functions read.
+Numbers, bools, and strings are plain lists. Dates and datetimes become days
+and seconds since the epoch. A factor becomes an array with its levels, its
+0-based codes, and whether it is ordered, so a model keeps the frame's level
+order, including unused levels. A list-column throws.
+
+{{< include examples/_model-data.md >}}
