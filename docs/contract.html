@@ -204,6 +204,7 @@ ul.task-list li input[type="checkbox"] {
   <li><a href="#verbs" id="toc-verbs" class="nav-link" data-scroll-target="#verbs">Verbs</a></li>
   <li><a href="#joins" id="toc-joins" class="nav-link" data-scroll-target="#joins">Joins</a></li>
   </ul></li>
+  <li><a href="#errors-and-allowed-differences" id="toc-errors-and-allowed-differences" class="nav-link" data-scroll-target="#errors-and-allowed-differences">Errors and allowed differences</a></li>
   <li><a href="#testing-a-backend" id="toc-testing-a-backend" class="nav-link" data-scroll-target="#testing-a-backend">Testing a backend</a></li>
   </ul>
 </nav>
@@ -350,7 +351,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td><code>summarise($aggregates)</code></td>
-<td>Returns one row per group: the keys, then one column per entry. Each entry is a closure given the group’s table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. <code>Frame</code> and <code>SqlTable</code> take dplyr’s <code>.groups</code> as an optional second argument.</td>
+<td>Returns one row per group: the keys, then one column per entry. Each entry is a closure given the group’s table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. The optional second argument is dplyr’s <code>.groups</code>: <code>'drop_last'</code> (the default), <code>'drop'</code>, <code>'keep'</code>, or <code>'rowwise'</code>.</td>
 </tr>
 <tr class="even">
 <td><code>distinct($names)</code></td>
@@ -383,6 +384,16 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>Grouping.</strong> The result keeps x’s grouping.</li>
 </ul>
 </section>
+</section>
+<section id="errors-and-allowed-differences" class="level2">
+<h2 class="anchored" data-anchor-id="errors-and-allowed-differences">Errors and allowed differences</h2>
+<p><code>Frame</code> follows R, and other backends match it. The following rules apply where R raises an error or where exact agreement is impractical.</p>
+<ul>
+<li><code>quantile()</code> and <code>iqr()</code> over values that include NA, without <code>na_rm: true</code>, throw an error, as R does. A backend must not return NA.</li>
+<li>A summary entry that is not size 1 throws <code>LengthException</code>, and the message mentions <code>reframe()</code>.</li>
+<li>Aggregates over zero rows may return NA. <code>Frame</code> returns R’s values (<code>NaN</code> for <code>mean()</code>, <code>Inf</code> and <code>-Inf</code> for <code>min()</code> and <code>max()</code>). This case only arises for an ungrouped table with no rows.</li>
+<li><code>as_string()</code> on doubles with very large or very small magnitudes may differ from R’s scientific notation. <code>Phibble\Column\Infer::formatFloat()</code> states R’s rule: 15 significant digits, in fixed or scientific notation, whichever is shorter.</li>
+</ul>
 </section>
 <section id="testing-a-backend" class="level2">
 <h2 class="anchored" data-anchor-id="testing-a-backend">Testing a backend</h2>

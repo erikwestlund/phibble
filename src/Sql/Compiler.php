@@ -110,7 +110,7 @@ final class Compiler
         $fn = $call->fn;
         $kind = Functions::kind($fn);
         if ($kind === 'agg') {
-            return $this->mode === 'summary' ? $this->aggregate($call) : $this->over($this->aggregate($call), withOrder: false);
+            return $this->aggregate($call);
         }
         if ($kind === 'window') {
             if ($this->mode === 'summary') {
@@ -178,43 +178,63 @@ final class Compiler
         };
     }
 
+    /**
+     * Aggregates. In summary mode they are plain aggregate calls; in row
+     * mode every inner aggregate call gets OVER (PARTITION BY groups), and
+     * the NA guards wrap those window calls.
+     */
     private function aggregate(Call $call): Fragment
     {
         $fn = $call->fn;
+        $rowMode = $this->mode !== 'summary';
+        // Wrap one aggregate call: plain in summarise, a window in mutate/filter.
+        $w = fn (Fragment $agg) => $rowMode ? $this->over($agg, withOrder: false) : $agg;
         if ($fn === 'n') {
-            return Fragment::raw('COUNT(*)');
+            return $w(Fragment::raw('COUNT(*)'));
         }
         $naRm = $call->option('na_rm') instanceof Lit && $call->option('na_rm')->value === true;
         if ($call->option('na_rm') !== null && ! $call->option('na_rm') instanceof Lit) {
             throw new Untranslatable('na_rm must be a literal in SQL.');
         }
         $x = $this->compile($call->args[0]);
+        $float = $this->dialect->castType('float');
+        $countAll = $w(Fragment::raw('COUNT(*)'));
+        $countX = $w(Fragment::format('COUNT({})', [$x]));
         // R returns NA when any input is NA unless na_rm.
         $guard = fn (Fragment $agg) => $naRm
             ? $agg
-            : Fragment::format('(CASE WHEN COUNT(*) > COUNT({}) THEN NULL ELSE {} END)', [$x, $agg]);
+            : Fragment::format('(CASE WHEN {} > {} THEN NULL ELSE {} END)', [$countAll, $countX, $agg]);
 
         return match ($fn) {
-            'sum' => $guard(Fragment::format('COALESCE(SUM({}), 0)', [$x])),
-            'mean' => $guard(Fragment::format('AVG(CAST({} AS '.$this->dialect->castType('float').'))', [$x])),
-            'min' => $guard(Fragment::format('MIN({})', [$x])),
-            'max' => $guard(Fragment::format('MAX({})', [$x])),
-            'sd', 'var' => $guard($this->dialect->sampleStat($fn, Fragment::format('CAST({} AS '.$this->dialect->castType('float').')', [$x]))),
-            'median' => $guard($this->dialect->quantile($x, 0.5)),
-            'quantile' => $this->quantile($call, $x, $naRm),
+            'sum' => $guard(Fragment::format('COALESCE({}, 0)', [$w(Fragment::format('SUM({})', [$x]))])),
+            'mean' => $guard($w(Fragment::format("AVG(CAST({} AS {$float}))", [$x]))),
+            'min' => $guard($w(Fragment::format('MIN({})', [$x]))),
+            'max' => $guard($w(Fragment::format('MAX({})', [$x]))),
+            'sd', 'var' => $guard($this->dialect->sampleStat($fn, Fragment::format("CAST({} AS {$float})", [$x]), $w)),
+            'median' => $rowMode
+                ? throw new Untranslatable('median() is not available as a window function in SQL.')
+                : $guard($this->dialect->quantile($x, 0.5)),
+            'quantile' => $rowMode
+                ? throw new Untranslatable('quantile() is not available as a window function in SQL.')
+                : $this->quantile($call, $x, $naRm),
             'iqr' => throw new Untranslatable('iqr() is not translated.'),
-            'n_distinct' => count($call->args) > 1
-                ? throw new Untranslatable('n_distinct() of several columns is not translated.')
-                : ($naRm
-                    ? Fragment::format('COUNT(DISTINCT {})', [$x])
-                    : Fragment::format('(COUNT(DISTINCT {}) + CASE WHEN COUNT(*) > COUNT({}) THEN 1 ELSE 0 END)', [$x, $x])),
+            'n_distinct' => match (true) {
+                count($call->args) > 1 => throw new Untranslatable('n_distinct() of several columns is not translated.'),
+                $rowMode => throw new Untranslatable('COUNT(DISTINCT) is not available as a window function in SQL.'),
+                $naRm => Fragment::format('COUNT(DISTINCT {})', [$x]),
+                default => Fragment::format('(COUNT(DISTINCT {}) + CASE WHEN {} > {} THEN 1 ELSE 0 END)', [$x, $countAll, $countX]),
+            },
             'any' => Fragment::format(
-                '(CASE WHEN SUM(CASE WHEN {} THEN 1 ELSE 0 END) > 0 THEN TRUE'.($naRm ? '' : ' WHEN COUNT(*) > COUNT({}) THEN NULL').' ELSE FALSE END)',
-                $naRm ? [$x] : [$x, $x],
+                '(CASE WHEN {} > 0 THEN TRUE'.($naRm ? '' : ' WHEN {} > {} THEN NULL').' ELSE FALSE END)',
+                $naRm
+                    ? [$w(Fragment::format('SUM(CASE WHEN {} THEN 1 ELSE 0 END)', [$x]))]
+                    : [$w(Fragment::format('SUM(CASE WHEN {} THEN 1 ELSE 0 END)', [$x])), $countAll, $countX],
             ),
             'all' => Fragment::format(
-                '(CASE WHEN SUM(CASE WHEN NOT {} THEN 1 ELSE 0 END) > 0 THEN FALSE'.($naRm ? '' : ' WHEN COUNT(*) > COUNT({}) THEN NULL').' ELSE TRUE END)',
-                $naRm ? [$x] : [$x, $x],
+                '(CASE WHEN {} > 0 THEN FALSE'.($naRm ? '' : ' WHEN {} > {} THEN NULL').' ELSE TRUE END)',
+                $naRm
+                    ? [$w(Fragment::format('SUM(CASE WHEN NOT {} THEN 1 ELSE 0 END)', [$x]))]
+                    : [$w(Fragment::format('SUM(CASE WHEN NOT {} THEN 1 ELSE 0 END)', [$x])), $countAll, $countX],
             ),
             'first', 'last', 'nth' => throw new Untranslatable("{$fn}() is not translated."),
         };

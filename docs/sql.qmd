@@ -59,6 +59,8 @@ match `Frame` in either case. The fallbacks are:
 - `first()`, `last()`, `nth()`, `iqr()`, `cumprod()`, and `consecutive_id()`,
 - `median()` and `quantile()` outside PostgreSQL,
 - `quantile()` without `na_rm: true`,
+- `median()`, `quantile()`, and `n_distinct()` inside grouped `mutate()` or
+  `filter()`, because SQL has no window form of them,
 - `take()`, `eachGroup()`, `rowwise()`, `mutateGroups()` with closures, and
   `filterGroups()`,
 - joins with `multiple`, `relationship`, or `unmatched` set, joins between

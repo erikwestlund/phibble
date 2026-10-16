@@ -65,10 +65,15 @@ abstract class Dialect
         return $this->supportsFullJoin();
     }
 
-    /** Sample standard deviation or variance; null when the dialect lacks it. */
-    public function sampleStat(string $fn, Fragment $x): Fragment
+    /**
+     * Sample standard deviation or variance. $aggregate wraps each aggregate
+     * call (adding OVER (...) when used as a window).
+     *
+     * @param \Closure(Fragment): Fragment $aggregate
+     */
+    public function sampleStat(string $fn, Fragment $x, \Closure $aggregate): Fragment
     {
-        return Fragment::format($fn === 'sd' ? 'STDDEV_SAMP({})' : 'VAR_SAMP({})', [$x]);
+        return $aggregate(Fragment::format($fn === 'sd' ? 'STDDEV_SAMP({})' : 'VAR_SAMP({})', [$x]));
     }
 
     /** A continuous quantile aggregate (type 7), if the dialect has one. */

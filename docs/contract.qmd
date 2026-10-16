@@ -65,7 +65,7 @@ implementation follows and the semantics of each method.
 | `groupBy($names)`, `ungroup()`, `groups()` | Set, clear, or read the grouping columns. |
 | `rowwise($idColumns)`, `isRowwise()` | Set or read rowwise mode. `groupBy()` and `ungroup()` clear it. |
 | `eachGroup()` | Yields `['key' => [...], 'table' => Table]` for each group, with ungrouped tables. An ungrouped table yields one group with an empty key. |
-| `summarise($aggregates)` | Returns one row per group: the keys, then one column per entry. Each entry is a closure given the group's table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. `Frame` and `SqlTable` take dplyr's `.groups` as an optional second argument. |
+| `summarise($aggregates)` | Returns one row per group: the keys, then one column per entry. Each entry is a closure given the group's table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. The optional second argument is dplyr's `.groups`: `'drop_last'` (the default), `'drop'`, `'keep'`, or `'rowwise'`. |
 | `distinct($names)` | Keeps the first row of each combination of the named columns (and the grouping columns), and only those columns. An empty list means all columns. |
 | `take($indices)` | Rows by 0-based position, in the given order. A `null` index gives an all-NA row. Keeps types, factor levels, and grouping. |
 | `slice($offset, $length)`, `head($n)` | Rows by position. These ignore grouping. |
@@ -94,6 +94,23 @@ takes no keys.
   many-to-many join raises a warning, as dplyr does. `unmatched: 'error'`
   throws when the join would drop rows.
 - **Grouping.** The result keeps x's grouping.
+
+## Errors and allowed differences
+
+`Frame` follows R, and other backends match it. The following rules apply
+where R raises an error or where exact agreement is impractical.
+
+- `quantile()` and `iqr()` over values that include NA, without
+  `na_rm: true`, throw an error, as R does. A backend must not return NA.
+- A summary entry that is not size 1 throws `LengthException`, and the message
+  mentions `reframe()`.
+- Aggregates over zero rows may return NA. `Frame` returns R's values (`NaN`
+  for `mean()`, `Inf` and `-Inf` for `min()` and `max()`). This case only arises
+  for an ungrouped table with no rows.
+- `as_string()` on doubles with very large or very small magnitudes may
+  differ from R's scientific notation. `Phibble\Column\Infer::formatFloat()`
+  states R's rule: 15 significant digits, in fixed or scientific notation,
+  whichever is shorter.
 
 ## Testing a backend
 

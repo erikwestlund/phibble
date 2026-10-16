@@ -36,12 +36,15 @@ final class SqliteDialect extends Dialect
         return 'LIMIT -1';
     }
 
-    public function sampleStat(string $fn, Fragment $x): Fragment
+    public function sampleStat(string $fn, Fragment $x, \Closure $aggregate): Fragment
     {
         // SQLite has no STDDEV_SAMP; compute from sums.
+        $count = $aggregate(Fragment::format('COUNT({})', [$x]));
+        $sum = $aggregate(Fragment::format('SUM({})', [$x]));
+        $squares = $aggregate(Fragment::format('SUM({} * {})', [$x, $x]));
         $var = Fragment::format(
-            '(CASE WHEN COUNT({}) < 2 THEN NULL ELSE (SUM({} * {}) - SUM({}) * SUM({}) / COUNT({})) / (COUNT({}) - 1) END)',
-            [$x, $x, $x, $x, $x, $x, $x],
+            '(CASE WHEN {} < 2 THEN NULL ELSE ({} - {} * {} / {}) / ({} - 1) END)',
+            [$count, $squares, $sum, $sum, $count, $count],
         );
 
         return $fn === 'sd' ? Fragment::format('SQRT({})', [$var]) : $var;

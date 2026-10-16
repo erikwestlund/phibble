@@ -153,8 +153,19 @@ final readonly class SqlTable implements Table
     public function column(string $name): array
     {
         $this->check([$name]);
+        // Fetch one column but keep the row order, which may use other columns.
+        $template = 'SELECT '.$this->dialect->quote($name).' FROM ({}) AS '.$this->alias();
+        $parts = [$this->from];
+        if ($this->order !== []) {
+            $template .= ' ORDER BY {}';
+            $parts[] = (new Compiler($this->dialect))->orderBy($this->order);
+        }
+        $rows = $this->run(Fragment::format($template, $parts))->fetchAll(PDO::FETCH_ASSOC);
+        $hints = array_intersect_key($this->hints, [$name => true]);
 
-        return $this->select([$name])->collect()->column($name);
+        return $rows === []
+            ? []
+            : Frame::fromRows($rows, $hints, parseStrings: true)->column($name);
     }
 
     public function groups(): array

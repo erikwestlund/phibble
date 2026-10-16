@@ -328,6 +328,7 @@ SELECT * FROM (SELECT "species", COUNT(*) AS "n", AVG(CAST("body_mass" AS REAL))
 <li><code>first()</code>, <code>last()</code>, <code>nth()</code>, <code>iqr()</code>, <code>cumprod()</code>, and <code>consecutive_id()</code>,</li>
 <li><code>median()</code> and <code>quantile()</code> outside PostgreSQL,</li>
 <li><code>quantile()</code> without <code>na_rm: true</code>,</li>
+<li><code>median()</code>, <code>quantile()</code>, and <code>n_distinct()</code> inside grouped <code>mutate()</code> or <code>filter()</code>, because SQL has no window form of them,</li>
 <li><code>take()</code>, <code>eachGroup()</code>, <code>rowwise()</code>, <code>mutateGroups()</code> with closures, and <code>filterGroups()</code>,</li>
 <li>joins with <code>multiple</code>, <code>relationship</code>, or <code>unmatched</code> set, joins between different connections, full joins in MySQL, and full joins with NA matching in PostgreSQL.</li>
 </ul>

@@ -170,3 +170,28 @@ it('opens tables and queries with tbl()', function () {
         ->and(Phibble\tbl($pdo, 'sqlite_master')->columns())->toContain('name')
         ->and((string) Phibble\tbl($pdo, 'SELECT 1 AS a'))->toStartWith("# Source: SQL [SQLite]\n# A tibble: 1 × 1");
 });
+
+it('uses every aggregate inside grouped mutate like Frame', function (Closure $connect) {
+    $pdo = $connect();
+    $failures = [];
+    foreach (summariseCases() as [$case, $expr]) {
+        $expected = null;
+        try {
+            $expected = normalise(exprFrame()->groupBy(['g'])->arrange(['i'])->mutate(['out' => $expr])->column('out'));
+        } catch (Throwable) {
+            continue; // quantile/iqr with NA throw in memory too
+        }
+        $out = normalise(sqlFrom($pdo, exprFrame())->groupBy(['g'])->arrange(['i'])->mutate(['out' => $expr])->collect()->column('out'));
+        if ($out !== $expected) {
+            $failures[$case] = ['got' => $out, 'want' => $expected];
+        }
+    }
+
+    expect($failures)->toBe([]);
+})->with('connections');
+
+it('keeps the row order when reading one column', function (Closure $connect) {
+    $sql = sqlFrom($connect(), exprFrame())->arrange([desc(col('i'))]);
+
+    expect($sql->column('g'))->toBe([null, 'b', 'a', 'b', 'a', 'b', 'a']);
+})->with('connections');

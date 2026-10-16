@@ -133,9 +133,11 @@ interface Table extends \Countable, \IteratorAggregate
      * The result drops the last grouping level, like dplyr. A rowwise
      * table keeps its id columns as groups.
      *
-     * @param array<string, Closure(Table): mixed> $aggregates
+     * @param array<string, Closure(Table): mixed|Expr> $aggregates
+     * @param string|null $groups dplyr's .groups: 'drop_last' (the default),
+     *     'drop', 'keep' or 'rowwise'. Rowwise tables default to 'keep'.
      */
-    public function summarise(array $aggregates): Table;
+    public function summarise(array $aggregates, ?string $groups = null): Table;
 
     /**
      * Unique rows over the named columns, keeping those columns only.
