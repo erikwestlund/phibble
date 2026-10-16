@@ -24,8 +24,9 @@ website:
           - expr.qmd
           - sql.qmd
           - laravel.qmd
-      - section: "For backend authors"
+      - section: "Backends"
         contents:
+          - backends.qmd
           - contract.qmd
       - development.qmd
 

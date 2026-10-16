@@ -5,6 +5,17 @@ All notable changes to phibble are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0, minor versions may
 change the public API.
 
+## [0.2.0] - Unreleased
+
+### Added
+
+- The Polars backend, `Phibble\Polars\PolarsTable`, moved here from the
+  phpolars-phibble package. It implements the Table contract on Polars through
+  the php_polars extension, which is suggested and not required. `polars()`
+  creates one from any table.
+- A Backends documentation page: `Frame`, `SqlTable`, and `PolarsTable` as
+  interchangeable implementations of `Phibble\Contracts\Table`.
+
 ## [0.1.0] - 2026-10-16
 
 The first release. phibble is a PHP 8.5 port of R's tibble, with readr-style
@@ -76,4 +87,5 @@ and cmdstanphp.
   query builders and `->phibble()` for lazy SQL tables. Global scopes such as
   soft deletes apply.
 
+[0.2.0]: https://github.com/erikwestlund/phibble/releases/tag/v0.2.0
 [0.1.0]: https://github.com/erikwestlund/phibble/releases/tag/v0.1.0

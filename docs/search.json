@@ -256,7 +256,7 @@
     "section": "",
     "text": "Phibble\\Contracts\\Table is the interface that every table backend implements. phplyr’s verbs call its methods, so a pipeline runs unchanged on any backend. phibble ships two implementations: Frame, which holds data in PHP arrays, and SqlTable, which compiles verbs to SQL. phpolars implements it over Polars.\nThis page is for authors of backends. It lists the rules that every implementation follows and the semantics of each method.",
     "crumbs": [
-      "For backend authors",
+      "Backends",
       "The Table contract"
     ]
   },
@@ -267,7 +267,7 @@
     "section": "Rules",
     "text": "Rules\n\nImmutability. Every method returns a new table and leaves the original unchanged.\nReturn types. Verbs are declared to return Table. A backend may return a different implementation. SqlTable returns a Frame when it falls back to memory for a closure. Frame declares static.\nNA. PHP null is NA in every column type.\nGrouping. groupBy() records grouping columns as metadata. filter(), mutate(), mutateGroups(), filterGroups(), summarise(), and eachGroup() work per group. The other verbs keep the grouping.\nGroup order. Groups are visited in sorted key order, as in dplyr: ascending, factors by level order, NA last, and strings in byte order. filter(), mutate(), and arrange() keep the input row order.\nRowwise tables. rowwise() makes every row its own group, in row order. groups() returns its id columns.\nRow closures. A row closure receives (Phibble\\Row $row, Table $group). $group is the row’s group, or the whole table when ungrouped.\nExpressions. Wherever a verb accepts a closure, it also accepts a Phibble\\Expr\\Expr, evaluated per group with the semantics in the expression reference.\nErrors. An unknown column name throws Phibble\\Exception\\ColumnNotFound.\nCountable and iterable. count() equals nrow(), and iterating yields one Phibble\\Row per row.",
     "crumbs": [
-      "For backend authors",
+      "Backends",
       "The Table contract"
     ]
   },
@@ -278,7 +278,7 @@
     "section": "Methods",
     "text": "Methods\n\nShape and data\n\n\n\n\n\n\n\nMethod\nReturns\n\n\n\n\ncolumns()\nColumn names in order.\n\n\ntypes()\nColumn name to Phibble\\Type.\n\n\nnrow(), ncol()\nRow and column counts.\n\n\ncolumn($name)\nOne column as a list. Factors return their labels.\n\n\ntoRows()\nA list of associative arrays.\n\n\ntoColumns()\nAn array of lists by column name.\n\n\ncollect()\nThe rows as an in-memory Frame. A Frame returns itself.\n\n\n\n\n\nVerbs\n\n\n\n\n\n\n\nMethod\nSemantics\n\n\n\n\nselect($names)\nKeeps the named columns in the given order. Grouping columns are always kept.\n\n\nfilter($predicate)\nKeeps rows where the closure or expression is true. NA counts as false.\n\n\nfilterGroups($fn)\nRuns $fn once per group with the group’s table. It returns one value per row, and truthy values keep the row.\n\n\nmutate($columns)\nAdds or replaces columns. A value is a row closure, an expression, a list with one value per row, or a scalar. Later entries see earlier ones. Replaced columns keep their position.\n\n\nmutateGroups($columns)\nLike mutate(), but a closure runs once per group and returns a list for the group’s rows or a scalar. This is the primitive for window functions.\n\n\nrename($map)\nRenames columns, with new =&gt; old entries as in dplyr.\n\n\narrange($keys)\nSorts stably. Keys are names, [name, 'asc'|'desc'] pairs, or expressions, and NA sorts last in both directions. It ignores grouping.\n\n\ngroupBy($names), ungroup(), groups()\nSet, clear, or read the grouping columns.\n\n\ngroupBy($names, drop: false), dropsEmptyGroups()\ndplyr’s .drop = FALSE: grouped verbs also visit empty groups. A factor key yields every level; a non-factor key yields its observed values, or NA under an empty group. Row verbs keep the flag; groupBy() and ungroup() reset it.\n\n\nrowwise($idColumns), isRowwise()\nSet or read rowwise mode. groupBy() and ungroup() clear it.\n\n\neachGroup()\nYields ['key' =&gt; [...], 'table' =&gt; Table] for each group, with ungrouped tables. An ungrouped table yields one group with an empty key.\n\n\nsummarise($aggregates)\nReturns one row per group: the keys, then one column per entry. Each entry is a closure given the group’s table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. The optional second argument is dplyr’s .groups: 'drop_last' (the default), 'drop', 'keep', or 'rowwise'.\n\n\ndistinct($names)\nKeeps the first row of each combination of the named columns (and the grouping columns), and only those columns. An empty list means all columns.\n\n\npivotLongerSpec($spec, dropNa:)\ntidyr’s pivot_longer_spec(). Spec rows are ['.name' =&gt; source, '.value' =&gt; value column, ...name parts]. Output: id columns, name parts, then one column per .value; each input row yields one row per name-part combination in spec order. Values combine by vctrs rules.\n\n\npivotWiderSpec($spec, idColumns:, valuesFill:)\ntidyr’s pivot_wider_spec(). Spec rows are ['.name' =&gt; new column, '.value' =&gt; values column, ...names_from values]. New columns follow spec order; rows follow the first appearance of each id combination. Duplicates make every new column a list-column and raise tidyr’s warning.\n\n\ntake($indices)\nRows by 0-based position, in the given order. A null index gives an all-NA row. Keeps types, factor levels, and grouping.\n\n\nslice($offset, $length), head($n)\nRows by position. These ignore grouping.\n\n\njoin($other, $by, $type, ...)\nJoins with dplyr 1.1 semantics, described below.\n\n\n\n\n\nJoins\njoin() takes the other table, a list of conditions, and the join type: inner, left, right, full, semi, anti, or cross. A cross join takes no conditions. The conditions follow dplyr’s join_by(), and all of them must hold:\n\n'k', [$l, $r], or $l =&gt; $r: equality.\n[$l, $op, $r] with $op in ==, &gt;=, &gt;, &lt;=, or &lt;: a comparison.\n['closest', $l, $op, $r], at most one per join: of the y rows that satisfy the other conditions and the comparison, keep only those with the largest $r (for &gt;= and &gt;) or the smallest (for &lt;= and &lt;). Ties keep every tied row.\n\ndplyr’s between(), within(), and overlaps() are expressed as pairs of comparisons.\n\nColumns. The result has x’s columns, then y’s columns. Clashing names get the suffixes, .x and .y by default.\nKeys. keep is null by default. Equality keys then come from x only, and for rows that only y has (right and full joins) they are filled from y’s keys. Columns used in comparisons are kept from both tables. With keep: true every key column is kept from both tables. keep: false throws when a comparison or closest condition is present, as in dplyr.\nRows. Rows follow x’s order, and each x row’s matches follow y’s order. Right and full joins then add y’s unmatched rows in y’s order. Semi and anti joins keep x’s rows and columns and never duplicate rows.\nMatching. NA keys match each other unless naMatches: false. In a comparison, NA against NA satisfies &gt;= and &lt;= but not &gt; or &lt;, and NA never matches a value. 1 matches 1.0, and a factor matches text by its label.\nOptions. multiple picks all, any, first, or last match per x row. relationship (one-to-one, one-to-many, many-to-one, or many-to-many) throws when the data violates it. Without it, an unexpected many-to-many equality join raises a warning, as dplyr does. unmatched: 'error' throws when the join would drop rows.\nGrouping. The result keeps x’s grouping.",
     "crumbs": [
-      "For backend authors",
+      "Backends",
       "The Table contract"
     ]
   },
@@ -289,7 +289,7 @@
     "section": "Errors and allowed differences",
     "text": "Errors and allowed differences\nFrame follows R, and other backends match it. The following rules apply where R raises an error or where exact agreement is impractical.\n\nquantile() and iqr() over values that include NA, without na_rm: true, throw an error, as R does. A backend must not return NA.\nA summary entry that is not size 1 throws LengthException, and the message mentions reframe().\nAggregates over zero rows may return NA. Frame returns R’s values (NaN for mean(), Inf and -Inf for min() and max()). This case only arises for an ungrouped table with no rows.\nas_string() on doubles with very large or very small magnitudes may differ from R’s scientific notation. Phibble\\Column\\Infer::formatFloat() states R’s rule: 15 significant digits, in fixed or scientific notation, whichever is shorter.",
     "crumbs": [
-      "For backend authors",
+      "Backends",
       "The Table contract"
     ]
   },
@@ -300,8 +300,41 @@
     "section": "Testing a backend",
     "text": "Testing a backend\nThe simplest test of a backend is to run the same operations on the backend and on Frame and compare the results. tests/SqlTest.php does this for SqlTable. It loads the same data into a database, runs each operation both ways, and compares the collected rows. It also runs every case in tests/fixtures/expr/expected.json, the dplyr results that tests/r/expr.R produces, so each backend is checked against R as well as against Frame.",
     "crumbs": [
-      "For backend authors",
+      "Backends",
       "The Table contract"
+    ]
+  },
+  {
+    "objectID": "backends.html",
+    "href": "backends.html",
+    "title": "Backends",
+    "section": "",
+    "text": "phibble separates what a pipeline does from where it runs. Every verb is part of the Phibble\\Contracts\\Table interface, and three classes implement it:\nCode written against Table, including phplyr’s verbs, runs on any of them. A pipeline gives the same result on each backend, because a backend that cannot run a step exactly (a PHP closure, or a function with no exact translation) hands that step to Frame and continues. The Table contract page states the rules each backend follows.",
+    "crumbs": [
+      "Backends",
+      "Backends"
+    ]
+  },
+  {
+    "objectID": "backends.html#choosing-and-switching",
+    "href": "backends.html#choosing-and-switching",
+    "title": "Backends",
+    "section": "Choosing and switching",
+    "text": "Choosing and switching\nuse Phibble\\Frame;\nuse function Phibble\\{tbl, polars};\nuse function Phibble\\Expr\\{col, mean, n};\n\n$frame = Frame::fromCsv('sales.csv');          // in memory\n$sql = tbl($pdo, 'sales');                     // in the database\n$fast = polars($frame);                        // in Polars\n\n$summary = fn ($t) =&gt; $t\n    -&gt;filter(col('units')-&gt;gt(0))\n    -&gt;groupBy(['store'])\n    -&gt;summarise(['n' =&gt; n(), 'avg' =&gt; mean(col('price'))]);\n\n$summary($frame);             // a Frame\n$summary($sql)-&gt;collect();    // runs as one SQL query\n$summary($fast)-&gt;collect();   // runs in Polars\ncollect() turns any table into a Frame. PolarsTable::fromTable() and polars() move a table into Polars; tbl() opens a database table or query.",
+    "crumbs": [
+      "Backends",
+      "Backends"
+    ]
+  },
+  {
+    "objectID": "backends.html#the-polars-backend",
+    "href": "backends.html#the-polars-backend",
+    "title": "Backends",
+    "section": "The Polars backend",
+    "text": "The Polars backend\nThe Polars backend needs the php_polars extension from phpolars. phibble does not require it: composer.json lists it as a suggestion, and the class is only loaded when used. Expressions, joins (including join_by comparisons and rolling joins), pivots, and the lubridate and stringr functions run natively in Polars. Steps it cannot run, such as PHP closures and str_to_title(), run in Frame. PolarsTable::$fallbacks counts those steps.\nThe Polars test suite runs phibble’s dplyr, tidyr, lubridate, and stringr reference cases on PolarsTable and skips when the extension is not loaded.",
+    "crumbs": [
+      "Backends",
+      "Backends"
     ]
   },
   {

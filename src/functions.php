@@ -53,3 +53,18 @@ function tbl(\PDO $pdo, string $from, array $bindings = []): Sql\SqlTable
         ? Sql\SqlTable::query($pdo, $from, $bindings)
         : Sql\SqlTable::table($pdo, $from);
 }
+
+/**
+ * polars(): a table backed by Polars (requires the php_polars extension).
+ * Takes any Table, or anything as_tibble() accepts.
+ *
+ *     polars(Frame::fromCsv('sales.csv'))->filter(col('units')->gt(0));
+ */
+function polars(mixed $data): Polars\PolarsTable
+{
+    if (! extension_loaded('php_polars')) {
+        throw new \RuntimeException('polars() needs the php_polars extension (erikwestlund/phpolars).');
+    }
+
+    return Polars\PolarsTable::fromTable($data instanceof Contracts\Table ? $data : Frame::asTibble($data));
+}

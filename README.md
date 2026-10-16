@@ -61,8 +61,9 @@ echo $penguins
   MySQL, like dbplyr. Anything SQL cannot compute exactly runs in memory, so
   results match `Frame`.
 - **Laravel:** `->toFrame()` and `->phibble()` on queries and collections.
-- **The Table contract:** `Phibble\Contracts\Table` lets other backends, such
-  as phpolars, run the same pipelines.
+- **Backends:** `Frame` (in memory), `SqlTable` (databases), and `PolarsTable`
+  (Polars, with the php_polars extension) implement one Table contract, so the
+  same pipeline runs on each.
 
 ## Development
 

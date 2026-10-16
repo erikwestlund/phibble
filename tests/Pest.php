@@ -8,6 +8,14 @@ require_once __DIR__.'/Support/ExprCases.php';
 require_once __DIR__.'/Support/JoinCases.php';
 require_once __DIR__.'/Support/LubridateStringrCases.php';
 require_once __DIR__.'/Support/SqlConnections.php';
+require_once __DIR__.'/Support/Polars.php';
+
+// The Polars backend needs the php_polars extension; without it these tests skip.
+uses()->beforeEach(function () {
+    if (! extension_loaded('php_polars')) {
+        $this->markTestSkipped('The php_polars extension is not loaded.');
+    }
+})->in('Polars');
 
 function penguins(): Frame
 {
