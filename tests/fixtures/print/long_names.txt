@@ -1,0 +1,8 @@
+# A tibble: 2 × 6
+  a_really_long_column_name_1 a_really_long_column_name_2 a_really_long_column…¹
+  <chr>                       <chr>                       <chr>                 
+1 aaaaaaaaaaaa                bbbbbbbbbbbb                cccccccccccc          
+2 aaaaaaaaaaaa                bbbbbbbbbbbb                cccccccccccc          
+# ℹ abbreviated name: ¹​a_really_long_column_name_3
+# ℹ 3 more variables: a_really_long_column_name_4 <chr>,
+#   a_really_long_column_name_5 <chr>, a_really_long_column_name_6 <chr>

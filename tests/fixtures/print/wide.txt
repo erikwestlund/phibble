@@ -1,0 +1,10 @@
+# A tibble: 3 × 15
+  measurement_1 measurement_2 measurement_3 measurement_4 measurement_5
+          <dbl>         <dbl>         <dbl>         <dbl>         <dbl>
+1         1000.         2000.         3000.         4001.         5001.
+2         2000.         4000.         6000.         8001.        10001.
+3         3000.         6000.         9000.        12001.        15001.
+# ℹ 10 more variables: measurement_6 <dbl>, measurement_7 <dbl>,
+#   measurement_8 <dbl>, measurement_9 <dbl>, measurement_10 <dbl>,
+#   measurement_11 <dbl>, measurement_12 <dbl>, measurement_13 <dbl>,
+#   measurement_14 <dbl>, measurement_15 <dbl>

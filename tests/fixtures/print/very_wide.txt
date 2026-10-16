@@ -1,0 +1,11 @@
+# A tibble: 1 × 120
+  column_number_001 column_number_002 column_number_003 column_number_004
+              <dbl>             <dbl>             <dbl>             <dbl>
+1               1.5               2.5               3.5               4.5
+# ℹ 116 more variables: column_number_005 <dbl>, column_number_006 <dbl>,
+#   column_number_007 <dbl>, column_number_008 <dbl>, column_number_009 <dbl>,
+#   column_number_010 <dbl>, column_number_011 <dbl>, column_number_012 <dbl>,
+#   column_number_013 <dbl>, column_number_014 <dbl>, column_number_015 <dbl>,
+#   column_number_016 <dbl>, column_number_017 <dbl>, column_number_018 <dbl>,
+#   column_number_019 <dbl>, column_number_020 <dbl>, column_number_021 <dbl>,
+#   column_number_022 <dbl>, column_number_023 <dbl>, …

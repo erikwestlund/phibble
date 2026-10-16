@@ -1,0 +1,5 @@
+Rows: 3
+Columns: 2
+Rowwise: 
+$ g <chr> "a", "b", "a"
+$ x <int> 1, 2, 3

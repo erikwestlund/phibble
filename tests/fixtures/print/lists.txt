@@ -1,0 +1,9 @@
+# A tibble: 6 × 1
+  x               
+  <list>          
+1 <int [3]>       
+2 <dbl [2]>       
+3 <chr [1]>       
+4 <NULL>          
+5 <tibble [2 × 3]>
+6 <list [2]>      

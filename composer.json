@@ -16,7 +16,11 @@
     "autoload": {
         "psr-4": {
             "Phibble\\": "src/"
-        }
+        },
+        "files": [
+            "src/functions.php",
+            "src/Expr/helpers.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {

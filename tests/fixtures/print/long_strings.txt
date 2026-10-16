@@ -1,0 +1,5 @@
+# A tibble: 2 × 2
+  s                                                                            n
+  <chr>                                                                    <dbl>
+1 a very long string that goes on and on and on and on and on and on and …     1
+2 short                                                                        2

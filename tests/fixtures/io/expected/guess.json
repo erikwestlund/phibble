@@ -1,0 +1,107 @@
+{
+  "names": ["lgl", "lgl2", "int", "signed", "dbl", "inf", "lead0", "grouped", "date", "date2", "dttm", "dttm_mixed", "chr", "allna"],
+  "types": {
+    "lgl": "bool",
+    "lgl2": "bool",
+    "int": "float",
+    "signed": "float",
+    "dbl": "float",
+    "inf": "float",
+    "lead0": "string",
+    "grouped": "float",
+    "date": "date",
+    "date2": "date",
+    "dttm": "datetime",
+    "dttm_mixed": "datetime",
+    "chr": "string",
+    "allna": "bool"
+  },
+  "levels": {},
+  "values": {
+    "lgl": [
+      true,
+      false,
+      true,
+      false
+    ],
+    "lgl2": [
+      true,
+      false,
+      true,
+      true
+    ],
+    "int": [
+      "1",
+      "-2",
+      "3",
+      "40000"
+    ],
+    "signed": [
+      "-7",
+      "5",
+      "0",
+      "-0"
+    ],
+    "dbl": [
+      "1.5",
+      "0.5",
+      "1000",
+      "5"
+    ],
+    "inf": [
+      "Inf",
+      "-Inf",
+      "NaN",
+      "NaN"
+    ],
+    "lead0": [
+      "007",
+      "012",
+      "0",
+      "0.5"
+    ],
+    "grouped": [
+      "1234",
+      "12345678",
+      "10",
+      "-1"
+    ],
+    "date": [
+      "2024-01-02",
+      "2024-12-31",
+      null,
+      "2024-02-29"
+    ],
+    "date2": [
+      "2024-01-02",
+      "2024-02-29",
+      "2024-03-01",
+      "2024-12-31"
+    ],
+    "dttm": [
+      "2024-01-02T10:00:00.000000Z",
+      "2024-01-02T09:00:00.000000Z",
+      "2024-01-02T10:00:00.000000Z",
+      "2024-07-01T04:59:59.000000Z"
+    ],
+    "dttm_mixed": [
+      "2024-01-02T00:00:00.000000Z",
+      "2024-01-03T08:30:00.000000Z",
+      "2024-01-04T00:00:00.500000Z",
+      "2024-01-05T00:00:00.000000Z"
+    ],
+    "chr": [
+      "x",
+      "y z",
+      null,
+      null
+    ],
+    "allna": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "problems": 0
+}

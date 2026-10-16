@@ -1,0 +1,6 @@
+# A tibble: 3 × 3
+      x s                t    
+  <dbl> <chr>            <chr>
+1 123.  abcdefghijklmno… ABCD…
+2   7.1 b                B    
+3   0.5 c                C    

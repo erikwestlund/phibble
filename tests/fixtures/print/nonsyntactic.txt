@@ -1,0 +1,5 @@
+# A tibble: 2 × 3
+  `my col` `1x`  `if` 
+     <int> <chr> <lgl>
+1        1 a     TRUE 
+2        2 b     FALSE

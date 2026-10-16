@@ -1,0 +1,24 @@
+{
+  "names": ["a", "b", "c"],
+  "types": {
+    "a": "string",
+    "b": "string",
+    "c": "float"
+  },
+  "levels": {},
+  "values": {
+    "a": [
+      "padded",
+      "x"
+    ],
+    "b": [
+      "quoted pad",
+      "y"
+    ],
+    "c": [
+      "7",
+      "8"
+    ]
+  },
+  "problems": 0
+}

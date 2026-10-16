@@ -1,0 +1,7 @@
+Rows: 5
+Columns: 4
+Groups: species [3]
+$ species <chr> "Adelie", "Adelie", "Gentoo", "Chinstrap", "Gentoo"
+$ island  <chr> "Torgersen", "Biscoe", "Biscoe", "Dream", "Biscoe"
+$ mass    <dbl> 3750, 3800, 5000, NA, 5400
+$ year    <int> 2007, 2008, 2007, 2009, 2008

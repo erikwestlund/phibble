@@ -1,0 +1,17 @@
+Rows: 3
+Columns: 15
+$ measurement_1  <dbl> 1000.14, 2000.14, 3000.14
+$ measurement_2  <dbl> 2000.29, 4000.29, 6000.29
+$ measurement_3  <dbl> 3000.43, 6000.43, 9000.43
+$ measurement_4  <dbl> 4000.57, 8000.57, 12000.57
+$ measurement_5  <dbl> 5000.71, 10000.71, 15000.71
+$ measurement_6  <dbl> 6000.86, 12000.86, 18000.86
+$ measurement_7  <dbl> 7001, 14001, 21001
+$ measurement_8  <dbl> 8001.14, 16001.14, 24001.14
+$ measurement_9  <dbl> 9001.29, 18001.29, 27001.29
+$ measurement_10 <dbl> 10001.43, 20001.43, 30001.43
+$ measurement_11 <dbl> 11001.57, 22001.57, 33001.57
+$ measurement_12 <dbl> 12001.71, 24001.71, 36001.71
+$ measurement_13 <dbl> 13001.86, 26001.86, 39001.86
+$ measurement_14 <dbl> 14002, 28002, 42002
+$ measurement_15 <dbl> 15002.14, 30002.14, 45002.14

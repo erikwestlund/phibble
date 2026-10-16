@@ -1,0 +1,9 @@
+# A tibble: 5 × 4
+# Groups:   species, year [5]
+  species   island     mass  year
+  <chr>     <chr>     <dbl> <int>
+1 Adelie    Torgersen  3750  2007
+2 Adelie    Biscoe     3800  2008
+3 Gentoo    Biscoe     5000  2007
+4 Chinstrap Dream        NA  2009
+5 Gentoo    Biscoe     5400  2008

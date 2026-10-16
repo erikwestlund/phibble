@@ -1,0 +1,8 @@
+# A tibble: 5 × 3
+       a     b c               
+   <dbl> <int> <chr>           
+1   1.5      1 x               
+2  10.2     NA <NA>            
+3 100      300 long string here
+4  NA       -4 y               
+5  -3.14     5 z               

@@ -10,6 +10,7 @@ use DateTimeInterface;
 use DateTimeZone;
 use Exception;
 use InvalidArgumentException;
+use Phibble\Io\TextParser;
 use Phibble\Type;
 use Stringable;
 
@@ -60,34 +61,31 @@ final class Infer
             return self::cast($values, Type::parse($type), Type::String, $name);
         }
 
-        return self::cast($values, self::guess($values), Type::String, $name);
+        $type = self::guess($values);
+        if ($type === Type::String) {
+            return new ArrayColumn(Type::String, $values);
+        }
+        $trimmed = array_map(fn (?string $v) => $v === null ? null : trim($v), $values);
+        [$column, $failed] = new TextParser()->parse($trimmed, $type, ['grouping' => true]);
+        if ($failed > 0) {
+            trigger_error(
+                "NAs introduced by parsing column '{$name}' as {$type->value} ({$failed} value".($failed === 1 ? '' : 's').').',
+                E_USER_WARNING,
+            );
+        }
+
+        return $column;
     }
 
     /**
-     * Guess the type of text values, as readr's guess_parser() does (except
-     * that whole numbers are int rather than double).
+     * Guess the type of text values, as readr does (except that whole
+     * numbers are int rather than double). Values are trimmed first.
      *
      * @param list<?string> $values
      */
     public static function guess(array $values): Type
     {
-        $present = [];
-        foreach ($values as $v) {
-            if ($v !== null) {
-                $present[] = trim($v);
-            }
-        }
-
-        return match (true) {
-            $present === [] => Type::Bool,
-            array_all($present, fn ($v) => in_array($v, ['T', 'F', 'TRUE', 'FALSE', 'True', 'False', 'true', 'false'], true)) => Type::Bool,
-            array_all($present, fn ($v) => preg_match('/^[+-]?\d+$/', $v)
-                && (strlen(ltrim($v, '+-')) < 19 || filter_var($v, FILTER_VALIDATE_INT) !== false)) => Type::Int,
-            array_all($present, fn ($v) => self::isNumber($v)) => Type::Float,
-            array_all($present, fn ($v) => preg_match(self::DATE, $v) && self::parseDate($v) !== null) => Type::Date,
-            array_all($present, fn ($v) => (self::parseDateTime($v) ?? self::parseDate($v)) !== null) => Type::DateTime,
-            default => Type::String,
-        };
+        return new TextParser()->guess(array_map(fn (?string $v) => $v === null ? null : trim($v), $values));
     }
 
     /**
@@ -164,6 +162,7 @@ final class Infer
                 is_bool($v) => 'bool',
                 is_int($v) => 'int',
                 is_float($v) => 'float',
+                $v instanceof \Phibble\Contracts\Table => 'list',
                 is_string($v), $v instanceof Stringable, $v instanceof BackedEnum => 'string',
                 $v instanceof DateTimeInterface => 'datetime',
                 default => 'list',

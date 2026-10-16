@@ -1,0 +1,2 @@
+# CSV fixtures are compared byte for byte (some use CRLF line endings).
+tests/fixtures/** -text

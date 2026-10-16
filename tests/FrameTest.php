@@ -136,11 +136,11 @@ it('prints like a tibble', function () {
     $out = (string) penguins()->groupBy(['species'])->head(2);
 
     expect($out)->toBe(<<<'TXT'
-        # A phibble: 2 × 4
-        # Groups: species [1]
-          species island    mass  year
+        # A tibble: 2 × 4
+        # Groups:   species [1]
+          species island     mass  year
           <chr>   <chr>     <dbl> <int>
-        1 Adelie  Torgersen 3750  2007
-        2 Adelie  Biscoe    3800  2008
+        1 Adelie  Torgersen  3750  2007
+        2 Adelie  Biscoe     3800  2008
         TXT);
 });

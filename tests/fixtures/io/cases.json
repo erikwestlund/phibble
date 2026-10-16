@@ -1,0 +1,203 @@
+[
+  {
+    "name": "guess",
+    "file": "guess.csv",
+    "r": {},
+    "php": {}
+  },
+  {
+    "name": "na",
+    "file": "na.csv",
+    "r": {
+      "na": [
+        "",
+        "NA",
+        "-",
+        "missing"
+      ]
+    },
+    "php": {
+      "na": [
+        "",
+        "NA",
+        "-",
+        "missing"
+      ]
+    }
+  },
+  {
+    "name": "quoting",
+    "file": "quoting.csv",
+    "r": {},
+    "php": {}
+  },
+  {
+    "name": "trim",
+    "file": "trim.csv",
+    "r": {},
+    "php": {}
+  },
+  {
+    "name": "comment",
+    "file": "comment.csv",
+    "r": {
+      "comment": "#"
+    },
+    "php": {
+      "comment": "#"
+    }
+  },
+  {
+    "name": "skip_nmax",
+    "file": "skip_nmax.csv",
+    "r": {
+      "skip": 2,
+      "n_max": 3
+    },
+    "php": {
+      "skip": 2,
+      "nMax": 3
+    }
+  },
+  {
+    "name": "nocolnames",
+    "file": "nocolnames.csv",
+    "r": {
+      "col_names": false
+    },
+    "php": {
+      "colNames": false
+    }
+  },
+  {
+    "name": "colnames_given",
+    "file": "nocolnames.csv",
+    "r": {
+      "col_names": [
+        "num",
+        "letter"
+      ]
+    },
+    "php": {
+      "colNames": [
+        "num",
+        "letter"
+      ]
+    }
+  },
+  {
+    "name": "dupnames",
+    "file": "dupnames.csv",
+    "r": {},
+    "php": {}
+  },
+  {
+    "name": "dupnames_universal",
+    "file": "dupnames.csv",
+    "r": {
+      "name_repair": "universal"
+    },
+    "php": {
+      "nameRepair": "universal"
+    }
+  },
+  {
+    "name": "coltypes",
+    "file": "coltypes.csv",
+    "r": {
+      "col_types": "ic_dlDTfn"
+    },
+    "php": {
+      "types": "ic_dlDTfn"
+    }
+  },
+  {
+    "name": "coltypes_named",
+    "file": "coltypes.csv",
+    "r": {
+      "col_types_named": {
+        "c": "c",
+        "f": "f",
+        ".default": "c"
+      }
+    },
+    "php": {
+      "types": {
+        "c": "c",
+        "f": "f",
+        ".default": "c"
+      }
+    }
+  },
+  {
+    "name": "guessmax",
+    "file": "guessmax.csv",
+    "r": {
+      "guess_max": 10
+    },
+    "php": {
+      "guessMax": 10
+    }
+  },
+  {
+    "name": "trim_false",
+    "file": "trim_false.csv",
+    "r": {
+      "trim_ws": false
+    },
+    "php": {
+      "trimWs": false
+    }
+  },
+  {
+    "name": "empty_rows",
+    "file": "empty_rows.csv",
+    "r": {
+      "skip_empty_rows": false
+    },
+    "php": {
+      "skipEmptyRows": false
+    }
+  },
+  {
+    "name": "ragged",
+    "file": "ragged.csv",
+    "r": {},
+    "php": {}
+  },
+  {
+    "name": "semicolon",
+    "file": "semicolon.csv",
+    "r": {
+      "delim": ";",
+      "decimal_mark": ","
+    },
+    "php": {
+      "delimiter": ";",
+      "decimalMark": ","
+    }
+  },
+  {
+    "name": "select",
+    "file": "select.csv",
+    "r": {
+      "col_select": [
+        "z",
+        "x"
+      ]
+    },
+    "php": {
+      "select": [
+        "z",
+        "x"
+      ]
+    }
+  },
+  {
+    "name": "write",
+    "file": "write.csv",
+    "r": {},
+    "php": {},
+    "write": true
+  }
+]

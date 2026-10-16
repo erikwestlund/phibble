@@ -1,0 +1,2 @@
+# A tibble: 0 × 2
+# ℹ 2 variables: a <dbl>, b <chr>

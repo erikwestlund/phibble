@@ -1,0 +1,7 @@
+# A tibble: 3 × 2
+# Rowwise: 
+  g         x
+  <chr> <int>
+1 a         1
+2 b         2
+3 a         3

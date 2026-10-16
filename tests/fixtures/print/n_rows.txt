@@ -1,0 +1,8 @@
+# A tibble: 5 × 1
+      n
+  <int>
+1     1
+2     2
+3     3
+4     4
+# ℹ 1 more row

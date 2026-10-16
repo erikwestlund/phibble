@@ -23,10 +23,12 @@ it('reads CSV and infers types from text', function () {
         ->and($frame->column('day')[1]->format('Y-m-d'))->toBe('2024-02-29');
 });
 
-it('keeps invalid dates and mixed text as strings', function () {
-    $frame = Frame::fromCsvString("d,code\n2024-02-30,1\n2024-01-01,x\n");
+it('guesses dates by shape and turns invalid ones into NA, as readr does', function () {
+    [$frame, $warnings] = quietly(fn () => Frame::fromCsvString("d,code\n2024-02-30,1\n2024-01-01,x\n"));
 
-    expect($frame->types())->toBe(['d' => Type::String, 'code' => Type::String]);
+    expect($frame->types())->toBe(['d' => Type::Date, 'code' => Type::String])
+        ->and($frame->column('d')[0])->toBeNull()
+        ->and($warnings)->toHaveCount(1);
 });
 
 it('reads CSV with explicit types, custom NA and delimiters', function () {
@@ -44,9 +46,12 @@ it('reads CSV files and strips a BOM', function () {
     unlink($path);
 });
 
-it('rejects CSV rows with the wrong number of fields', function () {
-    Frame::fromCsvString("a,b\n1\n");
-})->throws(InvalidArgumentException::class, 'CSV line 2 has 1 fields; the header has 2.');
+it('pads short CSV rows with NA and warns, as readr does', function () {
+    [$frame, $warnings] = quietly(fn () => Frame::fromCsvString("a,b\n1\n"));
+
+    expect($frame->toRows())->toBe([['a' => 1, 'b' => null]])
+        ->and($warnings[0])->toContain('row 2: expected 2 columns, got 1');
+});
 
 function database(): PDO
 {

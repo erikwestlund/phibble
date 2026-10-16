@@ -1,0 +1,4 @@
+Rows: 2
+Columns: 2
+$ s <chr> "a very long string that goes on and on and on and on and on and on …
+$ n <dbl> 1, 2

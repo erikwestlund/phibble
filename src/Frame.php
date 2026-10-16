@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Phibble;
 
+use ArrayAccess;
 use Closure;
 use DateTimeInterface;
 use Generator;
@@ -15,6 +16,15 @@ use Phibble\Column\FactorColumn;
 use Phibble\Column\Infer;
 use Phibble\Contracts\Table;
 use Phibble\Exception\ColumnNotFound;
+use Phibble\Expr\Desc;
+use Phibble\Expr\Evaluator;
+use Phibble\Expr\Expr;
+use Phibble\Format\Glimpse;
+use Phibble\Format\Printer;
+use Phibble\Io\Collections;
+use Phibble\Io\CsvOptions;
+use Phibble\Io\CsvWriter;
+use Phibble\Io\Json;
 use Phibble\Source\CsvSource;
 use Phibble\Source\PdoSource;
 use Phibble\Source\QuerySource;
@@ -24,7 +34,7 @@ use Stringable;
 /**
  * A typed, immutable, in-memory data frame.
  */
-final readonly class Frame implements Table, Stringable
+final readonly class Frame implements Table, ArrayAccess, Stringable
 {
     /**
      * @param array<string, Column> $data
@@ -89,24 +99,38 @@ final readonly class Frame implements Table, Stringable
     }
 
     /**
-     * Read a CSV file with a header row. Types are inferred from the text;
-     * "" and "NA" are NA unless $na says otherwise.
+     * Read delimited text like readr::read_csv(): a path (".gz" is
+     * decompressed) or an open stream. Types are guessed from up to
+     * guessMax rows; "" and "NA" are NA. More readr options go as named
+     * arguments; see Phibble\Io\CsvOptions (colNames, select, skip,
+     * nMax, quote, comment, trimWs, skipEmptyRows, guessMax, nameRepair,
+     * decimalMark, groupingMark, escapeDouble, escapeBackslash).
      *
-     * @param array<string, Type|string> $types
+     * Problems (unparseable values, ragged rows) raise one E_USER_WARNING;
+     * the data is still returned, with NA where values failed.
+     *
+     * @param string|resource $file
+     * @param string|array<int|string, mixed> $types readr col_types: "icdlDTfn_?" or name => spec.
      * @param list<string> $na
      */
-    public static function fromCsv(string $path, array $types = [], string $delimiter = ',', array $na = ['', 'NA']): self
+    public static function fromCsv(mixed $file, string|array $types = [], string $delimiter = ',', array $na = ['', 'NA'], mixed ...$options): self
     {
-        return CsvSource::file($path, $types, $delimiter, $na)->read();
+        $options = new CsvOptions(...['types' => $types, 'delimiter' => $delimiter, 'na' => $na, ...$options]);
+
+        return (is_resource($file) ? CsvSource::stream($file, $options) : CsvSource::file((string) $file, $options))->read();
     }
 
     /**
-     * @param array<string, Type|string> $types
+     * Read delimited text from a string; options as fromCsv().
+     *
+     * @param string|array<int|string, mixed> $types
      * @param list<string> $na
      */
-    public static function fromCsvString(string $csv, array $types = [], string $delimiter = ',', array $na = ['', 'NA']): self
+    public static function fromCsvString(string $csv, string|array $types = [], string $delimiter = ',', array $na = ['', 'NA'], mixed ...$options): self
     {
-        return CsvSource::string($csv, $types, $delimiter, $na)->read();
+        $options = new CsvOptions(...['types' => $types, 'delimiter' => $delimiter, 'na' => $na, ...$options]);
+
+        return CsvSource::string($csv, $options)->read();
     }
 
     /**
@@ -134,6 +158,36 @@ final readonly class Frame implements Table, Stringable
     public static function fromSource(Source $source): self
     {
         return $source->read();
+    }
+
+    // ---------------------------------------------------------------
+    // IO
+    // ---------------------------------------------------------------
+
+    /**
+     * Read JSON: a list of records ([{"a": 1}, ...]) or an object of
+     * columns ({"a": [1, 2]}). The shape is detected unless $orient is
+     * 'records' or 'columns'. Missing keys and nulls are NA; nested arrays
+     * and objects become list-columns.
+     *
+     * @param array<string, Type|string> $types
+     */
+    public static function fromJson(string $json, array $types = [], ?string $orient = null): self
+    {
+        return Json::read($json, $types, $orient);
+    }
+
+    /**
+     * Build a frame from a Laravel Collection (or anything with all() or
+     * toArray(), or any iterable). Items may be arrays, Eloquent models or
+     * other objects with toArray(), or plain objects. Laravel is not needed.
+     *
+     * @param iterable<mixed>|object $collection
+     * @param array<string, Type|string> $types
+     */
+    public static function fromCollection(iterable|object $collection, array $types = []): self
+    {
+        return Collections::read($collection, $types);
     }
 
     /**
@@ -182,6 +236,382 @@ final readonly class Frame implements Table, Stringable
         $groups = array_values(array_filter($frames[0]->groups, fn (string $g) => in_array($g, $names, true)));
 
         return new self($data, $rows, $groups);
+    }
+
+    // ---------------------------------------------------------------
+    // tibble
+    // ---------------------------------------------------------------
+
+    /**
+     * tibble(): build a frame column by column.
+     *
+     * - A list is a column; a scalar (or null) is repeated to the common
+     *   length. Only length-1 values are recycled.
+     * - A closure receives the frame built so far and returns a list or a
+     *   scalar, so columns can be computed from earlier ones.
+     * - A Table under an integer key is spliced in column by column.
+     *
+     * @param array<string|int, mixed> $columns
+     * @param string $nameRepair check_unique, unique, universal or minimal
+     */
+    public static function tibble(array $columns, string $nameRepair = 'check_unique'): self
+    {
+        $names = [];
+        $values = [];
+        foreach ($columns as $name => $value) {
+            if (is_int($name)) {
+                if (! $value instanceof Table) {
+                    throw new InvalidArgumentException('Column '.($name + 1).' must be named.');
+                }
+                foreach ($value->collect()->data as $inner => $column) {
+                    $names[] = (string) $inner;
+                    $values[] = $column;
+                }
+
+                continue;
+            }
+            $names[] = $name;
+            $values[] = $value;
+        }
+        $names = NameRepair::repair($names, $nameRepair);
+
+        $frame = new self([], 0);
+        $size = null;
+        foreach ($names as $i => $name) {
+            $value = $values[$i];
+            if ($value instanceof Closure) {
+                $value = $value($frame);
+            }
+            $column = match (true) {
+                $value instanceof Column => $value,
+                $value instanceof Table => throw new InvalidArgumentException(
+                    "Column `{$name}` is a data frame; packed data frame columns are not supported. Pass it unnamed to splice its columns."
+                ),
+                is_array($value) && array_is_list($value) => Infer::column($value, null, $name),
+                is_array($value) => Infer::column(array_values($value), null, $name),
+                default => null,
+            };
+
+            if ($column === null) {
+                // A scalar: recycled once the size is known.
+                $length = 1;
+            } else {
+                $length = $column->count();
+            }
+            if ($size === null || $size === 1 && $frame->data !== [] && $length !== 1) {
+                $frame = $size === 1 && $length !== 1 ? $frame->recycle($length) : $frame;
+                $size = $length;
+            } elseif ($length !== $size && $length !== 1) {
+                throw new InvalidArgumentException(
+                    "Tibble columns must have compatible sizes.\n• Size {$size}: Existing data.\n• Size {$length}: Column `{$name}`.\nℹ Only values of size one are recycled."
+                );
+            }
+
+            if ($column === null) {
+                $column = Infer::column(array_fill(0, $size, $value), null, $name);
+            } elseif ($length === 1 && $size !== 1) {
+                $column = $column->take(array_fill(0, $size, 0));
+            }
+            $data = $frame->data;
+            $data[$name] = $column;
+            $frame = new self($data, $size);
+        }
+
+        return $frame;
+    }
+
+    /**
+     * tribble(): a frame written row by row. Pass the column names, then
+     * either one list per row or the cells in row order.
+     *
+     *     Frame::tribble(['x', 'y'], [1, 'a'], [2, 'b']);
+     *
+     * @param list<string> $names
+     */
+    public static function tribble(array $names, mixed ...$cells): self
+    {
+        $names = NameRepair::repair(array_map(fn ($n) => ltrim((string) $n, '~'), $names), 'check_unique');
+        $width = count($names);
+        $rows = $cells !== [] && array_all($cells, fn ($c) => is_array($c) && array_is_list($c) && count($c) === $width)
+            ? $cells
+            : (function () use ($cells, $width): array {
+                if ($width === 0 || count($cells) % $width !== 0) {
+                    throw new InvalidArgumentException(
+                        "Data must be rectangular.\n• Found {$width} columns.\n• Found ".count($cells)." cells.\nℹ ".count($cells)." is not an integer multiple of {$width}."
+                    );
+                }
+
+                return array_chunk($cells, $width);
+            })();
+
+        $columns = [];
+        foreach ($names as $j => $name) {
+            $columns[$name] = array_map(fn (array $row) => $row[$j], $rows);
+        }
+
+        return self::fromColumns($columns);
+    }
+
+    /**
+     * as_tibble(): turn tables, rows, columns, collections or other
+     * iterables into a frame.
+     *
+     * - A Table is collected.
+     * - A list of associative arrays (or objects) is rows.
+     * - An associative array of lists is columns.
+     * - An object with all() or toArray() (a Laravel Collection) is unwrapped.
+     *
+     * @param string $nameRepair check_unique, unique, universal or minimal
+     */
+    public static function asTibble(mixed $data, string $nameRepair = 'check_unique'): self
+    {
+        if ($data instanceof Table) {
+            return $data->collect();
+        }
+        if (is_object($data) && ! $data instanceof \Traversable && (method_exists($data, 'all') || method_exists($data, 'toArray'))) {
+            $data = method_exists($data, 'all') ? $data->all() : $data->toArray();
+        }
+        if ($data instanceof \Traversable) {
+            $data = iterator_to_array($data, false);
+        }
+        if (! is_array($data)) {
+            throw new InvalidArgumentException('as_tibble() needs a table, an array or an iterable, got '.get_debug_type($data).'.');
+        }
+        if ($data === []) {
+            return self::fromColumns([]);
+        }
+
+        if (array_is_list($data)) {
+            $rows = array_map(fn ($row) => match (true) {
+                is_array($row) => $row,
+                $row instanceof Row => $row->toArray(),
+                is_object($row) && method_exists($row, 'toArray') => $row->toArray(),
+                is_object($row) => get_object_vars($row),
+                default => throw new InvalidArgumentException('as_tibble() needs rows as arrays or objects; use enframe() for a plain list.'),
+            }, $data);
+            $frame = self::fromRows($rows);
+
+            return $frame->renameAll(NameRepair::repair($frame->columns(), $nameRepair));
+        }
+
+        return self::tibble($data, $nameRepair);
+    }
+
+    /**
+     * enframe(): an array as a two-column frame of names and values. A list
+     * gets 1-based integer names, as in R.
+     *
+     * @param array<mixed> $values
+     */
+    public static function enframe(array $values, ?string $name = 'name', string $value = 'value'): self
+    {
+        $columns = [];
+        if ($name !== null) {
+            $columns[$name] = array_is_list($values)
+                ? ($values === [] ? [] : range(1, count($values)))
+                : array_map(strval(...), array_keys($values));
+        }
+        $columns[$value] = array_values($values);
+
+        return self::fromColumns($columns, $name !== null && $values === [] ? [$name => Type::String] : []);
+    }
+
+    /**
+     * deframe(): a two-column frame as name => value, or a one-column frame
+     * as a list.
+     *
+     * @return array<mixed>
+     */
+    public function deframe(): array
+    {
+        return match (count($this->data)) {
+            1 => array_values($this->toColumns())[0],
+            2 => array_combine(
+                array_map(fn ($k) => (string) $k, array_values($this->toColumns())[0]),
+                array_values($this->toColumns())[1],
+            ),
+            default => throw new InvalidArgumentException('deframe() needs a frame with one or two columns.'),
+        };
+    }
+
+    /**
+     * add_row(): insert rows. Pass one row (name => value), a list of rows,
+     * or nothing for an all-NA row. Missing columns are NA; unknown columns
+     * throw. Positions are 0-based: $before inserts before that row,
+     * $after after it. The default appends.
+     *
+     * @param array<string, mixed>|list<array<string, mixed>> $rows
+     */
+    public function addRow(array $rows = [], ?int $before = null, ?int $after = null): self
+    {
+        if ($before !== null && $after !== null) {
+            throw new InvalidArgumentException("Can't specify both before and after.");
+        }
+        $rows = $rows === [] ? [[]] : (array_is_list($rows) ? $rows : [$rows]);
+        foreach ($rows as $row) {
+            foreach (array_keys($row) as $name) {
+                if (! isset($this->data[$name])) {
+                    throw new InvalidArgumentException("New rows can't add columns.\n✖ Can't find column `{$name}` in `.data`.");
+                }
+            }
+        }
+
+        $columns = [];
+        foreach ($this->data as $name => $_) {
+            $columns[$name] = array_map(fn (array $row) => $row[$name] ?? null, $rows);
+        }
+        $new = self::fromColumns($columns)->withTypesOf($this);
+
+        $position = match (true) {
+            $before !== null => $before,
+            $after !== null => $after + 1,
+            default => $this->rows,
+        };
+        if ($position < 0 || $position > $this->rows) {
+            throw new InvalidArgumentException("Row position {$position} is out of range.");
+        }
+
+        $stacked = self::concat([$this->ungroup()->slice(0, $position), $new, $this->ungroup()->slice($position)]);
+
+        return $stacked->copy(groups: $this->groups, rowwise: $this->rowwise)->copyColumnsFrom($this);
+    }
+
+    /**
+     * add_column(): insert columns, with tibble()'s recycling rules. Place
+     * them before or after a column, by name or 0-based position; by
+     * default at the end.
+     *
+     * @param array<string, mixed> $columns
+     */
+    public function addColumn(array $columns, string|int|null $before = null, string|int|null $after = null): self
+    {
+        if ($before !== null && $after !== null) {
+            throw new InvalidArgumentException("Can't specify both before and after.");
+        }
+        foreach (array_keys($columns) as $name) {
+            if (isset($this->data[$name])) {
+                throw new InvalidArgumentException("Column name `{$name}` must not be duplicated.\nUse `.name_repair` to specify repair.");
+            }
+        }
+
+        $added = self::tibble([
+            ...array_map(fn ($v) => $v instanceof Closure ? fn () => $v($this) : $v, $columns),
+        ]);
+        if ($added->rows !== $this->rows) {
+            if ($added->rows !== 1) {
+                throw new InvalidArgumentException(
+                    "New columns must be compatible with `.data`.\n✖ New columns have {$added->rows} rows.\nℹ `.data` has {$this->rows} rows."
+                );
+            }
+            $added = $added->recycle($this->rows);
+        }
+
+        $names = $this->columns();
+        $position = match (true) {
+            $before !== null => is_int($before) ? $before : $this->position($before),
+            $after !== null => (is_int($after) ? $after : $this->position($after)) + 1,
+            default => count($names),
+        };
+        $data = [];
+        foreach (array_slice($this->data, 0, $position, true) as $name => $column) {
+            $data[$name] = $column;
+        }
+        foreach ($added->data as $name => $column) {
+            $data[$name] = $column;
+        }
+        foreach (array_slice($this->data, $position, null, true) as $name => $column) {
+            $data[$name] = $column;
+        }
+
+        return $this->copy(data: $data);
+    }
+
+    /** Column access as a property: $frame->price. Unknown names throw; there is no partial matching. */
+    public function __get(string $name): array
+    {
+        return $this->column($name);
+    }
+
+    public function __isset(string $name): bool
+    {
+        return isset($this->data[$name]);
+    }
+
+    public function offsetExists(mixed $offset): bool
+    {
+        return is_string($offset) && isset($this->data[$offset]);
+    }
+
+    /** Column access as an array: $frame['price']. */
+    public function offsetGet(mixed $offset): mixed
+    {
+        return $this->column((string) $offset);
+    }
+
+    public function offsetSet(mixed $offset, mixed $value): never
+    {
+        throw new \LogicException('Frames are immutable. Use mutate() or withColumn().');
+    }
+
+    public function offsetUnset(mixed $offset): never
+    {
+        throw new \LogicException('Frames are immutable. Use select() to drop columns.');
+    }
+
+    private function position(string $name): int
+    {
+        $this->storage($name);
+
+        return (int) array_search($name, $this->columns(), true);
+    }
+
+    /** Repeat a 1-row frame $n times. */
+    private function recycle(int $n): self
+    {
+        return $this->copy(
+            data: array_map(fn (Column $c) => $c->take(array_fill(0, $n, 0)), $this->data),
+            rows: $n,
+        );
+    }
+
+    /** @param list<string> $names */
+    private function renameAll(array $names): self
+    {
+        return $this->copy(data: array_combine($names, array_values($this->data)));
+    }
+
+    /** Cast this frame's columns to the types of the same columns in $like. */
+    private function withTypesOf(self $like): self
+    {
+        $frame = $this;
+        foreach ($like->data as $name => $column) {
+            $values = $frame->data[$name]->values();
+            $frame = $frame->withColumn($name, match (true) {
+                $column instanceof FactorColumn => FactorColumn::fromValues($values, null),
+                array_all($values, fn ($v) => $v === null) => Infer::column($values, $column->type(), $name),
+                default => $frame->data[$name],
+            });
+        }
+
+        return $frame;
+    }
+
+    /**
+     * Keep factor levels (and ordering) from $like where values still fit,
+     * as vctrs does when combining a factor with itself.
+     */
+    private function copyColumnsFrom(self $like): self
+    {
+        $frame = $this;
+        foreach ($like->data as $name => $column) {
+            $mine = $frame->data[$name];
+            if ($column instanceof FactorColumn && $mine instanceof FactorColumn) {
+                $levels = array_values(array_unique([...$column->levels(), ...$mine->levels()]));
+                $frame = $frame->withColumn($name, FactorColumn::fromValues($mine->values(), $levels, $column->isOrdered()));
+            }
+        }
+
+        return $frame;
     }
 
     /**
@@ -340,11 +770,20 @@ final readonly class Frame implements Table, Stringable
         return $this->copy(data: $data);
     }
 
-    public function filter(Closure $predicate): static
+    public function filter(Closure|Expr $predicate): static
     {
         $keep = [];
         foreach ($this->groupIndex() as [$_, $indices]) {
             $group = $this->subset($indices);
+            if ($predicate instanceof Expr) {
+                foreach ((new Evaluator($group))->vector($predicate) as $j => $flag) {
+                    if ($flag === true) {
+                        $keep[] = $indices[$j];
+                    }
+                }
+
+                continue;
+            }
             foreach ($group->toRows() as $j => $row) {
                 if ($predicate(new Row($row), $group)) {
                     $keep[] = $indices[$j];
@@ -466,6 +905,15 @@ final readonly class Frame implements Table, Stringable
     {
         $sorts = [];
         foreach ($keys as $key) {
+            if ($key instanceof Expr) {
+                // Expression keys are computed over the whole table; arrange ignores groups.
+                $desc = $key instanceof Desc;
+                $values = (new Evaluator($this->subset($this->rows === 0 ? [] : range(0, $this->rows - 1))))
+                    ->vector($desc ? $key->expr : $key);
+                $sorts[] = [$values, array_all($values, fn ($v) => $v === null || is_string($v)), $desc];
+
+                continue;
+            }
             [$name, $direction] = is_array($key) ? [$key[0], $key[1] ?? 'asc'] : [$key, 'asc'];
             $direction = strtolower($direction);
             if (! in_array($direction, ['asc', 'desc'], true)) {
@@ -554,7 +1002,9 @@ final readonly class Frame implements Table, Stringable
         foreach ($index as [$_, $indices]) {
             $group = $this->subset($indices);
             foreach ($aggregates as $name => $aggregate) {
-                $value = $aggregate($group);
+                $value = $aggregate instanceof Expr
+                    ? (new Evaluator($group))->scalar($aggregate, (string) $name)
+                    : $aggregate($group);
                 if (is_array($value)) {
                     throw new InvalidArgumentException("summarise() '{$name}' must return a single value, not an array.");
                 }
@@ -666,13 +1116,7 @@ final readonly class Frame implements Table, Stringable
                 $columns[] = $column;
             }
         }
-        // vctrs "unique" repair: duplicated or empty names become name...position.
-        $counts = array_count_values($names);
-        foreach ($names as $i => $name) {
-            if ($name === '' || $counts[$name] > 1) {
-                $names[$i] = $name.'...'.($i + 1);
-            }
-        }
+        $names = NameRepair::repair($names, 'unique');
 
         return Frame::fromColumns(array_combine($names, $columns));
     }
@@ -1003,6 +1447,65 @@ final readonly class Frame implements Table, Stringable
     }
 
     // ---------------------------------------------------------------
+    // Writing
+    // ---------------------------------------------------------------
+
+    /**
+     * Write CSV like readr::write_csv(): NA as "NA", quoting only where
+     * needed, ISO dates, UTC datetimes with "Z", TRUE/FALSE, and numbers
+     * in readr's shortest form. $quote is 'needed', 'all' or 'none';
+     * $escape is 'double', 'backslash' or 'none'. Appending skips the
+     * header unless $colNames is true.
+     */
+    public function writeCsv(
+        string $path,
+        string $delimiter = ',',
+        string $na = 'NA',
+        bool $append = false,
+        ?bool $colNames = null,
+        string $quote = 'needed',
+        string $escape = 'double',
+        string $eol = "\n",
+    ): void {
+        $csv = CsvWriter::format($this, $delimiter, $na, $colNames ?? ! $append, $quote, $escape, $eol);
+        if (file_put_contents($path, $csv, $append ? FILE_APPEND : 0) === false) {
+            throw new \RuntimeException("Cannot write CSV file '{$path}'.");
+        }
+    }
+
+    /** The CSV text writeCsv() would write. */
+    public function toCsv(
+        string $delimiter = ',',
+        string $na = 'NA',
+        bool $colNames = true,
+        string $quote = 'needed',
+        string $escape = 'double',
+        string $eol = "\n",
+    ): string {
+        return CsvWriter::format($this, $delimiter, $na, $colNames, $quote, $escape, $eol);
+    }
+
+    /**
+     * JSON as a list of records ('records') or an object of columns
+     * ('columns'). NA is null (records keep every key, unlike jsonlite);
+     * dates are "Y-m-d", datetimes ISO 8601 in UTC with "Z", factors their
+     * labels, NaN and infinities null, nested frames nested JSON.
+     */
+    public function toJson(string $orient = 'records', int $flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES): string
+    {
+        return Json::write($this, $orient, $flags);
+    }
+
+    /**
+     * An Illuminate\Support\Collection of row arrays. Needs Laravel's
+     * illuminate/support (or illuminate/collections) to be installed.
+     */
+    public function toCollection(): object
+    {
+        return Collections::write($this);
+    }
+
+    // ---------------------------------------------------------------
     // Printing
     // ---------------------------------------------------------------
 
@@ -1011,50 +1514,19 @@ final readonly class Frame implements Table, Stringable
         return $this->format();
     }
 
-    public function format(int $maxRows = 10): string
+    /**
+     * Print like a tibble. By default all rows are shown when there are at
+     * most 20, otherwise the first 10.
+     */
+    public function format(?int $n = null, int $width = 80): string
     {
-        $lines = ["# A phibble: {$this->rows} × {$this->ncol()}"];
-        if ($this->groups !== []) {
-            $lines[] = '# Groups: '.implode(', ', $this->groups).' ['.count($this->groupIndex()).']';
-        }
-        if ($this->data === []) {
-            return implode("\n", $lines);
-        }
-
-        $shown = $this->head($maxRows);
-        $table = [['', ...$this->columns()], ['', ...array_values(array_map(fn (Type $t) => "<{$t->abbreviation()}>", $this->types()))]];
-        foreach ($shown->toRows() as $i => $row) {
-            $table[] = [(string) ($i + 1), ...array_map(self::formatValue(...), array_values($row))];
-        }
-
-        $widths = [];
-        foreach ($table as $cells) {
-            foreach ($cells as $c => $cell) {
-                $widths[$c] = max($widths[$c] ?? 0, mb_strlen($cell));
-            }
-        }
-        foreach ($table as $cells) {
-            $padded = array_map(fn (string $cell, int $c) => mb_str_pad($cell, $widths[$c]), $cells, array_keys($cells));
-            $lines[] = rtrim(implode(' ', $padded));
-        }
-        if ($this->rows > $maxRows) {
-            $lines[] = '# ℹ '.($this->rows - $maxRows).' more rows';
-        }
-
-        return implode("\n", $lines);
+        return Printer::render($this, $n, $width);
     }
 
-    private static function formatValue(mixed $value): string
+    /** One line per column with its type and leading values, as tibble's glimpse(). */
+    public function glimpse(int $width = 80): string
     {
-        return match (true) {
-            $value === null => 'NA',
-            is_bool($value) => $value ? 'TRUE' : 'FALSE',
-            is_float($value) => is_finite($value) ? sprintf('%.6g', $value) : (string) $value,
-            $value instanceof DateTimeInterface => $value->format('H:i:s') === '00:00:00'
-                ? $value->format('Y-m-d')
-                : $value->format('Y-m-d H:i:s'),
-            default => (string) $value,
-        };
+        return Glimpse::render($this, $width);
     }
 
     // ---------------------------------------------------------------
@@ -1172,6 +1644,16 @@ final readonly class Frame implements Table, Stringable
     {
         if ($definition instanceof Column) {
             return $definition;
+        }
+        if ($definition instanceof Expr) {
+            $values = array_fill(0, $this->rows, null);
+            foreach ($this->groupIndex() as [$_, $indices]) {
+                foreach ((new Evaluator($this->subset($indices)))->vector($definition) as $j => $value) {
+                    $values[$indices[$j]] = $value;
+                }
+            }
+
+            return $values;
         }
         if (is_array($definition)) {
             if (! array_is_list($definition) || count($definition) !== $this->rows) {

@@ -1,0 +1,30 @@
+{
+  "names": ["id", "text", "other"],
+  "types": {
+    "id": "float",
+    "text": "string",
+    "other": "string"
+  },
+  "levels": {},
+  "values": {
+    "id": [
+      "1",
+      "2",
+      "3",
+      "5"
+    ],
+    "text": [
+      "he said \"hi\"",
+      "line1\nline2",
+      "a,b",
+      null
+    ],
+    "other": [
+      "a",
+      "b",
+      "c",
+      null
+    ]
+  },
+  "problems": 0
+}

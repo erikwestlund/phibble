@@ -1,0 +1,19 @@
+{
+  "names": ["z", "x"],
+  "types": {
+    "z": "float",
+    "x": "float"
+  },
+  "levels": {},
+  "values": {
+    "z": [
+      "3",
+      "6"
+    ],
+    "x": [
+      "1",
+      "4"
+    ]
+  },
+  "problems": 0
+}

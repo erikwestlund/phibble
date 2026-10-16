@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phibble\Contracts;
 
 use Closure;
+use Phibble\Expr\Expr;
 use Phibble\Frame;
 use Phibble\Type;
 
@@ -49,11 +50,12 @@ interface Table extends \Countable, \IteratorAggregate
     public function select(array $names): static;
 
     /**
-     * Keep rows where the closure returns true. Null counts as false.
+     * Keep rows where the predicate is true; NA counts as false. A
+     * closure runs per row; an Expr is evaluated per group, vectorised.
      *
-     * @param Closure(\Phibble\Row, Table): ?bool $predicate
+     * @param Closure(\Phibble\Row, Table): ?bool|Expr $predicate
      */
-    public function filter(Closure $predicate): static;
+    public function filter(Closure|Expr $predicate): static;
 
     /**
      * Keep rows by a vectorised predicate run once per group. The closure
@@ -64,8 +66,10 @@ interface Table extends \Countable, \IteratorAggregate
     public function filterGroups(Closure $predicate): static;
 
     /**
-     * Add or replace columns. Each value is either a closure run per row,
-     * or a list with one value per row. Later entries can use earlier ones.
+     * Add or replace columns. Each value is a closure run per row, an Expr
+     * evaluated per group (aggregates recycle within the group), a list
+     * with one value per row, or a scalar to repeat. Later entries can use
+     * earlier ones.
      *
      * @param array<string, Closure(\Phibble\Row, Table): mixed|list<mixed>> $columns
      */
@@ -87,8 +91,9 @@ interface Table extends \Countable, \IteratorAggregate
     /**
      * Sort rows. Stable; nulls sort last in both directions.
      *
-     * @param list<string|array{0: string, 1?: 'asc'|'desc'}> $keys
-     *     A bare name means ascending.
+     * @param list<string|array{0: string, 1?: 'asc'|'desc'}|Expr> $keys
+     *     A bare name means ascending. An Expr key sorts by its value;
+     *     wrap it in desc() for descending.
      */
     public function arrange(array $keys): static;
 
@@ -119,7 +124,9 @@ interface Table extends \Countable, \IteratorAggregate
     public function eachGroup(): iterable;
 
     /**
-     * One row per group: the group keys, then one column per entry.
+     * One row per group: the group keys, then one column per entry. Each
+     * entry is a closure given the group's table, or an Expr that must
+     * evaluate to one value (usually an aggregate).
      * The result drops the last grouping level, like dplyr. A rowwise
      * table keeps its id columns as groups.
      *

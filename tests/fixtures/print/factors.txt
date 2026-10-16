@@ -1,0 +1,6 @@
+# A tibble: 3 × 2
+  f     o    
+  <fct> <ord>
+1 a     lo   
+2 b     hi   
+3 <NA>  mid  
