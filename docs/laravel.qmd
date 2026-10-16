@@ -66,6 +66,33 @@ $summary = Penguin::query()->phibble()
     |> arrange(desc('mass'));
 ```
 
+## Charts with phiz
+
+[phiz](https://erikwestlund.github.io/phiz/) is a grammar of graphics in the
+style of ggplot2 that produces Vega-Lite specifications. `Plot::of()` accepts
+a phibble frame directly. A query can select the needed columns in the
+database, collect them, and plot them:
+
+{{< include examples/_laravel-chart.md >}}
+
+For a summary, the grouping and aggregation can also run in the database, so
+only the summary rows reach PHP:
+
+{{< include examples/_laravel-chart-summary.md >}}
+
+In a Laravel view, phiz's Blade component renders a plot, and `@phizScripts`
+loads the Vega libraries once per page:
+
+```blade
+<x-phiz :plot="$plot" />
+
+@phizScripts
+```
+
+phiz also has helpers that plot php-stats model results, such as
+`coefplot($fit)` and `effect_plot($fit, $data, 'x', by: 'g')`. Its
+documentation covers them.
+
 ## Using the result
 
 A collected frame can be returned from a controller or passed to a view:

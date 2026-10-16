@@ -8,7 +8,9 @@
  * imports Frame, Type, SqlTable, the Phibble\ functions (tibble, tribble,
  * as_tibble, enframe, deframe, tbl) and every Phibble\Expr\ helper.
  *
- * Code above a line "// ---" runs but is left out of the page.
+ * Code above a line "// ---" and below a line "// ===" runs but is left out
+ * of the page. Output after
+ * a line "<!--phiz-->" is HTML, such as a phiz chart, and is included as is.
  *
  * Usage: bin/docs-examples [name ...]
  * Environment: PHP (the PHP 8.5 binary, default: this one).
@@ -60,9 +62,16 @@ foreach (glob($root.'/docs/examples/*.php') as $file) {
     }
     // Code above a "// ---" line runs but is not shown (setup such as a database).
     $shown = preg_match('~^// ---\s*$~m', $code) ? trim((string) preg_split('~^// ---\s*$~m', $code, 2)[1]) : $code;
+    // Code below a "// ===" line runs but is not shown (output plumbing).
+    $shown = preg_match('~^// ===\s*$~m', $shown) ? trim((string) preg_split('~^// ===\s*$~m', $shown, 2)[0]) : $shown;
     $md = "```php\n{$shown}\n```\n\n";
-    if (trim($out) !== '') {
-        $md .= "```{.text .output}\n".rtrim($out)."\n```\n";
+    // Output after a "<!--phiz-->" line is HTML (a rendered chart), included as is.
+    [$text, $html] = str_contains($out, "<!--phiz-->\n") ? explode("<!--phiz-->\n", $out, 2) : [$out, ''];
+    if (trim($text) !== '') {
+        $md .= "```{.text .output}\n".rtrim($text)."\n```\n";
+    }
+    if (trim($html) !== '') {
+        $md .= "\n```{=html}\n".trim($html)."\n```\n";
     }
     file_put_contents($root."/docs/examples/_{$name}.md", $md);
     echo "{$name}: ok\n";
