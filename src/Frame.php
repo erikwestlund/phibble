@@ -14,6 +14,7 @@ use Phibble\Column\ArrayColumn;
 use Phibble\Column\Column;
 use Phibble\Column\FactorColumn;
 use Phibble\Column\Infer;
+use Phibble\Column\TemporalColumn;
 use Phibble\Contracts\Table;
 use Phibble\Exception\ColumnNotFound;
 use Phibble\Expr\Call;
@@ -1923,6 +1924,9 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         if ($column instanceof FactorColumn) {
             return array_map(fn (?int $c) => $c ?? $na, $column->codes());
         }
+        if ($column instanceof TemporalColumn) {
+            return array_map(fn (?int $t) => $t ?? $na, $column->ticks());
+        }
 
         return match ($column->type()) {
             Type::Int, Type::String => array_map(fn ($v) => $v ?? $na, $column->values()),
@@ -2008,7 +2012,11 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         }
 
         return [
-            $column instanceof FactorColumn ? $column->codes() : $column->values(),
+            match (true) {
+                $column instanceof FactorColumn => $column->codes(),
+                $column instanceof TemporalColumn => $column->ticks(),
+                default => $column->values(),
+            },
             $column->type() === Type::String,
         ];
     }
@@ -2071,6 +2079,11 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         $whole = count($indices) === $this->rows;
 
         return Evaluator::over(function (string $name) use ($indices, $whole): array {
+            $storage = $this->storage($name);
+            if ($storage instanceof TemporalColumn) {
+                // Build objects for these rows only.
+                return ($whole ? $storage : $storage->take($indices))->values();
+            }
             $values = $this->wholeColumn($name);
             if ($whole) {
                 return $values;

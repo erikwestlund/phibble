@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phibble\Io;
 
 use DateTimeImmutable;
+use Phibble\Column\TemporalColumn;
 use DateTimeZone;
 use Exception;
 use Phibble\Column\ArrayColumn;
@@ -99,6 +100,9 @@ final readonly class TextParser
             return [new ArrayColumn($type, $values), 0];
         }
 
+        if ($type === Type::Date || $type === Type::DateTime) {
+            return $this->parseTemporal($values, $type);
+        }
         $grouping = $options['grouping'] ?? false;
         $number = $options['number'] ?? false;
         $out = [];
@@ -123,6 +127,52 @@ final readonly class TextParser
         }
 
         return [new ArrayColumn($type, $out), $failed];
+    }
+
+    /**
+     * Dates and datetimes straight to integer storage. The common ISO
+     * shapes are converted arithmetically; anything else is parsed to an
+     * object first.
+     *
+     * @param list<?string> $values
+     * @return array{0: TemporalColumn, 1: int}
+     */
+    private function parseTemporal(array $values, Type $type): array
+    {
+        $ticks = [];
+        $failed = 0;
+        foreach ($values as $v) {
+            if ($v === null) {
+                $ticks[] = null;
+
+                continue;
+            }
+            $tick = null;
+            $len = strlen($v);
+            if (($len === 10 || ($len === 19 && ($v[10] === ' ' || $v[10] === 'T') && $v[13] === ':' && $v[16] === ':'))
+                && $v[4] === '-' && $v[7] === '-'
+                && ctype_digit(substr($v, 0, 4).substr($v, 5, 2).substr($v, 8, 2).($len === 19 ? substr($v, 11, 2).substr($v, 14, 2).substr($v, 17, 2) : ''))) {
+                [$y, $m, $d] = [(int) substr($v, 0, 4), (int) substr($v, 5, 2), (int) substr($v, 8, 2)];
+                [$h, $i, $s] = $len === 19 ? [(int) substr($v, 11, 2), (int) substr($v, 14, 2), (int) substr($v, 17, 2)] : [0, 0, 0];
+                if (checkdate($m, $d, $y) && $h <= 23 && $i <= 59 && $s <= 59 && ($type === Type::DateTime || $len === 10)) {
+                    $tick = $type === Type::Date
+                        ? TemporalColumn::days($y, $m, $d)
+                        : gmmktime($h, $i, $s, $m, $d, $y) * 1_000_000;
+                }
+            }
+            if ($tick === null) {
+                $object = $type === Type::Date ? self::parseDate($v) : self::parseDateTime($v);
+                if ($object !== null) {
+                    $tick = TemporalColumn::fromObjects($type, [$object])->ticks()[0];
+                }
+            }
+            if ($tick === null) {
+                $failed++;
+            }
+            $ticks[] = $tick;
+        }
+
+        return [new TemporalColumn($type, $ticks), $failed];
     }
 
     public function guessesAsInt(string $v): bool

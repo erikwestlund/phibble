@@ -115,6 +115,16 @@ final class Infer
         if ($column->type() === $type) {
             return $column;
         }
+        // Dates and datetimes to numbers: days or seconds since the epoch, as in R.
+        if ($column instanceof TemporalColumn && in_array($type, [Type::Int, Type::Float], true)) {
+            $scale = $column->type() === Type::Date ? 1 : 1_000_000;
+            $numbers = array_map(
+                fn (?int $t) => $t === null ? null : ($scale === 1 ? $t : $t / $scale),
+                $column->ticks(),
+            );
+
+            return self::cast($numbers, $type, null, $name);
+        }
         // as.integer(factor) gives the 1-based codes, as in R.
         if ($column instanceof FactorColumn && in_array($type, [Type::Int, Type::Float], true)) {
             $codes = array_map(fn (?int $c) => $c === null ? null : $c + 1, $column->codes());
@@ -215,7 +225,9 @@ final class Infer
             );
         }
 
-        return new ArrayColumn($type, $out);
+        return $type === Type::Date || $type === Type::DateTime
+            ? TemporalColumn::fromObjects($type, $out)
+            : new ArrayColumn($type, $out);
     }
 
     private static function castValue(mixed $value, Type $type, ?Type $from): mixed
