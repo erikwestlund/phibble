@@ -80,7 +80,7 @@ final readonly class SqlTable implements Table
      */
     public static function query(PDO $pdo, string $sql, array $bindings = []): self
     {
-        return self::start($pdo, Dialect::for($pdo), self::positional($sql, $bindings));
+        return self::start($pdo, Dialect::for($pdo), self::positional($sql, $bindings, $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql'));
     }
 
     public static function fromSource(PdoSource $source): self
@@ -101,16 +101,20 @@ final readonly class SqlTable implements Table
 
     private static function start(PDO $pdo, Dialect $dialect, Fragment $from, ?string $table = null): self
     {
-        $probe = $pdo->prepare("SELECT * FROM ({$from->sql}) AS phibble_probe LIMIT 0");
+        $probe = $pdo->prepare(self::sql("SELECT * FROM ({$from->sql}) AS phibble_probe LIMIT 0"));
         self::bind($probe, $from->bindings);
         $probe->execute();
         $columns = [];
         $text = [];
+        $hints = [];
         for ($i = 0; $i < $probe->columnCount(); $i++) {
             $meta = $probe->getColumnMeta($i);
             $columns[] = $name = $meta === false ? "column{$i}" : $meta['name'];
             if ($meta !== false && $dialect->isTextColumn($meta)) {
                 $text[] = $name;
+            }
+            if ($meta !== false && $dialect->isBoolColumn($meta)) {
+                $hints[$name] = Type::Bool;
             }
         }
 
@@ -122,18 +126,23 @@ final readonly class SqlTable implements Table
             'PostgreSQL' => 'ctid',
             default => null,
         };
-        if ($physical !== null) {
+        if ($physical === 'ctid') {
+            // Ask the catalog: a failed probe would abort the caller's transaction.
+            $kind = $pdo->prepare('SELECT relkind FROM pg_class WHERE oid = to_regclass(?)');
+            $kind->execute([self::sql($table)]);
+            $physical = in_array($kind->fetchColumn(), ['r', 'm'], true) ? 'ctid' : null;
+        } elseif ($physical === 'rowid') {
             try {
-                $pdo->query("SELECT {$physical} FROM {$table} LIMIT 0");
+                $pdo->query(self::sql("SELECT rowid FROM {$table} LIMIT 0"));
             } catch (\PDOException) {
-                $physical = null; // a view, or a table without row ids
+                $physical = null; // a view, or a WITHOUT ROWID table
             }
         }
         $numbered = $physical !== null
             ? Fragment::raw("SELECT *, {$physical} AS {$row} FROM {$table}")
             : Fragment::format("SELECT *, ROW_NUMBER() OVER () AS {$row} FROM ({}) AS phibble_source", [$from]);
 
-        return new self($pdo, $dialect, $numbered, $columns, text: $text);
+        return new self($pdo, $dialect, $numbered, $columns, hints: $hints, text: $text);
     }
 
     // ---------------------------------------------------------------
@@ -143,7 +152,13 @@ final readonly class SqlTable implements Table
     /** The SQL that collect() would run, with ? placeholders. */
     public function showQuery(): string
     {
-        return $this->render()->sql;
+        return self::sql($this->render()->sql);
+    }
+
+    /** Restore "{}" inside identifiers, kept out of the way while templates are filled. */
+    private static function sql(string $sql): string
+    {
+        return str_replace(Dialect::BRACES, '{}', $sql);
     }
 
     /** @return list<mixed> Bindings for showQuery(), in order. */
@@ -306,12 +321,19 @@ final readonly class SqlTable implements Table
             if ($expr === null) {
                 return $table->collect()->mutate(array_slice($columns, array_search($name, array_keys($columns), true), null, true));
             }
+            // Overwriting a column the row order uses: fix the order first.
+            if (array_any($table->order, fn (array $o) => in_array($name, $o[0]->columns(), true))) {
+                $table = $table->ordered();
+            }
             try {
                 $sql = $table->compiler()->compile($expr);
             } catch (Untranslatable) {
                 return $table->collect()->mutate(array_slice($columns, array_search($name, array_keys($columns), true), null, true));
             }
-            $table = $table->withExpression($name, $sql, Compiler::isLogical($expr) ? Type::Bool : null, Compiler::isText($expr, $table->text));
+            $logical = Compiler::isLogical($expr)
+                || ($expr instanceof Call && in_array($expr->fn, ['first', 'last', 'nth', 'lag', 'lead', 'coalesce', 'min', 'max'], true)
+                    && $expr->args[0] instanceof Col && in_array($expr->args[0]->name, $table->bools(), true));
+            $table = $table->withExpression($name, $sql, $logical ? Type::Bool : null, Compiler::isText($expr, $table->text));
         }
 
         return $table;
@@ -372,6 +394,10 @@ final readonly class SqlTable implements Table
         foreach ($order as [$expr]) {
             $this->check($expr->columns());
         }
+
+        // A new arrange() is the main sort; the previous order still breaks
+        // ties, because dplyr's arrange() is stable over the current rows.
+        $order = [...$order, ...$this->order];
 
         return new self($this->pdo, $this->dialect, $this->from, $this->columns, $this->groups, $order, $this->hints, $this->depth, $this->rowKeys, $this->text);
     }
@@ -447,7 +473,11 @@ final readonly class SqlTable implements Table
      */
     private function summariseCompiled(array $aggregates, ?string $groups, array $baseHints): Table
     {
-        $compiler = new Compiler($this->dialect, mode: 'summary', text: $this->text);
+        // Each entry must be one value per group; otherwise Frame raises the error.
+        if (array_any($aggregates, fn (Expr $e) => ! self::isSummary($e))) {
+            return $this->collect()->summarise($aggregates, $groups);
+        }
+        $compiler = new Compiler($this->dialect, mode: 'summary', text: $this->text, bools: $this->bools());
         // Group keys compare in byte order (text) and keep their names.
         $keys = array_map(fn (string $g) => $compiler->compile(new Col($g)), $this->groups);
         $parts = array_map(fn (Fragment $k, string $g) => Fragment::format('{} AS '.$this->dialect->quote($g), [$k]), $keys, $this->groups);
@@ -511,6 +541,10 @@ final readonly class SqlTable implements Table
 
     public function slice(int $offset, ?int $length = null): Table
     {
+        if ($offset < 0 || ($length !== null && $length < 0)) {
+            // Positions counted from the end need the row count; do it in memory.
+            return $this->collect()->slice($offset, $length);
+        }
         $limit = $length === null ? $this->dialect->noLimit() : 'LIMIT '.max(0, $length);
         $sql = Fragment::format('{} '.$limit.' OFFSET '.max(0, $offset), [$this->render(withRow: true)]);
         $sql = Fragment::format('SELECT * FROM ({}) AS '.$this->alias(), [$sql]);
@@ -610,7 +644,27 @@ final readonly class SqlTable implements Table
 
     private function compiler(): Compiler
     {
-        return new Compiler($this->dialect, $this->groups, $this->rowOrder(), text: $this->text);
+        return new Compiler($this->dialect, $this->groups, $this->rowOrder(), text: $this->text, bools: $this->bools());
+    }
+
+    /** Whether an expression gives one value per group: aggregates and literals, combined. */
+    private static function isSummary(Expr $expr): bool
+    {
+        return match (true) {
+            $expr instanceof Lit => true,
+            $expr instanceof Call => match (\Phibble\Expr\Functions::kind($expr->fn)) {
+                'agg' => true,
+                'window' => false,
+                default => array_all([...$expr->args, ...array_values($expr->named)], self::isSummary(...)),
+            },
+            default => false,
+        };
+    }
+
+    /** @return list<string> Logical columns (their SQL may be BOOLEAN). */
+    private function bools(): array
+    {
+        return array_map(strval(...), array_keys(array_filter($this->hints, fn (Type $t) => $t === Type::Bool)));
     }
 
     /**
@@ -787,7 +841,7 @@ final readonly class SqlTable implements Table
 
     private function run(Fragment $sql): \PDOStatement
     {
-        $statement = $this->pdo->prepare($sql->sql);
+        $statement = $this->pdo->prepare(self::sql($sql->sql));
         self::bind($statement, $sql->bindings);
         $statement->execute();
 
@@ -813,7 +867,7 @@ final readonly class SqlTable implements Table
      *
      * @param array<int|string, mixed> $bindings
      */
-    private static function positional(string $sql, array $bindings): Fragment
+    private static function positional(string $sql, array $bindings, bool $backslashEscapes = false): Fragment
     {
         if ($bindings === [] || array_is_list($bindings)) {
             return new Fragment($sql, array_values($bindings));
@@ -831,10 +885,28 @@ final readonly class SqlTable implements Table
             if ($char === "'" || $char === '"' || $char === '`') {
                 $end = $i + 1;
                 while ($end < $length && $sql[$end] !== $char) {
-                    $end++;
+                    // MySQL strings escape quotes with a backslash.
+                    $end += $backslashEscapes && $sql[$end] === '\\' && $char !== '`' ? 2 : 1;
                 }
                 $out .= substr($sql, $i, $end - $i + 1);
                 $i = $end;
+
+                continue;
+            }
+            // Comments are copied as they are; a :name inside one is not a binding.
+            if ($char === '-' && ($sql[$i + 1] ?? '') === '-') {
+                $end = strpos($sql, "\n", $i);
+                $end = $end === false ? $length : $end;
+                $out .= substr($sql, $i, $end - $i);
+                $i = $end - 1;
+
+                continue;
+            }
+            if ($char === '/' && ($sql[$i + 1] ?? '') === '*') {
+                $end = strpos($sql, '*/', $i + 2);
+                $end = $end === false ? $length : $end + 2;
+                $out .= substr($sql, $i, $end - $i);
+                $i = $end - 1;
 
                 continue;
             }

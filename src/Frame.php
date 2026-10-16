@@ -2094,7 +2094,15 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             }
 
             return $slice;
-        }, count($indices));
+        }, count($indices), function (string $name) use ($indices, $whole): ?array {
+            // Factors rank and order by level, so give their codes for sorting.
+            $storage = $this->storage($name);
+            if (! $storage instanceof FactorColumn) {
+                return null;
+            }
+
+            return $whole ? $storage->codes() : $storage->take($indices)->codes();
+        });
     }
 
     /** A column's values, computed once per frame (factor labels are built on demand). */

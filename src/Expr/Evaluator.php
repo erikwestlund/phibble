@@ -40,10 +40,20 @@ final class Evaluator
     /** @var \Closure(string): list<mixed> */
     private \Closure $column;
 
+    /** @var (\Closure(string): ?list<int>)|null Sort keys for a column (factor codes), or null to sort by value. */
+    private ?\Closure $sortKeys = null;
+
     public function __construct(Table $table)
     {
         $this->n = $table->nrow();
         $this->column = $table->column(...);
+        if ($table instanceof \Phibble\Frame) {
+            $this->sortKeys = function (string $name) use ($table): ?array {
+                $storage = $table->storage($name);
+
+                return $storage instanceof \Phibble\Column\FactorColumn ? $storage->codes() : null;
+            };
+        }
     }
 
     /**
@@ -52,11 +62,12 @@ final class Evaluator
      *
      * @param \Closure(string): list<mixed> $column Values of a column, by name.
      */
-    public static function over(\Closure $column, int $rows): self
+    public static function over(\Closure $column, int $rows, ?\Closure $sortKeys = null): self
     {
         $evaluator = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor();
         $evaluator->n = $rows;
         $evaluator->column = $column;
+        $evaluator->sortKeys = $sortKeys;
 
         return $evaluator;
     }
@@ -137,9 +148,7 @@ final class Evaluator
 
                 return null;
             }, ...$args),
-            'in' => $this->map(fn ($a, $set) => in_array($a, (array) $set, false) && ($a !== null || in_array(null, (array) $set, true))
-                ? true
-                : self::inLoose($a, (array) $set), ...$args),
+            'in' => $this->map(fn ($a, $set) => self::inLoose($a, (array) $set), ...$args),
             'between' => $this->map(fn ($x, $lo, $hi) => $x === null || $lo === null || $hi === null
                 ? null
                 : self::compare('>=', $x, $lo) && self::compare('<=', $x, $hi), ...$args),
@@ -160,11 +169,12 @@ final class Evaluator
             'str_lower' => $this->map(fn ($s) => $s === null ? null : mb_strtolower(self::str($s)), ...$args),
             'str_upper' => $this->map(fn ($s) => $s === null ? null : mb_strtoupper(self::str($s)), ...$args),
             'str_length' => $this->map(fn ($s) => $s === null ? null : mb_strlen(self::str($s)), ...$args),
-            'str_trim' => $this->map(fn ($s, $side) => $s === null ? null : match ($side) {
-                'left' => ltrim(self::str($s)),
-                'right' => rtrim(self::str($s)),
-                default => trim(self::str($s)),
-            }, ...[...$args, $this->option($call, 'side', 'both')]),
+            // Unicode white space, as stringr (ICU) trims it.
+            'str_trim' => $this->map(fn ($s, $side) => $s === null ? null : (string) preg_replace(match ($side) {
+                'left' => '/^[\s\p{Z}\x{85}]+/u',
+                'right' => '/[\s\p{Z}\x{85}]+$/u',
+                default => '/^[\s\p{Z}\x{85}]+|[\s\p{Z}\x{85}]+$/u',
+            }, '', self::str($s)), ...[...$args, $this->option($call, 'side', 'both')]),
             'str_sub' => $this->map(fn ($s, $start, $end = -1) => $s === null || $start === null || $end === null
                 ? null
                 : self::strSub(self::str($s), (int) $start, (int) $end), ...$args),
@@ -178,7 +188,7 @@ final class Evaluator
                     default => '',
                 });
 
-                return $negate ? ! $found : $found;
+                return $found === null ? null : ($negate ? ! $found : $found);
             }, ...[...$args, $this->option($call, 'negate', false)]),
             'str_replace', 'str_replace_all' => $this->map(fn ($s, $p, $r) => $s === null || $p === null
                 ? null
@@ -410,7 +420,7 @@ final class Evaluator
         } else {
             $arg = $call->args[0];
             $desc = $arg instanceof Desc;
-            $values = $this->vector($desc ? $arg->expr : $arg);
+            $values = $this->sortValues($desc ? $arg->expr : $arg);
         }
         if ($this->n === 0) {
             return [];
@@ -491,6 +501,16 @@ final class Evaluator
         return $out;
     }
 
+    /** Values to rank or order by: a factor's level codes, otherwise the values. */
+    private function sortValues(Expr $expr): array
+    {
+        if ($expr instanceof Col && $this->sortKeys !== null && ($codes = ($this->sortKeys)($expr->name)) !== null) {
+            return $codes;
+        }
+
+        return $this->vector($expr);
+    }
+
     /**
      * Row order by an order_by expression (NA last, stable).
      *
@@ -499,7 +519,7 @@ final class Evaluator
     private function order(Expr $by): array
     {
         $desc = $by instanceof Desc;
-        $values = $this->vector($desc ? $by->expr : $by);
+        $values = $this->sortValues($desc ? $by->expr : $by);
         $order = $this->n === 0 ? [] : range(0, $this->n - 1);
         usort($order, function (int $a, int $b) use ($values, $desc): int {
             [$x, $y] = [$values[$a], $values[$b]];
@@ -726,7 +746,8 @@ final class Evaluator
             '+' => $a + $b,
             '-' => $a - $b,
             '*' => $a * $b,
-            '/' => $b == 0 ? ($a == 0 || is_nan((float) $a) ? NAN : ($a > 0 ? INF : -INF)) : $a / $b,
+            // R's / always gives a double, also when the quotient is whole.
+            '/' => $b == 0 ? ($a == 0 || is_nan((float) $a) ? NAN : ($a > 0 ? INF : -INF)) : (float) $a / $b,
             '^' => (float) ($a ** $b),
             '%%' => $b == 0 ? ($ints ? null : NAN) : ($ints ? $a - (int) floor($a / $b) * $b : $a - floor($a / $b) * $b),
         };
@@ -831,6 +852,12 @@ final class Evaluator
     /** @param list<mixed> $present */
     private static function extreme(string $fn, array $present): mixed
     {
+        // NaN wins, as in R: min(c(1, NaN)) is NaN.
+        foreach ($present as $v) {
+            if (is_float($v) && is_nan($v)) {
+                return NAN;
+            }
+        }
         $best = $present[0];
         $strings = is_string($best);
         foreach ($present as $v) {

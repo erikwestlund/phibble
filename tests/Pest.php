@@ -7,6 +7,7 @@ use Phibble\Frame;
 require_once __DIR__.'/Support/ExprCases.php';
 require_once __DIR__.'/Support/JoinCases.php';
 require_once __DIR__.'/Support/LubridateStringrCases.php';
+require_once __DIR__.'/Support/SqlConnections.php';
 
 function penguins(): Frame
 {

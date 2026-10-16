@@ -13,7 +13,12 @@ final class MysqlDialect extends Dialect
 
     public function quote(string $identifier): string
     {
-        return '`'.str_replace('`', '``', $identifier).'`';
+        return '`'.str_replace(['`', '{}'], ['``', self::BRACES], $identifier).'`';
+    }
+
+    public function truncateToInt(Fragment $x): Fragment
+    {
+        return Fragment::format('CAST(TRUNCATE({}, 0) AS SIGNED)', [$x]);
     }
 
     public function castType(string $type): string
@@ -43,8 +48,9 @@ final class MysqlDialect extends Dialect
 
     public function collate(Fragment $x): Fragment
     {
-        // The default collation is case-insensitive; binary UTF-8 compares code points.
-        return Fragment::format('(CONVERT({} USING utf8mb4) COLLATE utf8mb4_bin)', [$x]);
+        // The default collation is case-insensitive. utf8mb4_0900_bin compares code
+        // points and, unlike utf8mb4_bin, does not ignore trailing spaces.
+        return Fragment::format('(CONVERT({} USING utf8mb4) COLLATE utf8mb4_0900_bin)', [$x]);
     }
 
     public function isTextColumn(array $meta): bool

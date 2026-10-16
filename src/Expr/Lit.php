@@ -54,7 +54,7 @@ final readonly class Lit extends Expr
     {
         $value = $this->value;
         if ($value instanceof DateTimeInterface) {
-            $value = $this->dtype === 'date' ? $value->format('Y-m-d') : $value->format(DATE_ATOM);
+            $value = $this->dtype === 'date' ? $value->format('Y-m-d') : $value->format('Y-m-d\TH:i:s.uP');
         }
 
         return $this->dtype === null

@@ -20,8 +20,11 @@ use function str_replace;
  */
 final class Strings
 {
-    public static function detect(string $s, Pattern $p, string $anchor = ''): bool
+    public static function detect(string $s, Pattern $p, string $anchor = ''): ?bool
     {
+        if (self::emptyFixed($p)) {
+            return null;
+        }
         if ($p->fixed && ! $p->ignoreCase) {
             return match ($anchor) {
                 'start' => str_starts_with($s, $p->pattern),
@@ -33,10 +36,13 @@ final class Strings
         return self::match($p->regex($anchor === 'start' ? '^' : '', $anchor === 'end' ? '\z' : ''), $s) === 1;
     }
 
-    public static function count(string $s, Pattern $p): int
+    public static function count(string $s, Pattern $p): ?int
     {
+        if (self::emptyFixed($p)) {
+            return null;
+        }
         if ($p->fixed && ! $p->ignoreCase) {
-            return $p->pattern === '' ? 0 : substr_count($s, $p->pattern);
+            return substr_count($s, $p->pattern);
         }
 
         return (int) self::guard(preg_match_all($p->regex(), $s));
@@ -77,13 +83,13 @@ final class Strings
     /** str_replace() / str_replace_all(); \1 in the replacement refers to a group, as in stringr. */
     public static function replace(string $s, Pattern $p, ?string $replacement, bool $all): ?string
     {
+        if (self::emptyFixed($p)) {
+            return null;
+        }
         if ($replacement === null) {
             return self::detect($s, $p) ? null : $s;
         }
         if ($p->fixed && ! $p->ignoreCase) {
-            if ($p->pattern === '') {
-                return $s;
-            }
             if ($all) {
                 return str_replace($p->pattern, $replacement, $s);
             }
@@ -144,6 +150,12 @@ final class Strings
     public static function squish(string $s): string
     {
         return trim((string) preg_replace('/\s+/u', ' ', $s));
+    }
+
+    /** stringr gives NA for an empty fixed() pattern ("empty search patterns are not supported"). */
+    private static function emptyFixed(Pattern $p): bool
+    {
+        return $p->fixed && $p->pattern === '';
     }
 
     private static function match(string $regex, string $s): int

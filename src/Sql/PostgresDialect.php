@@ -32,9 +32,24 @@ final class PostgresDialect extends Dialect
         return false;
     }
 
+    public function special(string $which): string
+    {
+        return ['inf' => "'Infinity'::float8", '-inf' => "'-Infinity'::float8", 'nan' => "'NaN'::float8"][$which];
+    }
+
+    public function truncateToInt(Fragment $x): Fragment
+    {
+        return Fragment::format('CAST(TRUNC(CAST({} AS DOUBLE PRECISION)) AS BIGINT)', [$x]);
+    }
+
     public function collate(Fragment $x): Fragment
     {
         return Fragment::format('({} COLLATE "C")', [$x]);
+    }
+
+    public function isBoolColumn(array $meta): bool
+    {
+        return ($meta['native_type'] ?? '') === 'bool';
     }
 
     public function isTextColumn(array $meta): bool

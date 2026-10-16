@@ -149,7 +149,10 @@ final class SqlJoin
         $xFrom = $x->fragment();
         if ($closest !== null) {
             // Number x's rows so the closest match can be picked per x row.
-            $items[] = "{$jy}.{$q($closest[2])} AS {$q('__phibble_r')}";
+            // Text compares in byte order when choosing the closest match.
+            $items[] = $isText($closest[0], $closest[2])
+                ? $dialect->collate(Fragment::raw("{$jy}.{$q($closest[2])}"))->sql." AS {$q('__phibble_r')}"
+                : "{$jy}.{$q($closest[2])} AS {$q('__phibble_r')}";
         }
         $template = 'SELECT '.implode(', ', $items)." FROM ({}) AS {$jx} {$joinSql} ({}) AS {$jy}";
         $parts = [$xFrom, $y->fragment()];

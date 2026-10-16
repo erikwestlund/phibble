@@ -42,6 +42,7 @@ final class Compiler
         private readonly array $order = [],
         private readonly string $mode = 'row',
         private readonly array $text = [],
+        private readonly array $bools = [],
     ) {}
 
     public function compile(Expr $expr): Fragment
@@ -118,6 +119,14 @@ final class Compiler
         return Fragment::join(', ', $terms);
     }
 
+    /** A double as a SQL numeric literal that round-trips exactly. */
+    private static function floatText(float $x): string
+    {
+        $text = sprintf('%.17g', $x);
+
+        return str_contains($text, '.') || str_contains($text, 'e') ? $text : $text.'.0';
+    }
+
     private function literal(Lit $lit): Fragment
     {
         $value = $lit->value;
@@ -129,6 +138,9 @@ final class Compiler
             is_array($value) => Fragment::join(', ', array_map(fn ($v) => $this->literal(new Lit($v)), $value)),
             $value instanceof DateTimeInterface => Fragment::param($lit->dtype === 'date' ? $value->format('Y-m-d') : $value->format('Y-m-d H:i:s')),
             is_float($value) && ! is_finite($value) => throw new Untranslatable('Infinite or NaN literals have no portable SQL form.'),
+            // Inline doubles with their type: bound as text they compare as text
+            // in SQLite and fail against integers in PostgreSQL.
+            is_float($value) => Fragment::raw('CAST('.self::floatText($value).' AS '.$this->dialect->castType('float').')'),
             default => Fragment::param($value),
         };
     }
@@ -165,8 +177,15 @@ final class Compiler
 
         return match ($fn) {
             '+', '-', '*' => Fragment::format("({} {$fn} {})", [$a(0), $a(1)]),
-            '/' => Fragment::format("(CAST({} AS {$float}) / NULLIF({}, 0))", [$a(0), $a(1)]),
-            '^' => Fragment::format("POWER(CAST({} AS {$float}), {})", [$a(0), $a(1)]),
+            // x / 0 is Inf, -Inf or NaN in R; NULL only where the database can't store those.
+            '/' => Fragment::format(
+                "(CASE WHEN {} = 0 THEN (CASE WHEN {} > 0 THEN {$this->dialect->special('inf')} WHEN {} < 0 THEN {$this->dialect->special('-inf')} WHEN {} = 0 THEN {$this->dialect->special('nan')} END) ELSE CAST({} AS {$float}) / {} END)",
+                [$a(1), $a(0), $a(0), $a(0), $a(0), $a(1)],
+            ),
+            '^' => Fragment::format(
+                "(CASE WHEN {} < 0 AND {} <> FLOOR({}) THEN {$this->dialect->special('nan')} ELSE POWER(CAST({} AS {$float}), {}) END)",
+                [$a(0), $a(1), $a(1), $a(0), $a(1)],
+            ),
             '%%' => Fragment::format("({} - {} * FLOOR(CAST({} AS {$float}) / NULLIF({}, 0)))", [$a(0), $a(1), $a(0), $a(1)]),
             'neg' => Fragment::format('(-{})', [$a(0)]),
             '==' => Fragment::format('({} = {})', [$a(0), $a(1)]),
@@ -184,18 +203,15 @@ final class Compiler
             'in' => $this->in($call),
             'between' => Fragment::format('({} BETWEEN {} AND {})', [$a(0), $a(1), $a(2)]),
             'na_if' => Fragment::format('NULLIF({}, {})', [$a(0), $a(1)]),
-            'near' => Fragment::format('(ABS({} - {}) < {})', [$a(0), $a(1), $call->option('tol') ? $this->compile($call->option('tol')) : Fragment::param(sqrt(PHP_FLOAT_EPSILON))]),
+            'near' => Fragment::format('(ABS({} - {}) < {})', [$a(0), $a(1), $call->option('tol') ? $this->compile($call->option('tol')) : $this->literal(new Lit(sqrt(PHP_FLOAT_EPSILON)))]),
             'abs' => Fragment::format('ABS({})', [$a(0)]),
-            'sqrt' => Fragment::format("SQRT(CAST({} AS {$float}))", [$a(0)]),
-            'exp' => Fragment::format("EXP(CAST({} AS {$float}))", [$a(0)]),
-            'log' => $call->option('base')
-                ? Fragment::format("(LN(CAST({} AS {$float})) / LN(CAST({} AS {$float})))", [$a(0), $this->compile($call->option('base'))])
-                : Fragment::format("LN(CAST({} AS {$float}))", [$a(0)]),
-            'log10' => Fragment::format("(LN(CAST({} AS {$float})) / LN(10))", [$a(0)]),
+            'sqrt' => Fragment::format("(CASE WHEN {} < 0 THEN {$this->dialect->special('nan')} ELSE SQRT(CAST({} AS {$float})) END)", [$a(0), $a(0)]),
+            'exp' => Fragment::format("(CASE WHEN {} > 709.782712893384 THEN {$this->dialect->special('inf')} ELSE EXP(CAST({} AS {$float})) END)", [$a(0), $a(0)]),
+            'log', 'log10' => $this->logarithm($call, $a(0)),
             'floor' => Fragment::format("FLOOR(CAST({} AS {$float}))", [$a(0)]),
             'ceiling' => Fragment::format("CEIL(CAST({} AS {$float}))", [$a(0)]),
             'round' => throw new Untranslatable('round() rounds half to even in R; SQL ROUND does not.'),
-            'as_int' => Fragment::format('CAST({} AS '.$this->dialect->castType('int').')', [$a(0)]),
+            'as_int' => $this->dialect->truncateToInt($a(0)),
             'as_float' => Fragment::format("CAST({} AS {$float})", [$a(0)]),
             'as_string' => throw new Untranslatable('as_string() formats numbers differently in SQL.'),
             'as_bool' => throw new Untranslatable('as_bool() has no portable SQL translation.'),
@@ -210,11 +226,11 @@ final class Compiler
             'str_pad' => $this->strPad($call),
             'str_squish' => $this->dialect->squish($a(0)),
             'year', 'month', 'day', 'hour', 'minute', 'second', 'yday' => $this->dialect->datePart($fn, $a(0)),
-            'quarter' => Fragment::format('(FLOOR(({} - 1) / 3.0) + 1)', [$this->dialect->datePart('month', $a(0))]),
+            'quarter' => Fragment::format('CAST(FLOOR(({} - 1) / 3.0) + 1 AS '.$this->dialect->castType('int').')', [$this->dialect->datePart('month', $a(0))]),
             'wday' => $this->wday($call),
             'difftime' => $this->difftime($call),
             'str_length' => $this->dialect->length($a(0)),
-            'str_trim' => $this->trim($call),
+            'str_trim' => throw new Untranslatable('str_trim() removes all Unicode white space in R; SQL TRIM removes spaces.'),
             'str_sub' => $this->substring($call),
             'str_detect' => $this->negate($call, $this->isLiteralPattern($call->args[1])
                 ? Fragment::format('({} > 0)', [$this->dialect->position($a(0), $this->literalPattern($call->args[1]))])
@@ -252,7 +268,17 @@ final class Compiler
         if ($call->option('na_rm') !== null && ! $call->option('na_rm') instanceof Lit) {
             throw new Untranslatable('na_rm must be a literal in SQL.');
         }
+        foreach ($call->args as $arg) {
+            if (self::hasWindow($arg)) {
+                throw new Untranslatable('Nested aggregates and windows are evaluated in memory.');
+            }
+        }
         $x = $this->compile($call->args[0]);
+        $isBool = $call->args[0] instanceof Col && in_array($call->args[0]->name, $this->bools, true);
+        if ($isBool && in_array($fn, ['sum', 'mean', 'sd', 'var', 'median', 'quantile', 'iqr'], true)) {
+            // Logicals count as 0/1, as in R; PostgreSQL won't sum booleans.
+            $x = Fragment::format('(CASE WHEN {} THEN 1 WHEN NOT {} THEN 0 END)', [$x, $x]);
+        }
         $float = $this->dialect->castType('float');
         $countAll = $w(Fragment::raw('COUNT(*)'));
         $countX = $w(Fragment::format('COUNT({})', [$x]));
@@ -263,9 +289,11 @@ final class Compiler
 
         return match ($fn) {
             'sum' => $guard(Fragment::format('COALESCE({}, 0)', [$w(Fragment::format('SUM({})', [$x]))])),
-            'mean' => $guard($w(Fragment::format("AVG(CAST({} AS {$float}))", [$x]))),
-            'min' => $guard($w(Fragment::format('MIN({})', [$x]))),
-            'max' => $guard($w(Fragment::format('MAX({})', [$x]))),
+            // Over no values R gives NaN for mean and Inf/-Inf for min/max.
+            'mean' => $guard(Fragment::format("(CASE WHEN {} = 0 THEN {$this->dialect->special('nan')} ELSE {} END)", [
+                $countX, $w(Fragment::format("AVG(CAST({} AS {$float}))", [$x])),
+            ])),
+            'min', 'max' => $guard($this->extreme($fn, $call->args[0], $x, $countX, $w, $isBool)),
             'sd', 'var' => $guard($this->dialect->sampleStat($fn, Fragment::format("CAST({} AS {$float})", [$x]), $w)),
             'median' => $rowMode
                 ? throw new Untranslatable('median() is not available as a window function in SQL.')
@@ -322,6 +350,30 @@ final class Compiler
         $fn = abs($n) === 1 ? Fragment::format('FIRST_VALUE({})', [$x]) : Fragment::format('NTH_VALUE({}, '.abs($n).')', [$x]);
 
         return $this->over($fn, withOrder: true, orderBy: $call->option('order_by'), frame: $whole, reverse: $n < 0);
+    }
+
+    /** MIN/MAX with R's values for no input, and boolean support. */
+    private function extreme(string $fn, Expr $arg, Fragment $x, Fragment $countX, \Closure $w, bool $isBool): Fragment
+    {
+        $agg = $isBool
+            ? Fragment::format('(CASE WHEN {} > 0 THEN TRUE WHEN {} > 0 THEN FALSE END)', [
+                $w(Fragment::format('SUM(CASE WHEN {} THEN 1 ELSE 0 END)', [$x])),
+                $w(Fragment::format('COUNT({})', [$x])),
+            ])
+            : $w(Fragment::format(strtoupper($fn).'({})', [$x]));
+        if ($isBool && $fn === 'min') {
+            $agg = Fragment::format('(CASE WHEN {} > 0 THEN FALSE WHEN {} > 0 THEN TRUE END)', [
+                $w(Fragment::format('SUM(CASE WHEN NOT {} THEN 1 ELSE 0 END)', [$x])),
+                $w(Fragment::format('COUNT({})', [$x])),
+            ]);
+        }
+        // Text, logicals and the window columns summarise() makes for first(),
+        // last() and nth() have no Inf; an empty set stays NA.
+        if ($isBool || self::isText($arg, $this->text) || ($arg instanceof Col && str_starts_with($arg->name, '__phibble_w'))) {
+            return $agg;
+        }
+
+        return Fragment::format("(CASE WHEN {} = 0 THEN {$this->dialect->special($fn === 'min' ? 'inf' : '-inf')} ELSE {} END)", [$countX, $agg]);
     }
 
     private function quantile(Call $call, Fragment $x, bool $naRm): Fragment
@@ -417,7 +469,7 @@ final class Compiler
         if ($fn === 'percent_rank') {
             // R gives NaN (an NA) when there is a single value; SQL gives 0.
             $count = Fragment::format('COUNT({}) OVER ('.($partition->sql === '' ? '' : '{}').')', $partition->sql === '' ? [$x] : [$x, $partition]);
-            $over = Fragment::format('(CASE WHEN {} = 1 THEN NULL ELSE {} END)', [$count, $over]);
+            $over = Fragment::format("(CASE WHEN {} = 1 THEN {$this->dialect->special('nan')} ELSE {} END)", [$count, $over]);
         }
 
         return Fragment::format('(CASE WHEN {} IS NULL THEN NULL ELSE {} END)', [$x, $over]);
@@ -545,6 +597,21 @@ final class Compiler
                 'ymd', 'dmy', 'mdy', 'ymd_hms', 'dmy_hms', 'mdy_hms', 'parse_date_time', 'floor_date', 'ceiling_date',
                 'round_date', 'with_tz', 'force_tz', 'today', 'now', 'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years',
             ], true));
+    }
+
+    /** log(x, base:) and log10(x): -Inf at 0 and NaN below, as R gives. */
+    private function logarithm(Call $call, Fragment $x): Fragment
+    {
+        $float = $this->dialect->castType('float');
+        $base = $call->fn === 'log10' ? Fragment::raw('10') : ($call->option('base') ? $this->compile($call->option('base')) : null);
+        $ln = $base === null
+            ? Fragment::format("LN(CAST({} AS {$float}))", [$x])
+            : Fragment::format("(LN(CAST({} AS {$float})) / LN(CAST({} AS {$float})))", [$x, $base]);
+
+        return Fragment::format(
+            "(CASE WHEN {} < 0 THEN {$this->dialect->special('nan')} WHEN {} = 0 THEN {$this->dialect->special('-inf')} ELSE {} END)",
+            [$x, $x, $ln],
+        );
     }
 
     /** Evaluate a call whose arguments are all literals; null when it can't be inlined. */

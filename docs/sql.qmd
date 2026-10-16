@@ -72,6 +72,11 @@ match `Frame` in either case. The fallbacks are:
 - `first()`, `last()`, and `nth()` without a row order (from `arrange()` or
   `order_by:`), or with `default:` or `na_rm:`,
 - `iqr()` outside PostgreSQL, `cumprod()`, and `consecutive_id()`,
+- `sd()` and `var()` in SQLite, whose formula would lose precision,
+- `str_trim()`, because R removes all Unicode white space and SQL `TRIM`
+  removes spaces,
+- nested aggregates such as `mean(x - mean(x))`, `summarise()` entries that
+  are not one value per group, and `slice()` with negative positions,
 - `median()` and `quantile()` outside PostgreSQL,
 - `quantile()` without `na_rm: true`,
 - `median()`, `quantile()`, and `n_distinct()` inside grouped `mutate()` or
@@ -88,6 +93,24 @@ SQLite compares by storage class, and it orders all text above all numbers.
 A column declared without a type stores bound values as text, so
 `col('x')->gt(0)` is true for every row of such a column. Declare column types
 (`INTEGER`, `REAL`, `TEXT`) when creating SQLite tables that phibble will query.
+
+## Known differences
+
+These cases can differ from `Frame`, because the database cannot represent
+R's result:
+
+- MySQL has no infinity or NaN. Results that are `Inf`, `-Inf`, or `NaN` in
+  R, such as `x / 0`, `log(0)`, or `mean()` of no values, are NA in MySQL.
+  SQLite stores infinities but has no NaN, so `NaN` is NA there.
+- Integer arithmetic beyond 64 bits fails in the database, where `Frame`
+  switches to a double.
+- Joins do not warn about unexpected many-to-many matches.
+- Column names starting with `__phibble_` are reserved for the hidden columns
+  that keep row order and window results.
+
+Text compares in byte order and case-sensitively, as R does: phibble applies
+`COLLATE "C"` in PostgreSQL and `utf8mb4_0900_bin` in MySQL to text columns
+wherever values are compared, sorted, grouped, or joined.
 
 ## Window functions
 

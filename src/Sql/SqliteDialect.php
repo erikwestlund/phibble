@@ -31,6 +31,12 @@ final class SqliteDialect extends Dialect
         return Fragment::format('({} IS {})', [$a, $b]);
     }
 
+    public function special(string $which): string
+    {
+        // SQLite stores infinities; NaN becomes NULL.
+        return ['inf' => '9e999', '-inf' => '-9e999', 'nan' => 'NULL'][$which];
+    }
+
     public function datePart(string $part, Fragment $x): Fragment
     {
         return match ($part) {
@@ -64,15 +70,8 @@ final class SqliteDialect extends Dialect
 
     public function sampleStat(string $fn, Fragment $x, \Closure $aggregate): Fragment
     {
-        // SQLite has no STDDEV_SAMP; compute from sums.
-        $count = $aggregate(Fragment::format('COUNT({})', [$x]));
-        $sum = $aggregate(Fragment::format('SUM({})', [$x]));
-        $squares = $aggregate(Fragment::format('SUM({} * {})', [$x, $x]));
-        $var = Fragment::format(
-            '(CASE WHEN {} < 2 THEN NULL ELSE ({} - {} * {} / {}) / ({} - 1) END)',
-            [$count, $squares, $sum, $sum, $count, $count],
-        );
-
-        return $fn === 'sd' ? Fragment::format('SQRT({})', [$var]) : $var;
+        // SQLite has no STDDEV_SAMP, and the sum-of-squares formula loses
+        // precision badly for large values; compute it in memory instead.
+        throw new Untranslatable('sd() and var() are evaluated in memory on SQLite.');
     }
 }

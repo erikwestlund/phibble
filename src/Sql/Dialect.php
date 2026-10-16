@@ -26,9 +26,24 @@ abstract class Dialect
 
     abstract public function name(): string;
 
+    /** A marker standing in for "{}" inside identifiers, so templates don't split on it. */
+    public const string BRACES = "\x01";
+
     public function quote(string $identifier): string
     {
-        return '"'.str_replace('"', '""', $identifier).'"';
+        return '"'.str_replace(['"', '{}'], ['""', self::BRACES], $identifier).'"';
+    }
+
+    /** SQL for a double: +Inf, -Inf or NaN. NULL where the database cannot store it. */
+    public function special(string $which): string
+    {
+        return 'NULL';
+    }
+
+    /** Truncate a number toward zero and make it an integer, as R's as.integer(). */
+    public function truncateToInt(Fragment $x): Fragment
+    {
+        return Fragment::format('CAST({} AS '.$this->castType('int').')', [$x]);
     }
 
     /** CAST target for 'int', 'float' and 'string'. */
@@ -92,6 +107,12 @@ abstract class Dialect
      * @param array<string, mixed> $meta
      */
     public function isTextColumn(array $meta): bool
+    {
+        return false;
+    }
+
+    /** @param array<string, mixed> $meta Whether a column is boolean. */
+    public function isBoolColumn(array $meta): bool
     {
         return false;
     }
