@@ -63,6 +63,7 @@ implementation follows and the semantics of each method.
 | `rename($map)` | Renames columns, with `new => old` entries as in dplyr. |
 | `arrange($keys)` | Sorts stably. Keys are names, <code>[name, &#39;asc&#39;&#124;&#39;desc&#39;]</code> pairs, or expressions, and NA sorts last in both directions. It ignores grouping. |
 | `groupBy($names)`, `ungroup()`, `groups()` | Set, clear, or read the grouping columns. |
+| `groupBy($names, drop: false)`, `dropsEmptyGroups()` | dplyr's `.drop = FALSE`: grouped verbs also visit empty groups. A factor key yields every level; a non-factor key yields its observed values, or NA under an empty group. Row verbs keep the flag; `groupBy()` and `ungroup()` reset it. |
 | `rowwise($idColumns)`, `isRowwise()` | Set or read rowwise mode. `groupBy()` and `ungroup()` clear it. |
 | `eachGroup()` | Yields `['key' => [...], 'table' => Table]` for each group, with ungrouped tables. An ungrouped table yields one group with an empty key. |
 | `summarise($aggregates)` | Returns one row per group: the keys, then one column per entry. Each entry is a closure given the group's table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. The optional second argument is dplyr's `.groups`: `'drop_last'` (the default), `'drop'`, `'keep'`, or `'rowwise'`. |
@@ -73,25 +74,39 @@ implementation follows and the semantics of each method.
 
 ### Joins
 
-`join()` takes the other table, a list of `[leftColumn, rightColumn]` key
-pairs, and the join type: `inner`, `left`, `right`, `full`, `semi`, `anti`, or
-`cross`. A bare column name means the same name on both sides, and a cross join
-takes no keys.
+`join()` takes the other table, a list of conditions, and the join type:
+`inner`, `left`, `right`, `full`, `semi`, `anti`, or `cross`. A cross join
+takes no conditions. The conditions follow dplyr's `join_by()`, and all of
+them must hold:
 
-- **Columns.** The result has x's columns, then y's columns other than its keys.
-  Clashing names get the suffixes, `.x` and `.y` by default. With `keep: true`,
-  y's keys are kept too.
-- **Keys.** Without `keep`, the key columns come from x. For rows that only y
-  has (right and full joins), they are filled from y's keys.
+- `'k'`, `[$l, $r]`, or `$l => $r`: equality.
+- `[$l, $op, $r]` with `$op` in `==`, `>=`, `>`, `<=`, or `<`: a comparison.
+- `['closest', $l, $op, $r]`, at most one per join: of the y rows that satisfy
+  the other conditions and the comparison, keep only those with the largest
+  `$r` (for `>=` and `>`) or the smallest (for `<=` and `<`). Ties keep every
+  tied row.
+
+dplyr's `between()`, `within()`, and `overlaps()` are expressed as pairs of
+comparisons.
+
+- **Columns.** The result has x's columns, then y's columns. Clashing names get
+  the suffixes, `.x` and `.y` by default.
+- **Keys.** `keep` is `null` by default. Equality keys then come from x only,
+  and for rows that only y has (right and full joins) they are filled from
+  y's keys. Columns used in comparisons are kept from both tables. With
+  `keep: true` every key column is kept from both tables. `keep: false`
+  throws when a comparison or closest condition is present, as in dplyr.
 - **Rows.** Rows follow x's order, and each x row's matches follow y's order.
   Right and full joins then add y's unmatched rows in y's order. Semi and anti
   joins keep x's rows and columns and never duplicate rows.
-- **Matching.** NA keys match each other unless `naMatches: false`. `1` matches
-  `1.0`, and a factor matches text by its label.
+- **Matching.** NA keys match each other unless `naMatches: false`. In a
+  comparison, NA against NA satisfies `>=` and `<=` but not `>` or `<`, and NA
+  never matches a value. `1` matches `1.0`, and a factor matches text by its
+  label.
 - **Options.** `multiple` picks `all`, `any`, `first`, or `last` match per x
   row. `relationship` (`one-to-one`, `one-to-many`, `many-to-one`, or
   `many-to-many`) throws when the data violates it. Without it, an unexpected
-  many-to-many join raises a warning, as dplyr does. `unmatched: 'error'`
+  many-to-many equality join raises a warning, as dplyr does. `unmatched: 'error'`
   throws when the join would drop rows.
 - **Grouping.** The result keeps x's grouping.
 

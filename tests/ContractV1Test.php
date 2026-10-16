@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Phibble\Frame;
 use Phibble\Type;
 
+use function Phibble\Expr\{col, mean, n};
+
 function joinX(): Frame
 {
     return Frame::fromColumns(['k' => [1.0, 2.0, null, 2.0], 'a' => ['x1', 'x2', 'x3', 'x4'], 'v' => [1, 2, 3, 4]]);
@@ -252,3 +254,54 @@ it('matches dplyr join_by for inequality, rolling and overlap joins', function (
 it('rejects keep = false with inequality conditions', function () {
     joinByX()->join(joinByY(), [['t', '>=', 't']], 'left', keep: false);
 })->throws(InvalidArgumentException::class, "Can't set `keep = FALSE` when using an inequality, rolling, or overlap join.");
+
+function dropFrame(): Frame
+{
+    return Frame::fromColumns(['f' => ['a', 'a', 'c'], 's' => ['x', 'y', 'x'], 'v' => [1.0, 2.0, 3.0]])
+        ->fctLevels('f', ['a', 'b', 'c']);
+}
+
+// Expected rows are dplyr 1.2.1 output for group_by(..., .drop = FALSE).
+it('keeps empty factor-level groups with drop: false', function () {
+    $out = dropFrame()->groupBy(['f'], drop: false)->summarise([
+        'n' => n(), 's' => Phibble\Expr\sum(col('v')), 'm' => mean(col('v')),
+    ]);
+
+    expect($out->column('f'))->toBe(['a', 'b', 'c'])
+        ->and($out->column('n'))->toBe([2, 0, 1])
+        ->and($out->column('s'))->toBe([3.0, 0.0, 3.0])
+        ->and(is_nan($out->column('m')[1]))->toBeTrue()
+        ->and($out->levels('f'))->toBe(['a', 'b', 'c']);
+});
+
+it('expands empty groups hierarchically like dplyr', function () {
+    $fs = dropFrame()->groupBy(['f', 's'], drop: false)->summarise(['n' => n()], 'drop');
+    $sf = dropFrame()->groupBy(['s', 'f'], drop: false)->summarise(['n' => n()], 'drop');
+
+    expect($fs->toRows())->toBe([
+        ['f' => 'a', 's' => 'x', 'n' => 1],
+        ['f' => 'a', 's' => 'y', 'n' => 1],
+        ['f' => 'b', 's' => null, 'n' => 0],
+        ['f' => 'c', 's' => 'x', 'n' => 1],
+    ])
+        ->and($sf->toRows())->toBe([
+            ['s' => 'x', 'f' => 'a', 'n' => 1],
+            ['s' => 'x', 'f' => 'b', 'n' => 0],
+            ['s' => 'x', 'f' => 'c', 'n' => 1],
+            ['s' => 'y', 'f' => 'a', 'n' => 1],
+            ['s' => 'y', 'f' => 'b', 'n' => 0],
+            ['s' => 'y', 'f' => 'c', 'n' => 0],
+        ]);
+});
+
+it('carries drop: false through row verbs and resets it on regrouping', function () {
+    $grouped = dropFrame()->groupBy(['f'], drop: false);
+
+    expect($grouped->filter(col('v')->gt(1))->dropsEmptyGroups())->toBeFalse()
+        ->and($grouped->filter(col('v')->gt(1))->ngroups())->toBe(3)
+        ->and($grouped->mutate(['k' => n()])->column('k'))->toBe([2, 2, 1])
+        ->and(iterator_to_array($grouped->eachGroup(), false)[1]['table']->nrow())->toBe(0)
+        ->and($grouped->groupBy(['s'])->dropsEmptyGroups())->toBeTrue()
+        ->and($grouped->ungroup()->dropsEmptyGroups())->toBeTrue()
+        ->and(dropFrame()->groupBy(['f'])->ngroups())->toBe(2);
+});

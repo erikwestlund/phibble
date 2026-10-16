@@ -342,30 +342,34 @@ ul.task-list li input[type="checkbox"] {
 <td>Set, clear, or read the grouping columns.</td>
 </tr>
 <tr class="odd">
+<td><code>groupBy($names, drop: false)</code>, <code>dropsEmptyGroups()</code></td>
+<td>dplyr’s <code>.drop = FALSE</code>: grouped verbs also visit empty groups. A factor key yields every level; a non-factor key yields its observed values, or NA under an empty group. Row verbs keep the flag; <code>groupBy()</code> and <code>ungroup()</code> reset it.</td>
+</tr>
+<tr class="even">
 <td><code>rowwise($idColumns)</code>, <code>isRowwise()</code></td>
 <td>Set or read rowwise mode. <code>groupBy()</code> and <code>ungroup()</code> clear it.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>eachGroup()</code></td>
 <td>Yields <code>['key' =&gt; [...], 'table' =&gt; Table]</code> for each group, with ungrouped tables. An ungrouped table yields one group with an empty key.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>summarise($aggregates)</code></td>
 <td>Returns one row per group: the keys, then one column per entry. Each entry is a closure given the group’s table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. The optional second argument is dplyr’s <code>.groups</code>: <code>'drop_last'</code> (the default), <code>'drop'</code>, <code>'keep'</code>, or <code>'rowwise'</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>distinct($names)</code></td>
 <td>Keeps the first row of each combination of the named columns (and the grouping columns), and only those columns. An empty list means all columns.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>take($indices)</code></td>
 <td>Rows by 0-based position, in the given order. A <code>null</code> index gives an all-NA row. Keeps types, factor levels, and grouping.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>slice($offset, $length)</code>, <code>head($n)</code></td>
 <td>Rows by position. These ignore grouping.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>join($other, $by, $type, ...)</code></td>
 <td>Joins with dplyr 1.1 semantics, described below.</td>
 </tr>
@@ -374,13 +378,19 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="joins" class="level3">
 <h3 class="anchored" data-anchor-id="joins">Joins</h3>
-<p><code>join()</code> takes the other table, a list of <code>[leftColumn, rightColumn]</code> key pairs, and the join type: <code>inner</code>, <code>left</code>, <code>right</code>, <code>full</code>, <code>semi</code>, <code>anti</code>, or <code>cross</code>. A bare column name means the same name on both sides, and a cross join takes no keys.</p>
+<p><code>join()</code> takes the other table, a list of conditions, and the join type: <code>inner</code>, <code>left</code>, <code>right</code>, <code>full</code>, <code>semi</code>, <code>anti</code>, or <code>cross</code>. A cross join takes no conditions. The conditions follow dplyr’s <code>join_by()</code>, and all of them must hold:</p>
 <ul>
-<li><strong>Columns.</strong> The result has x’s columns, then y’s columns other than its keys. Clashing names get the suffixes, <code>.x</code> and <code>.y</code> by default. With <code>keep: true</code>, y’s keys are kept too.</li>
-<li><strong>Keys.</strong> Without <code>keep</code>, the key columns come from x. For rows that only y has (right and full joins), they are filled from y’s keys.</li>
+<li><code>'k'</code>, <code>[$l, $r]</code>, or <code>$l =&gt; $r</code>: equality.</li>
+<li><code>[$l, $op, $r]</code> with <code>$op</code> in <code>==</code>, <code>&gt;=</code>, <code>&gt;</code>, <code>&lt;=</code>, or <code>&lt;</code>: a comparison.</li>
+<li><code>['closest', $l, $op, $r]</code>, at most one per join: of the y rows that satisfy the other conditions and the comparison, keep only those with the largest <code>$r</code> (for <code>&gt;=</code> and <code>&gt;</code>) or the smallest (for <code>&lt;=</code> and <code>&lt;</code>). Ties keep every tied row.</li>
+</ul>
+<p>dplyr’s <code>between()</code>, <code>within()</code>, and <code>overlaps()</code> are expressed as pairs of comparisons.</p>
+<ul>
+<li><strong>Columns.</strong> The result has x’s columns, then y’s columns. Clashing names get the suffixes, <code>.x</code> and <code>.y</code> by default.</li>
+<li><strong>Keys.</strong> <code>keep</code> is <code>null</code> by default. Equality keys then come from x only, and for rows that only y has (right and full joins) they are filled from y’s keys. Columns used in comparisons are kept from both tables. With <code>keep: true</code> every key column is kept from both tables. <code>keep: false</code> throws when a comparison or closest condition is present, as in dplyr.</li>
 <li><strong>Rows.</strong> Rows follow x’s order, and each x row’s matches follow y’s order. Right and full joins then add y’s unmatched rows in y’s order. Semi and anti joins keep x’s rows and columns and never duplicate rows.</li>
-<li><strong>Matching.</strong> NA keys match each other unless <code>naMatches: false</code>. <code>1</code> matches <code>1.0</code>, and a factor matches text by its label.</li>
-<li><strong>Options.</strong> <code>multiple</code> picks <code>all</code>, <code>any</code>, <code>first</code>, or <code>last</code> match per x row. <code>relationship</code> (<code>one-to-one</code>, <code>one-to-many</code>, <code>many-to-one</code>, or <code>many-to-many</code>) throws when the data violates it. Without it, an unexpected many-to-many join raises a warning, as dplyr does. <code>unmatched: 'error'</code> throws when the join would drop rows.</li>
+<li><strong>Matching.</strong> NA keys match each other unless <code>naMatches: false</code>. In a comparison, NA against NA satisfies <code>&gt;=</code> and <code>&lt;=</code> but not <code>&gt;</code> or <code>&lt;</code>, and NA never matches a value. <code>1</code> matches <code>1.0</code>, and a factor matches text by its label.</li>
+<li><strong>Options.</strong> <code>multiple</code> picks <code>all</code>, <code>any</code>, <code>first</code>, or <code>last</code> match per x row. <code>relationship</code> (<code>one-to-one</code>, <code>one-to-many</code>, <code>many-to-one</code>, or <code>many-to-many</code>) throws when the data violates it. Without it, an unexpected many-to-many equality join raises a warning, as dplyr does. <code>unmatched: 'error'</code> throws when the join would drop rows.</li>
 <li><strong>Grouping.</strong> The result keeps x’s grouping.</li>
 </ul>
 </section>

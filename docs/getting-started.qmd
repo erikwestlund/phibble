@@ -107,6 +107,13 @@ group's rows:
 A row closure receives the row's group as its second argument:
 `fn (Row $r, Frame $group) => ...`.
 
+By default, groups are the combinations that occur in the data. With
+`groupBy($names, drop: false)`, as with dplyr's `.drop = FALSE`, a factor key
+also yields a group for each level that has no rows. Such a group has zero
+rows, so `n()` is 0 and `sum()` is 0.
+
+{{< include examples/_group-drop.md >}}
+
 ## Distinct rows and joins
 
 `distinct()` keeps the first row of each combination of the given columns.
@@ -115,6 +122,17 @@ A row closure receives the row's group as its second argument:
 including its column naming and the rule that NA keys match each other.
 
 {{< include examples/_join.md >}}
+
+Besides equality keys, a join condition can compare columns, as dplyr's
+`join_by()` does. `[$left, $op, $right]` with `>=`, `>`, `<=`, or `<` keeps the
+pairs that satisfy the comparison, and all conditions must hold. One
+`['closest', $left, $op, $right]` condition keeps, for each row of x, only the
+y rows with the nearest value: the largest for `>=` and `>`, the smallest for
+`<=` and `<`. dplyr's `between()`, `within()`, and `overlaps()` are pairs of
+comparisons. In a rolling join, the columns used in comparisons are kept from
+both tables:
+
+{{< include examples/_join-by.md >}}
 
 ## Immutability
 

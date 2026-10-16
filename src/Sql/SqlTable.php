@@ -333,11 +333,20 @@ final readonly class SqlTable implements Table
         return new self($this->pdo, $this->dialect, $this->from, $this->columns, $this->groups, $order, $this->hints, $this->depth);
     }
 
-    public function groupBy(array $names): Table
+    public function groupBy(array $names, bool $drop = true): Table
     {
         $this->check($names);
+        if (! $drop) {
+            // Empty factor-level groups need the levels, which SQL doesn't have.
+            return $this->collect()->ungroup()->groupBy($names, false);
+        }
 
         return $this->withGroups(array_values(array_unique($names)));
+    }
+
+    public function dropsEmptyGroups(): bool
+    {
+        return true;
     }
 
     public function ungroup(): Table

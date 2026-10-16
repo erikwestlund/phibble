@@ -45,6 +45,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         private int $rows,
         private array $groups = [],
         private bool $rowwise = false,
+        private bool $drop = true,
     ) {}
 
     // ---------------------------------------------------------------
@@ -937,19 +938,25 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         return $this->take($order);
     }
 
-    public function groupBy(array $names): static
+    public function groupBy(array $names, bool $drop = true): static
     {
         $names = array_values(array_unique($names));
         foreach ($names as $name) {
             $this->storage($name);
         }
 
-        return $this->copy(groups: $names, rowwise: false);
+        return $this->copy(groups: $names, rowwise: false, drop: $drop);
     }
 
     public function ungroup(): static
     {
-        return $this->copy(groups: [], rowwise: false);
+        return $this->copy(groups: [], rowwise: false, drop: true);
+    }
+
+    /** False after groupBy(..., drop: false): empty factor-level groups are kept. */
+    public function dropsEmptyGroups(): bool
+    {
+        return $this->drop;
     }
 
     public function groups(): array
@@ -963,7 +970,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             $this->storage($name);
         }
 
-        return $this->copy(groups: array_values($idColumns), rowwise: true);
+        return $this->copy(groups: array_values($idColumns), rowwise: true, drop: true);
     }
 
     public function isRowwise(): bool
@@ -995,7 +1002,9 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
 
         $data = [];
         foreach ($this->groups as $name) {
-            $data[$name] = $this->data[$name]->take($first);
+            $data[$name] = in_array(null, $first, true)
+                ? $this->keyColumn($name, array_map(fn (array $g) => $g[0][$name], $index))
+                : $this->data[$name]->take($first);
         }
 
         $results = array_fill_keys(array_keys($aggregates), []);
@@ -1024,7 +1033,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             default => throw new InvalidArgumentException("Unknown .groups value '{$groups}'."),
         };
 
-        return new self($data, count($index), $outGroups, $rowwise);
+        return new self($data, count($index), $outGroups, $rowwise, $outGroups === [] ? true : $this->drop);
     }
 
     /** Alias of summarise(). */
@@ -1549,6 +1558,9 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         if ($this->groups === []) {
             return [[[], $all]];
         }
+        if (! $this->drop) {
+            return $this->expandGroups($this->groups, $all, []);
+        }
 
         $keys = array_map(fn (string $g) => $this->data[$g]->values(), array_combine($this->groups, $this->groups));
         $index = [];
@@ -1573,6 +1585,69 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         });
 
         return $index;
+    }
+
+    /**
+     * Groups for groupBy(..., drop: false), as dplyr builds them: a factor
+     * key takes every level (plus NA if present), a non-factor key its
+     * observed values; under an empty group a non-factor key is NA.
+     *
+     * @param list<string> $names
+     * @param list<int> $rows
+     * @param array<string, mixed> $prefix
+     * @return list<array{0: array<string, mixed>, 1: list<int>}>
+     */
+    private function expandGroups(array $names, array $rows, array $prefix): array
+    {
+        if ($names === []) {
+            return [[$prefix, $rows]];
+        }
+        $name = $names[0];
+        $rest = array_slice($names, 1);
+        $column = $this->data[$name];
+        $values = $column->values();
+
+        // Rows by value, in sorted order with NA last.
+        $buckets = [];
+        foreach ($rows as $i) {
+            $buckets[self::hashKey([$values[$i]])][] = $i;
+        }
+        if ($column instanceof FactorColumn) {
+            $keys = $column->levels();
+            if (array_any($rows, fn (int $i) => $values[$i] === null)) {
+                $keys[] = null;
+            }
+        } elseif ($rows === []) {
+            $keys = [null];
+        } else {
+            $present = array_map(fn (array $b) => $b[0], array_values($buckets));
+            [$sortable, $isString] = $this->sortable($name);
+            usort($present, fn (int $a, int $b) => self::compare($sortable[$a], $sortable[$b], $isString, false));
+            $keys = array_map(fn (int $i) => $values[$i], $present);
+        }
+
+        $out = [];
+        foreach ($keys as $key) {
+            $subset = $buckets[self::hashKey([$key])] ?? [];
+            array_push($out, ...$this->expandGroups($rest, $subset, [...$prefix, $name => $key]));
+        }
+
+        return $out;
+    }
+
+    /**
+     * A key column rebuilt from group key values, keeping the source type
+     * (and factor levels).
+     *
+     * @param list<mixed> $values
+     */
+    private function keyColumn(string $name, array $values): Column
+    {
+        $source = $this->data[$name];
+
+        return $source instanceof FactorColumn
+            ? FactorColumn::fromValues($values, $source->levels(), $source->isOrdered())
+            : Infer::column($values, $source->type(), $name);
     }
 
     /**
@@ -1624,9 +1699,15 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
      * @param array<string, Column>|null $data
      * @param list<string>|null $groups
      */
-    private function copy(?array $data = null, ?int $rows = null, ?array $groups = null, ?bool $rowwise = null): self
+    private function copy(?array $data = null, ?int $rows = null, ?array $groups = null, ?bool $rowwise = null, ?bool $drop = null): self
     {
-        return new self($data ?? $this->data, $rows ?? $this->rows, $groups ?? $this->groups, $rowwise ?? $this->rowwise);
+        return new self(
+            $data ?? $this->data,
+            $rows ?? $this->rows,
+            $groups ?? $this->groups,
+            $rowwise ?? $this->rowwise,
+            $drop ?? $this->drop,
+        );
     }
 
     /**

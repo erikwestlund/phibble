@@ -100,8 +100,17 @@ interface Table extends \Countable, \IteratorAggregate
      */
     public function arrange(array $keys): Table;
 
-    /** @param list<string> $names Replaces any existing grouping. */
-    public function groupBy(array $names): Table;
+    /**
+     * @param list<string> $names Replaces any existing grouping.
+     * @param bool $drop dplyr's .drop. With false, grouped verbs also visit
+     *     empty groups: every factor level that has no rows (non-factor
+     *     keys contribute their observed values, NA under an empty group).
+     *     The flag survives row verbs; ungroup() and groupBy() reset it.
+     */
+    public function groupBy(array $names, bool $drop = true): Table;
+
+    /** False when grouped with drop: false. */
+    public function dropsEmptyGroups(): bool;
 
     public function ungroup(): Table;
 
