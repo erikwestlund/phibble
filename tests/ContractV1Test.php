@@ -227,3 +227,28 @@ it('binds columns and repairs clashing names like dplyr', function () {
         ->and(fn () => Frame::bindCols([Frame::fromColumns(['a' => [1]]), Frame::fromColumns(['b' => [1, 2]])]))
         ->toThrow(InvalidArgumentException::class);
 });
+
+it('matches dplyr join_by for inequality, rolling and overlap joins', function () {
+    $failures = [];
+    foreach (joinByCases() as $case => [$x, $y, $by, $type, $options]) {
+        $expected = joinByExpected($case);
+        $out = $x()->join($y(), $by, $type, ...$options);
+        if ($out->columns() !== $expected['columns']) {
+            $failures[$case] = ['columns' => $out->columns(), 'want' => $expected['columns']];
+
+            continue;
+        }
+        // Row order is x order with matches in y order; compare exactly.
+        $got = array_map(fn ($r) => array_values(array_map(fn ($v) => is_int($v) ? (float) $v : $v, $r)), $out->toRows());
+        $want = array_map(fn ($r) => array_map(fn ($c) => is_int($r[$c] ?? null) ? (float) $r[$c] : ($r[$c] ?? null), $expected['columns']), $expected['rows']);
+        if ($got !== $want) {
+            $failures[$case] = ['got' => $got, 'want' => $want];
+        }
+    }
+
+    expect($failures)->toBe([]);
+});
+
+it('rejects keep = false with inequality conditions', function () {
+    joinByX()->join(joinByY(), [['t', '>=', 't']], 'left', keep: false);
+})->throws(InvalidArgumentException::class, "Can't set `keep = FALSE` when using an inequality, rolling, or overlap join.");

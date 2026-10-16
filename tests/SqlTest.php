@@ -195,3 +195,26 @@ it('keeps the row order when reading one column', function (Closure $connect) {
 
     expect($sql->column('g'))->toBe([null, 'b', 'a', 'b', 'a', 'b', 'a']);
 })->with('connections');
+
+it('matches dplyr join_by in SQL', function (Closure $connect) {
+    $pdo = $connect();
+    $failures = [];
+    foreach (joinByCases() as $case => [$x, $y, $by, $type, $options]) {
+        $expected = joinByExpected($case);
+        $lazy = sqlFrom($pdo, $x())->join(sqlFrom($pdo, $y()), $by, $type, ...$options);
+        $out = $lazy->collect();
+        if ($out->columns() !== $expected['columns']) {
+            $failures[$case] = ['columns' => $out->columns(), 'want' => $expected['columns']];
+
+            continue;
+        }
+        // SQL row order is unspecified; compare sorted rows.
+        $got = joinRows($expected['columns'], $out->toRows());
+        $want = joinRows($expected['columns'], $expected['rows']);
+        if ($got !== $want) {
+            $failures[$case] = ['got' => $got, 'want' => $want, 'native' => $lazy instanceof SqlTable];
+        }
+    }
+
+    expect($failures)->toBe([]);
+})->with('connections');

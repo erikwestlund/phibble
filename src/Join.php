@@ -29,7 +29,7 @@ final class Join
         array $by,
         string $type = 'inner',
         array $suffix = ['.x', '.y'],
-        bool $keep = false,
+        ?bool $keep = null,
         bool $naMatches = true,
         string $multiple = 'all',
         ?string $relationship = null,
@@ -48,14 +48,18 @@ final class Join
             throw new InvalidArgumentException("unmatched must be drop or error, got '{$unmatched}'.");
         }
 
-        $pairs = self::pairs($by);
-        if ($type === 'cross' && $pairs !== []) {
+        [$pairs, $conditions, $closest] = self::conditions($by);
+        if ($type === 'cross' && ($pairs !== [] || $conditions !== [] || $closest !== null)) {
             throw new InvalidArgumentException('A cross join takes no keys.');
         }
-        if ($type !== 'cross' && $pairs === []) {
+        if ($type !== 'cross' && $pairs === [] && $conditions === [] && $closest === null) {
             throw new InvalidArgumentException('Join keys are required; pass by.');
         }
-        foreach ($pairs as [$left, $right]) {
+        $nonEquality = $conditions !== [] || $closest !== null;
+        if ($keep === false && $nonEquality) {
+            throw new InvalidArgumentException("Can't set `keep = FALSE` when using an inequality, rolling, or overlap join.");
+        }
+        foreach ([...$pairs, ...array_map(fn ($c) => [$c[0], $c[2]], $conditions), ...($closest ? [[$closest[0], $closest[2]]] : [])] as [$left, $right]) {
             $x->storage($left);
             $y->storage($right);
         }
@@ -69,11 +73,23 @@ final class Join
                 $index[$key][] = $j;
             }
         }
+        $allY = $y->nrow() === 0 ? [] : range(0, $y->nrow() - 1);
+
+        // Inequality and closest conditions, as column values.
+        $checks = array_map(fn (array $c) => [$x->column($c[0]), $c[1], $y->column($c[2])], $conditions);
+        $roll = $closest === null ? null : [$x->column($closest[0]), $closest[1], $y->column($closest[2])];
 
         // Matches per x row, in y order.
         $matches = [];
         foreach ($xKeys as $i => $key) {
-            $found = $type === 'cross' ? array_keys($yKeys) : ($key === null ? [] : ($index[$key] ?? []));
+            $found = match (true) {
+                $type === 'cross' || $pairs === [] => $allY,
+                $key === null => [],
+                default => $index[$key] ?? [],
+            };
+            if ($checks !== [] || $roll !== null) {
+                $found = self::filterConditions($i, $found, $checks, $roll, $naMatches);
+            }
             $matches[$i] = match ($multiple) {
                 'all' => $found,
                 'any', 'first' => array_slice($found, 0, 1),
@@ -88,7 +104,7 @@ final class Join
         }
 
         if ($type !== 'cross') {
-            self::checkRelationship($relationship, $matches, $matchedY, $type);
+            self::checkRelationship($relationship, $matches, $matchedY, $type, $nonEquality);
             self::checkUnmatched($unmatched, $type, $matches, $matchedY, $y->nrow());
         }
 
@@ -119,7 +135,7 @@ final class Join
             }
         }
 
-        return self::assemble($x, $y, $pairs, $xRows, $yRows, $suffix, $keep);
+        return self::assemble($x, $y, $pairs, $xRows, $yRows, $suffix, $keep === true);
     }
 
     /**
@@ -188,23 +204,121 @@ final class Join
     }
 
     /**
-     * Normalise by into [left, right] pairs.
+     * Split $by into equality pairs, inequality conditions and at most one
+     * closest (rolling) condition.
      *
-     * @return list<array{0: string, 1: string}>
+     * - 'k' or [l, r] (or [l, '==', r]): equality
+     * - [l, op, r] with op in >=, >, <=, <: inequality
+     * - ['closest', l, op, r]: keep only the closest r per x row
+     *
+     * @return array{0: list<array{0: string, 1: string}>, 1: list<array{0: string, 1: string, 2: string}>, 2: ?array{0: string, 1: string, 2: string}}
      */
-    private static function pairs(array $by): array
+    /** @internal Shared with SqlJoin. */
+    public static function conditions(array $by): array
     {
         $pairs = [];
-        foreach ($by as $left => $right) {
-            $pairs[] = match (true) {
-                is_array($right) && count($right) === 2 => [(string) $right[0], (string) $right[1]],
-                is_array($right) => throw new InvalidArgumentException('Inequality joins are not supported yet.'),
-                is_string($left) => [$left, (string) $right],
-                default => [(string) $right, (string) $right],
-            };
+        $conditions = [];
+        $closest = null;
+        foreach ($by as $left => $entry) {
+            if (is_string($left)) {
+                $pairs[] = [$left, (string) $entry];
+
+                continue;
+            }
+            if (is_string($entry)) {
+                $pairs[] = [$entry, $entry];
+
+                continue;
+            }
+            if (! is_array($entry)) {
+                throw new InvalidArgumentException('Each join condition must be a column name or an array.');
+            }
+            $entry = array_values($entry);
+            if (count($entry) === 2) {
+                $pairs[] = [(string) $entry[0], (string) $entry[1]];
+
+                continue;
+            }
+            if (count($entry) === 4 && $entry[0] === 'closest') {
+                if ($closest !== null) {
+                    throw new InvalidArgumentException('A join can have only one closest() condition.');
+                }
+                if (! in_array($entry[2], ['>=', '>', '<=', '<'], true)) {
+                    throw new InvalidArgumentException("closest() needs >=, >, <= or <, got '{$entry[2]}'.");
+                }
+                $closest = [(string) $entry[1], $entry[2], (string) $entry[3]];
+
+                continue;
+            }
+            if (count($entry) === 3 && in_array($entry[1], ['==', '>=', '>', '<=', '<'], true)) {
+                if ($entry[1] === '==') {
+                    $pairs[] = [(string) $entry[0], (string) $entry[2]];
+                } else {
+                    $conditions[] = [(string) $entry[0], $entry[1], (string) $entry[2]];
+                }
+
+                continue;
+            }
+            throw new InvalidArgumentException('Unrecognised join condition: '.json_encode($entry).'.');
         }
 
-        return $pairs;
+        return [$pairs, $conditions, $closest];
+    }
+
+    /**
+     * Keep the y rows that satisfy every inequality, then the closest ones.
+     * With NA matching, NA equals NA: it satisfies ==, >= and <= but not
+     * > or <. NA never matches a value.
+     *
+     * @param list<int> $candidates
+     * @param list<array{0: list<mixed>, 1: string, 2: list<mixed>}> $checks
+     * @param array{0: list<mixed>, 1: string, 2: list<mixed>}|null $roll
+     * @return list<int>
+     */
+    private static function filterConditions(int $i, array $candidates, array $checks, ?array $roll, bool $naMatches): array
+    {
+        $holds = function (mixed $a, string $op, mixed $b) use ($naMatches): bool {
+            if ($a === null || $b === null) {
+                return $a === null && $b === null && $naMatches && in_array($op, ['>=', '<='], true);
+            }
+            $cmp = is_string($a) && is_string($b) ? strcmp($a, $b) <=> 0 : $a <=> $b;
+
+            return match ($op) {
+                '>=' => $cmp >= 0,
+                '>' => $cmp > 0,
+                '<=' => $cmp <= 0,
+                '<' => $cmp < 0,
+            };
+        };
+
+        $kept = [];
+        foreach ($candidates as $j) {
+            foreach ($checks as [$xs, $op, $ys]) {
+                if (! $holds($xs[$i], $op, $ys[$j])) {
+                    continue 2;
+                }
+            }
+            if ($roll !== null && ! $holds($roll[0][$i], $roll[1], $roll[2][$j])) {
+                continue;
+            }
+            $kept[] = $j;
+        }
+        if ($roll === null || $kept === []) {
+            return $kept;
+        }
+
+        // Closest: the largest y value for >=/>, the smallest for <=/<. Ties keep all.
+        $ys = $roll[2];
+        $wantMax = in_array($roll[1], ['>=', '>'], true);
+        $best = null;
+        foreach ($kept as $j) {
+            $v = $ys[$j];
+            if ($best === null || ($v !== null && ($wantMax ? $v > $best : $v < $best))) {
+                $best = $v;
+            }
+        }
+
+        return array_values(array_filter($kept, fn (int $j) => $ys[$j] === $best || $ys[$j] == $best && $ys[$j] !== null));
     }
 
     /**
@@ -254,7 +368,7 @@ final class Join
      * @param array<int, list<int>> $matches
      * @param array<int, list<int>> $matchedY
      */
-    private static function checkRelationship(?string $relationship, array $matches, array $matchedY, string $type): void
+    private static function checkRelationship(?string $relationship, array $matches, array $matchedY, string $type, bool $nonEquality = false): void
     {
         $xMulti = null;
         foreach ($matches as $i => $found) {
@@ -279,7 +393,8 @@ final class Join
         if (in_array($relationship, ['one-to-one', 'one-to-many'], true) && $yMulti !== null) {
             throw new InvalidArgumentException('Each row in `y` must match at most 1 row in `x`. Row '.($yMulti + 1).' of `y` matches multiple rows in `x`.');
         }
-        if ($relationship === null && $xMulti !== null && $yMulti !== null && ! in_array($type, ['semi', 'anti'], true)) {
+        // dplyr only warns for equality joins; inequality joins expect many matches.
+        if ($relationship === null && ! $nonEquality && $xMulti !== null && $yMulti !== null && ! in_array($type, ['semi', 'anti'], true)) {
             trigger_error(
                 "Detected an unexpected many-to-many relationship between `x` and `y`.\n"
                 .'ℹ Row '.($xMulti + 1)." of `x` matches multiple rows in `y`.\n"

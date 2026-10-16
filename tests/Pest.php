@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Phibble\Frame;
 
 require_once __DIR__.'/Support/ExprCases.php';
+require_once __DIR__.'/Support/JoinCases.php';
 
 function penguins(): Frame
 {

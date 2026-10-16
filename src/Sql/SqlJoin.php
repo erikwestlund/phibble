@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Phibble\Sql;
 
 use InvalidArgumentException;
+use Phibble\Join;
 
 /**
  * Joins two SqlTables on the same connection in SQL, with the column
@@ -19,28 +20,32 @@ final class SqlJoin
      * @param list<string|array{0: string, 1: string}>|array<string, string> $by
      * @param array{0: string, 1: string} $suffix
      */
-    public static function build(SqlTable $x, SqlTable $y, array $by, string $type, array $suffix, bool $keep, bool $naMatches): SqlTable
+    public static function build(SqlTable $x, SqlTable $y, array $by, string $type, array $suffix, ?bool $keep, bool $naMatches): SqlTable
     {
         if (! in_array($type, ['inner', 'left', 'right', 'full', 'semi', 'anti', 'cross'], true)) {
             throw new InvalidArgumentException("Unknown join type '{$type}'.");
         }
-        $pairs = [];
-        foreach ($by as $left => $right) {
-            $pairs[] = match (true) {
-                is_array($right) => [(string) $right[0], (string) $right[1]],
-                is_string($left) => [$left, (string) $right],
-                default => [(string) $right, (string) $right],
-            };
-        }
-        if (($type === 'cross') !== ($pairs === [])) {
+        [$pairs, $inequalities, $closest] = Join::conditions($by);
+        $hasConditions = $pairs !== [] || $inequalities !== [] || $closest !== null;
+        if (($type === 'cross') === $hasConditions) {
             throw new InvalidArgumentException($type === 'cross' ? 'A cross join takes no keys.' : 'Join keys are required; pass by.');
         }
+        if ($keep === false && ($inequalities !== [] || $closest !== null)) {
+            throw new InvalidArgumentException("Can't set `keep = FALSE` when using an inequality, rolling, or overlap join.");
+        }
+        if (in_array($type, ['semi', 'anti'], true) && $closest !== null) {
+            // Whether any row matches does not depend on which match is closest.
+            $inequalities[] = $closest;
+            $closest = null;
+        }
+        $keep = $keep === true;
 
         $dialect = $x->dialect();
         $q = $dialect->quote(...);
         $jx = 'j'.$x->alias().'x';
         $jy = 'j'.$x->alias().'y';
-        foreach ($pairs as [$l, $r]) {
+        $all = [...$pairs, ...array_map(fn ($c) => [$c[0], $c[2]], $inequalities), ...($closest ? [[$closest[0], $closest[2]]] : [])];
+        foreach ($all as [$l, $r]) {
             if (! in_array($l, $x->columns(), true) || ! in_array($r, $y->columns(), true)) {
                 throw new InvalidArgumentException("Join key {$l} = {$r} not found.");
             }
@@ -51,6 +56,14 @@ final class SqlJoin
             $left = Fragment::raw("{$jx}.{$q($l)}");
             $right = Fragment::raw("{$jy}.{$q($r)}");
             $conditions[] = $naMatches ? $dialect->nullSafeEquals($left, $right) : Fragment::format('({} = {})', [$left, $right]);
+        }
+        // With NA matching, NA equals NA: it satisfies >= and <= but not > or <.
+        foreach ([...$inequalities, ...($closest ? [$closest] : [])] as [$l, $op, $r]) {
+            $left = "{$jx}.{$q($l)}";
+            $right = "{$jy}.{$q($r)}";
+            $conditions[] = Fragment::raw($naMatches && in_array($op, ['>=', '<='], true)
+                ? "(({$left} {$op} {$right}) OR ({$left} IS NULL AND {$right} IS NULL))"
+                : "({$left} {$op} {$right})");
         }
         $on = $conditions === [] ? null : Fragment::join(' AND ', $conditions);
 
@@ -101,15 +114,37 @@ final class SqlJoin
             'full' => 'FULL JOIN',
             'cross' => 'CROSS JOIN',
         };
+        $xFrom = $x->fragment();
+        if ($closest !== null) {
+            // Number x's rows so the closest match can be picked per x row.
+            $xFrom = Fragment::format("SELECT *, ROW_NUMBER() OVER () AS {$q('__phibble_xid')} FROM ({}) AS {$jx}r", [$xFrom]);
+            $items[] = "{$jx}.{$q('__phibble_xid')} AS {$q('__phibble_xid')}";
+            $items[] = "{$jy}.{$q($closest[2])} AS {$q('__phibble_r')}";
+        }
         $template = 'SELECT '.implode(', ', $items)." FROM ({}) AS {$jx} {$joinSql} ({}) AS {$jy}";
-        $parts = [$x->fragment(), $y->fragment()];
+        $parts = [$xFrom, $y->fragment()];
         if ($on !== null) {
             $template .= ' ON {}';
             $parts[] = $on;
         }
+        $sql = Fragment::format($template, $parts);
+
+        if ($closest !== null) {
+            // Keep the largest y value for >= and >, the smallest for <= and <; ties keep all.
+            $direction = in_array($closest[1], ['>=', '>'], true) ? 'DESC' : 'ASC';
+            $r = $q('__phibble_r');
+            $ranked = Fragment::format(
+                "SELECT *, RANK() OVER (PARTITION BY {$q('__phibble_xid')} ORDER BY ({$r} IS NULL), {$r} {$direction}) AS {$q('__phibble_rank')} FROM ({}) AS {$jx}c",
+                [$sql],
+            );
+            $sql = Fragment::format(
+                'SELECT '.implode(', ', array_map($q, $columns))." FROM ({}) AS {$jx}k WHERE {$q('__phibble_rank')} = 1",
+                [$ranked],
+            );
+        }
 
         return $x->derive(
-            Fragment::format($template, $parts),
+            $sql,
             $columns,
             array_values(array_intersect($x->groups(), $columns)),
             $hints,

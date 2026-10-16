@@ -16,6 +16,7 @@ use Phibble\Expr\Desc;
 use Phibble\Expr\Expr;
 use Phibble\Expr\Lit;
 use Phibble\Frame;
+use Phibble\Join;
 use Phibble\Source\PdoSource;
 use Phibble\Source\QuerySource;
 use Phibble\Type;
@@ -428,15 +429,17 @@ final readonly class SqlTable implements Table
         array $by,
         string $type = 'inner',
         array $suffix = ['.x', '.y'],
-        bool $keep = false,
+        ?bool $keep = null,
         bool $naMatches = true,
         string $multiple = 'all',
         ?string $relationship = null,
         string $unmatched = 'drop',
     ): Table {
+        $closest = (Join::conditions($by))[2] !== null;
         $native = $other instanceof self
             && $other->pdo === $this->pdo
             && $multiple === 'all' && $relationship === null && $unmatched === 'drop'
+            && ! ($closest && in_array($type, ['right', 'full'], true))
             && ($type !== 'full' || ($naMatches ? $this->dialect->supportsNullSafeFullJoin() : $this->dialect->supportsFullJoin()));
         if (! $native) {
             return $this->collect()->join($other->collect(), $by, $type, $suffix, $keep, $naMatches, $multiple, $relationship, $unmatched);

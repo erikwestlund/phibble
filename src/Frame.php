@@ -1085,7 +1085,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         array $by,
         string $type = 'inner',
         array $suffix = ['.x', '.y'],
-        bool $keep = false,
+        ?bool $keep = null,
         bool $naMatches = true,
         string $multiple = 'all',
         ?string $relationship = null,
