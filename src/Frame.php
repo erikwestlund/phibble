@@ -1006,7 +1006,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
                     ? (new Evaluator($group))->scalar($aggregate, (string) $name)
                     : $aggregate($group);
                 if (is_array($value)) {
-                    throw new InvalidArgumentException("summarise() '{$name}' must return a single value, not an array.");
+                    throw new \LengthException("summarise() '{$name}' must return a single value, not an array. Use reframe() for several rows per group.");
                 }
                 $results[$name][] = $value;
             }

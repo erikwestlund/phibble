@@ -39,3 +39,17 @@ function deframe(Frame $frame): array
 {
     return $frame->deframe();
 }
+
+/**
+ * tbl(): a lazy SQL table, as in dbplyr. Pass a table name, or a SELECT
+ * query with bindings.
+ *
+ *     tbl($pdo, 'visits');
+ *     tbl($pdo, 'SELECT * FROM visits WHERE year = ?', [2024]);
+ */
+function tbl(\PDO $pdo, string $from, array $bindings = []): Sql\SqlTable
+{
+    return preg_match('/^\s*(SELECT|WITH)\b/i', $from)
+        ? Sql\SqlTable::query($pdo, $from, $bindings)
+        : Sql\SqlTable::table($pdo, $from);
+}

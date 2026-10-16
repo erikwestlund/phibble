@@ -14,7 +14,10 @@ use Phibble\Type;
  * a later Polars-backed table and a later lazy SQL table.
  *
  * Rules shared by every method:
- * - Tables are immutable. Every operation returns a new table.
+ * - Tables are immutable. Every operation returns a new table. Verbs are
+ *   declared to return Table: a backend may hand back a different
+ *   implementation, e.g. a SQL table falls back to an in-memory Frame
+ *   for closures it cannot translate. Frame returns static.
  * - NA is PHP null.
  * - Grouping is metadata. groupBy() records key columns; verbs that care
  *   about groups (filter, mutate, summarise) read it, the rest keep it.
@@ -47,7 +50,7 @@ interface Table extends \Countable, \IteratorAggregate
     public function column(string $name): array;
 
     /** @param list<string> $names Keep these columns, in this order. */
-    public function select(array $names): static;
+    public function select(array $names): Table;
 
     /**
      * Keep rows where the predicate is true; NA counts as false. A
@@ -55,7 +58,7 @@ interface Table extends \Countable, \IteratorAggregate
      *
      * @param Closure(\Phibble\Row, Table): ?bool|Expr $predicate
      */
-    public function filter(Closure|Expr $predicate): static;
+    public function filter(Closure|Expr $predicate): Table;
 
     /**
      * Keep rows by a vectorised predicate run once per group. The closure
@@ -63,7 +66,7 @@ interface Table extends \Countable, \IteratorAggregate
      *
      * @param Closure(Table): list<?bool> $predicate
      */
-    public function filterGroups(Closure $predicate): static;
+    public function filterGroups(Closure $predicate): Table;
 
     /**
      * Add or replace columns. Each value is a closure run per row, an Expr
@@ -73,7 +76,7 @@ interface Table extends \Countable, \IteratorAggregate
      *
      * @param array<string, Closure(\Phibble\Row, Table): mixed|list<mixed>> $columns
      */
-    public function mutate(array $columns): static;
+    public function mutate(array $columns): Table;
 
     /**
      * Add or replace columns with vectorised closures, run once per group.
@@ -83,10 +86,10 @@ interface Table extends \Countable, \IteratorAggregate
      *
      * @param array<string, Closure(Table): (list<mixed>|scalar|null)|list<mixed>|scalar|null> $columns
      */
-    public function mutateGroups(array $columns): static;
+    public function mutateGroups(array $columns): Table;
 
     /** @param array<string, string> $map New name => old name, as in dplyr. */
-    public function rename(array $map): static;
+    public function rename(array $map): Table;
 
     /**
      * Sort rows. Stable; nulls sort last in both directions.
@@ -95,12 +98,12 @@ interface Table extends \Countable, \IteratorAggregate
      *     A bare name means ascending. An Expr key sorts by its value;
      *     wrap it in desc() for descending.
      */
-    public function arrange(array $keys): static;
+    public function arrange(array $keys): Table;
 
     /** @param list<string> $names Replaces any existing grouping. */
-    public function groupBy(array $names): static;
+    public function groupBy(array $names): Table;
 
-    public function ungroup(): static;
+    public function ungroup(): Table;
 
     /** @return list<string> Current group key columns; empty when ungrouped. */
     public function groups(): array;
@@ -110,7 +113,7 @@ interface Table extends \Countable, \IteratorAggregate
      *
      * @param list<string> $idColumns Kept by summarise(), like group keys.
      */
-    public function rowwise(array $idColumns = []): static;
+    public function rowwise(array $idColumns = []): Table;
 
     public function isRowwise(): bool;
 
@@ -132,7 +135,7 @@ interface Table extends \Countable, \IteratorAggregate
      *
      * @param array<string, Closure(Table): mixed> $aggregates
      */
-    public function summarise(array $aggregates): static;
+    public function summarise(array $aggregates): Table;
 
     /**
      * Unique rows over the named columns, keeping those columns only.
@@ -140,7 +143,7 @@ interface Table extends \Countable, \IteratorAggregate
      *
      * @param list<string> $names
      */
-    public function distinct(array $names = []): static;
+    public function distinct(array $names = []): Table;
 
     /**
      * Rows by position, in the given order; a null index gives an all-NA
@@ -148,7 +151,7 @@ interface Table extends \Countable, \IteratorAggregate
      *
      * @param list<int|null> $indices
      */
-    public function take(array $indices): static;
+    public function take(array $indices): Table;
 
     /**
      * Join another table, with dplyr 1.1 semantics.
@@ -183,13 +186,13 @@ interface Table extends \Countable, \IteratorAggregate
         string $multiple = 'all',
         ?string $relationship = null,
         string $unmatched = 'drop',
-    ): static;
+    ): Table;
 
     /** Rows [$offset, $offset + $length). Ignores groups. */
-    public function slice(int $offset, ?int $length = null): static;
+    public function slice(int $offset, ?int $length = null): Table;
 
     /** First $n rows. Ignores groups. */
-    public function head(int $n = 6): static;
+    public function head(int $n = 6): Table;
 
     /** @return list<array<string, mixed>> */
     public function toRows(): array;

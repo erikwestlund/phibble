@@ -58,8 +58,8 @@ final class Evaluator
             return $result->value;
         }
         if (count($result) !== 1) {
-            throw new InvalidArgumentException(
-                "summarise() '{$name}' must be size 1, not ".count($result).'. Use an aggregate such as mean() or n().'
+            throw new \LengthException(
+                "summarise() '{$name}' must be size 1, not ".count($result).'. Use an aggregate such as mean() or n(), or reframe() for several rows per group.'
             );
         }
 

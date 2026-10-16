@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Phibble\Frame;
 
+require_once __DIR__.'/Support/ExprCases.php';
+
 function penguins(): Frame
 {
     return Frame::fromRows([
