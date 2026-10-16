@@ -1,5 +1,5 @@
 ```php
-use Phiz\Plot;
+use Phit\Plot;
 
 // The grouping and the means run in the database.
 $byYear = Penguin::query()
@@ -29,26 +29,26 @@ $plot = Plot::of($byYear)
 ```
 
 ```{=html}
-<div data-phiz="{&quot;$schema&quot;:&quot;https://vega.github.io/schema/vega-lite/v6.json&quot;,&quot;title&quot;:&quot;Mean body mass by year&quot;,&quot;data&quot;:{&quot;values&quot;:[{&quot;species&quot;:&quot;Adelie&quot;,&quot;year&quot;:2007,&quot;mass&quot;:3696.4285714285716},{&quot;species&quot;:&quot;Adelie&quot;,&quot;year&quot;:2008,&quot;mass&quot;:3742.0},{&quot;species&quot;:&quot;Adelie&quot;,&quot;year&quot;:2009,&quot;mass&quot;:3664.903846153846},{&quot;species&quot;:&quot;Chinstrap&quot;,&quot;year&quot;:2007,&quot;mass&quot;:3694.230769230769},{&quot;species&quot;:&quot;Chinstrap&quot;,&quot;year&quot;:2008,&quot;mass&quot;:3800.0},{&quot;species&quot;:&quot;Chinstrap&quot;,&quot;year&quot;:2009,&quot;mass&quot;:3725.0},{&quot;species&quot;:&quot;Gentoo&quot;,&quot;year&quot;:2007,&quot;mass&quot;:5070.588235294118},{&quot;species&quot;:&quot;Gentoo&quot;,&quot;year&quot;:2008,&quot;mass&quot;:5019.565217391304},{&quot;species&quot;:&quot;Gentoo&quot;,&quot;year&quot;:2009,&quot;mass&quot;:5140.697674418605}]},&quot;width&quot;:300,&quot;layer&quot;:[{&quot;mark&quot;:{&quot;type&quot;:&quot;line&quot;},&quot;encoding&quot;:{&quot;x&quot;:{&quot;field&quot;:&quot;year&quot;,&quot;type&quot;:&quot;ordinal&quot;,&quot;title&quot;:&quot;Year&quot;},&quot;y&quot;:{&quot;field&quot;:&quot;mass&quot;,&quot;type&quot;:&quot;quantitative&quot;,&quot;title&quot;:&quot;Mean body mass (g)&quot;,&quot;scale&quot;:{&quot;zero&quot;:false}},&quot;color&quot;:{&quot;field&quot;:&quot;species&quot;,&quot;type&quot;:&quot;nominal&quot;}}},{&quot;mark&quot;:{&quot;type&quot;:&quot;point&quot;,&quot;filled&quot;:true},&quot;encoding&quot;:{&quot;x&quot;:{&quot;field&quot;:&quot;year&quot;,&quot;type&quot;:&quot;ordinal&quot;,&quot;title&quot;:&quot;Year&quot;},&quot;y&quot;:{&quot;field&quot;:&quot;mass&quot;,&quot;type&quot;:&quot;quantitative&quot;,&quot;title&quot;:&quot;Mean body mass (g)&quot;,&quot;scale&quot;:{&quot;zero&quot;:false}},&quot;color&quot;:{&quot;field&quot;:&quot;species&quot;,&quot;type&quot;:&quot;nominal&quot;}}}],&quot;config&quot;:{&quot;legend&quot;:{&quot;labelLimit&quot;:320}}}"><div data-phiz-view wire:ignore></div></div>
+<div data-phit="{&quot;$schema&quot;:&quot;https://vega.github.io/schema/vega-lite/v6.json&quot;,&quot;title&quot;:&quot;Mean body mass by year&quot;,&quot;data&quot;:{&quot;values&quot;:[{&quot;species&quot;:&quot;Adelie&quot;,&quot;year&quot;:2007,&quot;mass&quot;:3696.4285714285716},{&quot;species&quot;:&quot;Adelie&quot;,&quot;year&quot;:2008,&quot;mass&quot;:3742.0},{&quot;species&quot;:&quot;Adelie&quot;,&quot;year&quot;:2009,&quot;mass&quot;:3664.903846153846},{&quot;species&quot;:&quot;Chinstrap&quot;,&quot;year&quot;:2007,&quot;mass&quot;:3694.230769230769},{&quot;species&quot;:&quot;Chinstrap&quot;,&quot;year&quot;:2008,&quot;mass&quot;:3800.0},{&quot;species&quot;:&quot;Chinstrap&quot;,&quot;year&quot;:2009,&quot;mass&quot;:3725.0},{&quot;species&quot;:&quot;Gentoo&quot;,&quot;year&quot;:2007,&quot;mass&quot;:5070.588235294118},{&quot;species&quot;:&quot;Gentoo&quot;,&quot;year&quot;:2008,&quot;mass&quot;:5019.565217391304},{&quot;species&quot;:&quot;Gentoo&quot;,&quot;year&quot;:2009,&quot;mass&quot;:5140.697674418605}]},&quot;width&quot;:300,&quot;layer&quot;:[{&quot;mark&quot;:{&quot;type&quot;:&quot;line&quot;},&quot;encoding&quot;:{&quot;x&quot;:{&quot;field&quot;:&quot;year&quot;,&quot;type&quot;:&quot;ordinal&quot;,&quot;title&quot;:&quot;Year&quot;},&quot;y&quot;:{&quot;field&quot;:&quot;mass&quot;,&quot;type&quot;:&quot;quantitative&quot;,&quot;title&quot;:&quot;Mean body mass (g)&quot;,&quot;scale&quot;:{&quot;zero&quot;:false}},&quot;color&quot;:{&quot;field&quot;:&quot;species&quot;,&quot;type&quot;:&quot;nominal&quot;}}},{&quot;mark&quot;:{&quot;type&quot;:&quot;point&quot;,&quot;filled&quot;:true},&quot;encoding&quot;:{&quot;x&quot;:{&quot;field&quot;:&quot;year&quot;,&quot;type&quot;:&quot;ordinal&quot;,&quot;title&quot;:&quot;Year&quot;},&quot;y&quot;:{&quot;field&quot;:&quot;mass&quot;,&quot;type&quot;:&quot;quantitative&quot;,&quot;title&quot;:&quot;Mean body mass (g)&quot;,&quot;scale&quot;:{&quot;zero&quot;:false}},&quot;color&quot;:{&quot;field&quot;:&quot;species&quot;,&quot;type&quot;:&quot;nominal&quot;}}}],&quot;config&quot;:{&quot;legend&quot;:{&quot;labelLimit&quot;:320}}}"><div data-phit-view wire:ignore></div></div>
 <script src="https://cdn.jsdelivr.net/npm/vega@6.4.0/build/vega.min.js" integrity="sha384-VKdcJr3ZaBIJMbVcopTAI/JEuUkSY6qnwVu9iLuw0DnQ9gQ1JjsfZJhXFQAgNi43" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/vega-lite@6.4.3/build/vega-lite.min.js" integrity="sha384-9/70gNCfOu6G7xXvkdreMfuqAEsoaGJVXV2BN/JLRXkSmcGvnMqtsRx8HZtUWAvI" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/vega-embed@7.3.0/build/vega-embed.min.js" integrity="sha384-Muy1QRxYFeNrA1zShc1KtN4OfipkR/61gt+HWqN57c1Zxu3Oe16TsilsruVVjfKL" crossorigin="anonymous"></script>
-<script>/* phiz: renders [data-phiz] elements with vega-embed, and re-renders when their spec changes (Livewire morphs). */
+<script>/* phit: renders [data-phit] elements with vega-embed, and re-renders when their spec changes (Livewire morphs). */
 (function () {
-  if (window.Phiz) return;
+  if (window.Phit) return;
   var views = new WeakMap();
   var dark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
 
   function parse(json, fallback) {
     if (!json) return fallback;
-    try { return JSON.parse(json); } catch (e) { console.error('phiz: invalid JSON', e); return fallback; }
+    try { return JSON.parse(json); } catch (e) { console.error('phit: invalid JSON', e); return fallback; }
   }
 
   function target(el) {
-    var view = el.querySelector(':scope > [data-phiz-view]');
+    var view = el.querySelector(':scope > [data-phit-view]');
     if (!view) {
       view = document.createElement('div');
-      view.setAttribute('data-phiz-view', '');
+      view.setAttribute('data-phit-view', '');
       view.setAttribute('wire:ignore', '');
       el.appendChild(view);
     }
@@ -56,10 +56,10 @@ $plot = Plot::of($byYear)
   }
 
   function render(el) {
-    var embed = Phiz.embed || window.vegaEmbed;
+    var embed = Phit.embed || window.vegaEmbed;
     if (!embed) { pending = true; return; }
-    var json = el.getAttribute('data-phiz');
-    var optionsJson = el.getAttribute('data-phiz-options') || '';
+    var json = el.getAttribute('data-phit');
+    var optionsJson = el.getAttribute('data-phit-options') || '';
     var key = json + '\u0000' + optionsJson + '\u0000' + (dark && dark.matches ? 'dark' : 'light');
     var state = views.get(el);
     if (state && state.key === key) return;
@@ -80,25 +80,25 @@ $plot = Plot::of($byYear)
       if (!current || current.token !== token) { result.view.finalize(); holder.remove(); return; }
       Array.prototype.slice.call(holder.parentNode.children).forEach(function (child) { if (child !== holder) child.remove(); });
       current.view = result.view;
-      el.dispatchEvent(new CustomEvent('phiz:rendered', { detail: { view: result.view }, bubbles: true }));
+      el.dispatchEvent(new CustomEvent('phit:rendered', { detail: { view: result.view }, bubbles: true }));
     }).catch(function (error) {
       var current = views.get(el);
       if (!current || current.token !== token) { holder.remove(); return; }
-      console.error('phiz:', error);
+      console.error('phit:', error);
       holder.textContent = 'Chart error: ' + error.message;
     });
   }
 
   function scan(root) {
     if (root.nodeType !== 1) return;
-    if (root.hasAttribute('data-phiz')) render(root);
-    root.querySelectorAll('[data-phiz]').forEach(render);
+    if (root.hasAttribute('data-phit')) render(root);
+    root.querySelectorAll('[data-phit]').forEach(render);
   }
 
   function release(root) {
     if (root.nodeType !== 1) return;
-    var nodes = root.hasAttribute('data-phiz') ? [root] : [];
-    root.querySelectorAll('[data-phiz]').forEach(function (n) { nodes.push(n); });
+    var nodes = root.hasAttribute('data-phit') ? [root] : [];
+    root.querySelectorAll('[data-phit]').forEach(function (n) { nodes.push(n); });
     nodes.forEach(function (n) {
       if (n.isConnected) return;
       var state = views.get(n);
@@ -108,7 +108,7 @@ $plot = Plot::of($byYear)
   }
 
   var pending = false;
-  var Phiz = window.Phiz = {
+  var Phit = window.Phit = {
     embed: null,
     render: render,
     scan: function () { scan(document.documentElement); },
@@ -121,11 +121,11 @@ $plot = Plot::of($byYear)
       m.addedNodes.forEach(scan);
       m.removedNodes.forEach(release);
     });
-  }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-phiz', 'data-phiz-options'] });
+  }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-phit', 'data-phit-options'] });
 
-  if (dark && dark.addEventListener) dark.addEventListener('change', function () { Phiz.scan(); });
+  if (dark && dark.addEventListener) dark.addEventListener('change', function () { Phit.scan(); });
 
-  function start() { pending = false; Phiz.scan(); }
+  function start() { pending = false; Phit.scan(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
   window.addEventListener('load', function () { if (pending) start(); });
 })();</script>

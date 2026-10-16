@@ -2,7 +2,7 @@
 
 require '../examples/support/laravel.php';
 // ---
-use Phiz\Plot;
+use Phit\Plot;
 
 $penguins = Penguin::query()
     ->measured()
@@ -17,4 +17,4 @@ $plot = Plot::of($penguins)
     ->labs(title: 'Body mass by flipper length', x: 'Flipper length (mm)', y: 'Body mass (g)');
 
 // ===
-echo "<!--phiz-->\n", Phiz\Html::embed($plot);
+echo "<!--phit-->\n", Phit\Html::embed($plot);
