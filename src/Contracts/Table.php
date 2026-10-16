@@ -17,6 +17,11 @@ use Phibble\Type;
  * - NA is PHP null.
  * - Grouping is metadata. groupBy() records key columns; verbs that care
  *   about groups (filter, mutate, summarise) read it, the rest keep it.
+ * - Groups are visited in sorted key order, as in dplyr: ascending,
+ *   factors by level order, NA last, strings in byte order. Row-level
+ *   verbs (filter, mutate, arrange) keep the input row order.
+ * - A rowwise table (rowwise()) treats every row as its own group, in
+ *   row order; groups() returns its id columns.
  * - Row closures receive (Phibble\Row $row, Table $group). $group is the
  *   row's group, or the whole table when ungrouped. Closures that only
  *   need the row can ignore the second argument.
@@ -51,12 +56,30 @@ interface Table extends \Countable, \IteratorAggregate
     public function filter(Closure $predicate): static;
 
     /**
+     * Keep rows by a vectorised predicate run once per group. The closure
+     * returns one value per row of the group; truthy keeps the row.
+     *
+     * @param Closure(Table): list<?bool> $predicate
+     */
+    public function filterGroups(Closure $predicate): static;
+
+    /**
      * Add or replace columns. Each value is either a closure run per row,
      * or a list with one value per row. Later entries can use earlier ones.
      *
      * @param array<string, Closure(\Phibble\Row, Table): mixed|list<mixed>> $columns
      */
     public function mutate(array $columns): static;
+
+    /**
+     * Add or replace columns with vectorised closures, run once per group.
+     * Each returns a list with one value per row of the group, or a scalar
+     * to repeat. Non-closure values behave as in mutate(). This is the
+     * primitive for window functions (lag, cumsum, rank) and across().
+     *
+     * @param array<string, Closure(Table): (list<mixed>|scalar|null)|list<mixed>|scalar|null> $columns
+     */
+    public function mutateGroups(array $columns): static;
 
     /** @param array<string, string> $map New name => old name, as in dplyr. */
     public function rename(array $map): static;
@@ -78,8 +101,18 @@ interface Table extends \Countable, \IteratorAggregate
     public function groups(): array;
 
     /**
-     * Iterate groups in order of first appearance. Each group's table is
-     * ungrouped. Ungrouped tables yield one group with an empty key.
+     * Treat each row as its own group. groupBy() and ungroup() clear it.
+     *
+     * @param list<string> $idColumns Kept by summarise(), like group keys.
+     */
+    public function rowwise(array $idColumns = []): static;
+
+    public function isRowwise(): bool;
+
+    /**
+     * Iterate groups in sorted key order (row order for rowwise tables).
+     * Each group's table is ungrouped. Ungrouped tables yield one group
+     * with an empty key, even when they have no rows.
      *
      * @return iterable<int, array{key: array<string, mixed>, table: Table}>
      */
@@ -87,7 +120,8 @@ interface Table extends \Countable, \IteratorAggregate
 
     /**
      * One row per group: the group keys, then one column per entry.
-     * The result drops the last grouping level, like dplyr.
+     * The result drops the last grouping level, like dplyr. A rowwise
+     * table keeps its id columns as groups.
      *
      * @param array<string, Closure(Table): mixed> $aggregates
      */
@@ -100,6 +134,49 @@ interface Table extends \Countable, \IteratorAggregate
      * @param list<string> $names
      */
     public function distinct(array $names = []): static;
+
+    /**
+     * Rows by position, in the given order; a null index gives an all-NA
+     * row. Keeps types, factor levels and grouping.
+     *
+     * @param list<int|null> $indices
+     */
+    public function take(array $indices): static;
+
+    /**
+     * Join another table, with dplyr 1.1 semantics.
+     *
+     * - $by: list of [leftColumn, rightColumn] pairs; a bare 'k' means
+     *   ['k', 'k']. Empty for a cross join.
+     * - $type: inner, left, right, full, semi, anti or cross.
+     * - Columns: x's columns, then y's non-key columns (all of y's with
+     *   $keep). Clashing names get $suffix. Without $keep, key columns come
+     *   from x, filled from y for rows only y has (right and full joins).
+     * - Rows: x order, with each x row's matches in y order; right and full
+     *   joins then add y's unmatched rows in y order. Semi and anti joins
+     *   keep x's rows and columns and never duplicate rows.
+     * - Matching: NA matches NA unless !$naMatches; 1 matches 1.0; factors
+     *   match strings by label.
+     * - $multiple: all, any, first or last match per x row.
+     * - $relationship: one-to-one, one-to-many, many-to-one or
+     *   many-to-many; a violation throws. Unspecified many-to-many warns.
+     * - $unmatched: drop, or error when a join would drop rows.
+     * - The result keeps x's grouping.
+     *
+     * @param list<string|array{0: string, 1: string}> $by
+     * @param array{0: string, 1: string} $suffix
+     */
+    public function join(
+        Table $other,
+        array $by,
+        string $type = 'inner',
+        array $suffix = ['.x', '.y'],
+        bool $keep = false,
+        bool $naMatches = true,
+        string $multiple = 'all',
+        ?string $relationship = null,
+        string $unmatched = 'drop',
+    ): static;
 
     /** Rows [$offset, $offset + $length). Ignores groups. */
     public function slice(int $offset, ?int $length = null): static;

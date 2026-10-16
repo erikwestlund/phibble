@@ -9,6 +9,7 @@ use DateTimeInterface;
 use Generator;
 use InvalidArgumentException;
 use PDO;
+use Phibble\Column\ArrayColumn;
 use Phibble\Column\Column;
 use Phibble\Column\FactorColumn;
 use Phibble\Column\Infer;
@@ -33,6 +34,7 @@ final readonly class Frame implements Table, Stringable
         private array $data,
         private int $rows,
         private array $groups = [],
+        private bool $rowwise = false,
     ) {}
 
     // ---------------------------------------------------------------
@@ -335,14 +337,14 @@ final readonly class Frame implements Table, Stringable
             $data[$name] = $this->data[$name];
         }
 
-        return new self($data, $this->rows, $this->groups);
+        return $this->copy(data: $data);
     }
 
     public function filter(Closure $predicate): static
     {
         $keep = [];
         foreach ($this->groupIndex() as [$_, $indices]) {
-            $group = $this->take($indices, []);
+            $group = $this->subset($indices);
             foreach ($group->toRows() as $j => $row) {
                 if ($predicate(new Row($row), $group)) {
                     $keep[] = $indices[$j];
@@ -351,7 +353,28 @@ final readonly class Frame implements Table, Stringable
         }
         sort($keep);
 
-        return $this->take($keep, $this->groups);
+        return $this->take($keep);
+    }
+
+    public function filterGroups(Closure $predicate): static
+    {
+        $keep = [];
+        foreach ($this->groupIndex() as [$_, $indices]) {
+            $mask = $predicate($this->subset($indices));
+            if (! is_array($mask) || count($mask) !== count($indices)) {
+                throw new InvalidArgumentException(
+                    'filterGroups() must return one value per row of the group ('.count($indices).').'
+                );
+            }
+            foreach (array_values($mask) as $j => $flag) {
+                if ($flag) {
+                    $keep[] = $indices[$j];
+                }
+            }
+        }
+        sort($keep);
+
+        return $this->take($keep);
     }
 
     public function mutate(array $columns): static
@@ -359,6 +382,37 @@ final readonly class Frame implements Table, Stringable
         $frame = $this;
         foreach ($columns as $name => $definition) {
             $frame = $frame->withColumn((string) $name, $frame->evaluate((string) $name, $definition));
+        }
+
+        return $frame;
+    }
+
+    public function mutateGroups(array $columns): static
+    {
+        $frame = $this;
+        foreach ($columns as $name => $definition) {
+            $name = (string) $name;
+            if (! $definition instanceof Closure) {
+                $frame = $frame->withColumn($name, $frame->evaluate($name, $definition));
+
+                continue;
+            }
+            $values = array_fill(0, $frame->rows, null);
+            foreach ($frame->groupIndex() as [$_, $indices]) {
+                $result = $definition($frame->subset($indices));
+                if (! is_array($result)) {
+                    $result = array_fill(0, count($indices), $result);
+                }
+                if (count($result) !== count($indices)) {
+                    throw new InvalidArgumentException(
+                        "mutateGroups() '{$name}' returned ".count($result).' values for a group of '.count($indices).'.'
+                    );
+                }
+                foreach (array_values($result) as $j => $value) {
+                    $values[$indices[$j]] = $value;
+                }
+            }
+            $frame = $frame->withColumn($name, $values);
         }
 
         return $frame;
@@ -384,7 +438,7 @@ final readonly class Frame implements Table, Stringable
         $data = $this->data;
         $data[$name] = $column;
 
-        return new self($data, $column->count(), $this->groups);
+        return $this->copy(data: $data, rows: $column->count());
     }
 
     public function rename(array $map): static
@@ -405,7 +459,7 @@ final readonly class Frame implements Table, Stringable
         }
         $groups = array_map(fn (string $g) => $newByOld[$g] ?? $g, $this->groups);
 
-        return new self($data, $this->rows, $groups);
+        return $this->copy(data: $data, groups: $groups);
     }
 
     public function arrange(array $keys): static
@@ -417,36 +471,22 @@ final readonly class Frame implements Table, Stringable
             if (! in_array($direction, ['asc', 'desc'], true)) {
                 throw new InvalidArgumentException("Sort direction must be 'asc' or 'desc', got '{$direction}'.");
             }
-            $column = $this->storage($name);
-            $values = $column instanceof FactorColumn ? $column->codes() : $column->values();
-            $sorts[] = [$values, $direction === 'desc', $column->type() === Type::String];
+            $sorts[] = [...$this->sortable($name), $direction === 'desc'];
         }
 
-        $order = range(0, $this->rows - 1);
-        if ($this->rows === 0) {
-            $order = [];
-        }
+        $order = $this->rows === 0 ? [] : range(0, $this->rows - 1);
         usort($order, function (int $a, int $b) use ($sorts): int {
-            foreach ($sorts as [$values, $desc, $isString]) {
-                $x = $values[$a];
-                $y = $values[$b];
-                if ($x === null || $y === null) {
-                    if ($x === $y) {
-                        continue;
-                    }
-
-                    return $x === null ? 1 : -1;
-                }
-                $cmp = $isString ? strcmp($x, $y) : $x <=> $y;
+            foreach ($sorts as [$values, $isString, $desc]) {
+                $cmp = self::compare($values[$a], $values[$b], $isString, $desc);
                 if ($cmp !== 0) {
-                    return $desc ? -$cmp : $cmp;
+                    return $cmp;
                 }
             }
 
             return $a <=> $b;
         });
 
-        return $this->take($order, $this->groups);
+        return $this->take($order);
     }
 
     public function groupBy(array $names): static
@@ -456,12 +496,12 @@ final readonly class Frame implements Table, Stringable
             $this->storage($name);
         }
 
-        return new self($this->data, $this->rows, $names);
+        return $this->copy(groups: $names, rowwise: false);
     }
 
     public function ungroup(): static
     {
-        return new self($this->data, $this->rows);
+        return $this->copy(groups: [], rowwise: false);
     }
 
     public function groups(): array
@@ -469,17 +509,41 @@ final readonly class Frame implements Table, Stringable
         return $this->groups;
     }
 
+    public function rowwise(array $idColumns = []): static
+    {
+        foreach ($idColumns as $name) {
+            $this->storage($name);
+        }
+
+        return $this->copy(groups: array_values($idColumns), rowwise: true);
+    }
+
+    public function isRowwise(): bool
+    {
+        return $this->rowwise;
+    }
+
     public function eachGroup(): iterable
     {
         foreach ($this->groupIndex() as [$key, $indices]) {
-            yield ['key' => $key, 'table' => $this->take($indices, [])];
+            yield ['key' => $key, 'table' => $this->subset($indices)];
         }
     }
 
-    public function summarise(array $aggregates): static
+    /** Number of groups (1 for an ungrouped table, nrow for a rowwise one). */
+    public function ngroups(): int
+    {
+        return count($this->groupIndex());
+    }
+
+    /**
+     * @param string $groups dplyr's .groups: 'drop_last' (default), 'drop',
+     *     'keep' or 'rowwise'. Rowwise tables keep their id columns as groups.
+     */
+    public function summarise(array $aggregates, ?string $groups = null): static
     {
         $index = $this->groupIndex();
-        $first = array_map(fn (array $g) => $g[1][0] ?? 0, $index);
+        $first = array_map(fn (array $g) => $g[1][0] ?? null, $index);
 
         $data = [];
         foreach ($this->groups as $name) {
@@ -488,7 +552,7 @@ final readonly class Frame implements Table, Stringable
 
         $results = array_fill_keys(array_keys($aggregates), []);
         foreach ($index as [$_, $indices]) {
-            $group = $this->take($indices, []);
+            $group = $this->subset($indices);
             foreach ($aggregates as $name => $aggregate) {
                 $value = $aggregate($group);
                 if (is_array($value)) {
@@ -501,13 +565,22 @@ final readonly class Frame implements Table, Stringable
             $data[(string) $name] = Infer::column($values, null, (string) $name);
         }
 
-        return new self($data, count($index), array_slice($this->groups, 0, -1));
+        $groups ??= $this->rowwise ? 'keep' : 'drop_last';
+        [$outGroups, $rowwise] = match ($groups) {
+            'drop_last' => [array_slice($this->groups, 0, -1), false],
+            'drop' => [[], false],
+            'keep' => [$this->groups, false],
+            'rowwise' => [$this->groups, true],
+            default => throw new InvalidArgumentException("Unknown .groups value '{$groups}'."),
+        };
+
+        return new self($data, count($index), $outGroups, $rowwise);
     }
 
     /** Alias of summarise(). */
-    public function summarize(array $aggregates): static
+    public function summarize(array $aggregates, ?string $groups = null): static
     {
-        return $this->summarise($aggregates);
+        return $this->summarise($aggregates, $groups);
     }
 
     public function distinct(array $names = []): static
@@ -523,17 +596,14 @@ final readonly class Frame implements Table, Stringable
             }
         }
 
-        return $selected->take($keep, $this->groups);
+        return $selected->take($keep);
     }
 
     public function slice(int $offset, ?int $length = null): static
     {
-        $indices = array_slice(range(0, max(0, $this->rows - 1)), $offset, $length);
-        if ($this->rows === 0) {
-            $indices = [];
-        }
+        $indices = $this->rows === 0 ? [] : array_slice(range(0, $this->rows - 1), $offset, $length);
 
-        return $this->take($indices, $this->groups);
+        return $this->take($indices);
     }
 
     public function head(int $n = 6): static
@@ -544,6 +614,171 @@ final readonly class Frame implements Table, Stringable
     public function tail(int $n = 6): self
     {
         return $this->slice(max(0, $this->rows - $n));
+    }
+
+    public function take(array $indices): static
+    {
+        foreach ($indices as $i) {
+            if ($i !== null && ($i < 0 || $i >= $this->rows)) {
+                throw new InvalidArgumentException("Row index {$i} is out of range for a table of {$this->rows} rows.");
+            }
+        }
+
+        return $this->copy(
+            data: array_map(fn (Column $c) => $c->take($indices), $this->data),
+            rows: count($indices),
+        );
+    }
+
+    public function join(
+        Table $other,
+        array $by,
+        string $type = 'inner',
+        array $suffix = ['.x', '.y'],
+        bool $keep = false,
+        bool $naMatches = true,
+        string $multiple = 'all',
+        ?string $relationship = null,
+        string $unmatched = 'drop',
+    ): static {
+        return Join::run($this, $other->collect()->ungroup(), $by, $type, $suffix, $keep, $naMatches, $multiple, $relationship, $unmatched);
+    }
+
+    /**
+     * bind_cols(): put tables side by side. They must have the same number
+     * of rows; clashing names are repaired as name...position.
+     *
+     * @param list<Table> $tables
+     */
+    public static function bindCols(array $tables): self
+    {
+        $frames = array_map(fn (Table $t) => $t->collect(), $tables);
+        $columns = [];
+        $names = [];
+        $rows = null;
+        foreach ($frames as $frame) {
+            $rows ??= $frame->rows;
+            if ($frame->rows !== $rows) {
+                throw new InvalidArgumentException("Can't bind tables of {$rows} and {$frame->rows} rows.");
+            }
+            foreach ($frame->data as $name => $column) {
+                $names[] = (string) $name;
+                $columns[] = $column;
+            }
+        }
+        // vctrs "unique" repair: duplicated or empty names become name...position.
+        $counts = array_count_values($names);
+        foreach ($names as $i => $name) {
+            if ($name === '' || $counts[$name] > 1) {
+                $names[$i] = $name.'...'.($i + 1);
+            }
+        }
+
+        return Frame::fromColumns(array_combine($names, $columns));
+    }
+
+    /**
+     * tidyr::nest(): collapse columns into a list-column of tables, one row
+     * per unique combination of the other columns (first-appearance order).
+     * On a grouped table with no columns given, nests everything but the
+     * grouping columns.
+     *
+     * @param list<string> $columns
+     */
+    public function nest(array $columns = [], string $into = 'data'): self
+    {
+        if ($columns === []) {
+            if ($this->groups === []) {
+                throw new InvalidArgumentException('nest() needs columns, or a grouped table.');
+            }
+            $columns = array_values(array_diff($this->columns(), $this->groups));
+        }
+        foreach ($columns as $name) {
+            $this->storage($name);
+        }
+        $keys = array_values(array_diff($this->columns(), $columns));
+
+        $index = [];
+        $keyColumns = array_map(fn (string $k) => $this->data[$k]->values(), $keys);
+        for ($i = 0; $i < $this->rows; $i++) {
+            $hash = self::hashKey(array_map(fn (array $v) => $v[$i], $keyColumns));
+            $index[$hash][] = $i;
+        }
+
+        $inner = $this->ungroup()->select($columns);
+        $data = [];
+        $first = array_map(fn (array $rows) => $rows[0], array_values($index));
+        foreach ($keys as $k) {
+            $data[$k] = $this->data[$k]->take($first);
+        }
+        $data[$into] = new ArrayColumn(Type::List, array_map(fn (array $rows) => $inner->subset($rows), array_values($index)));
+
+        return new self($data, count($index), array_values(array_intersect($this->groups, $keys)));
+    }
+
+    /**
+     * tidyr::unnest(): expand list-columns of tables (or lists of rows)
+     * into rows. Rows whose value is NA or empty are dropped unless
+     * $keepEmpty. Nested columns take the place of the list-column.
+     *
+     * @param list<string>|string $columns
+     */
+    public function unnest(array|string $columns, bool $keepEmpty = false): self
+    {
+        $frame = $this;
+        foreach ((array) $columns as $name) {
+            $frame = $frame->unnestOne($name, $keepEmpty);
+        }
+
+        return $frame;
+    }
+
+    private function unnestOne(string $name, bool $keepEmpty): self
+    {
+        $parts = [];
+        $outer = [];
+        foreach ($this->column($name) as $i => $value) {
+            $table = match (true) {
+                $value === null => null,
+                $value instanceof Table => $value->collect(),
+                is_array($value) && $value !== [] && array_is_list($value) && is_array($value[0]) => Frame::fromRows($value),
+                is_array($value) && array_is_list($value) => Frame::fromColumns([$name => $value]),
+                is_array($value) => Frame::fromRows([$value]),
+                default => Frame::fromColumns([$name => [$value]]),
+            };
+            if ($table === null || $table->nrow() === 0) {
+                if ($keepEmpty) {
+                    $outer[] = $i;
+                    $parts[] = null;
+                }
+
+                continue;
+            }
+            array_push($outer, ...array_fill(0, $table->nrow(), $i));
+            $parts[] = $table;
+        }
+
+        $tables = array_values(array_filter($parts, fn ($p) => $p !== null));
+        $innerColumns = $tables === [] ? [] : Frame::concat($tables)->columns();
+        $empty = Frame::fromColumns(array_fill_keys($innerColumns, [null]));
+        $stacked = Frame::concat(array_map(fn ($p) => $p ?? $empty, $parts) ?: [Frame::fromColumns([])]);
+
+        $data = [];
+        foreach ($this->data as $column => $storage) {
+            if ($column === $name) {
+                foreach ($stacked->data as $innerName => $innerStorage) {
+                    if (isset($data[$innerName]) || ($innerName !== $name && isset($this->data[$innerName]))) {
+                        throw new InvalidArgumentException("unnest() would create a duplicate column '{$innerName}'.");
+                    }
+                    $data[$innerName] = $innerStorage;
+                }
+
+                continue;
+            }
+            $data[$column] = $storage->take($outer);
+        }
+
+        return new self($data, count($outer), array_values(array_intersect($this->groups, array_keys($data))), $this->rowwise);
     }
 
     // ---------------------------------------------------------------
@@ -685,7 +920,7 @@ final readonly class Frame implements Table, Stringable
             }
         }
 
-        return $this->take($keep, $this->groups);
+        return $this->take($keep);
     }
 
     // ---------------------------------------------------------------
@@ -728,6 +963,43 @@ final readonly class Frame implements Table, Stringable
     public function toVector(string $name): array
     {
         return array_map(fn (array $row) => $row[0], $this->toMatrix([$name]));
+    }
+
+    /**
+     * Columns for model fitting (stats_lm, stats_glm, stats_model_matrix):
+     *
+     * - float, int: list<float|int|null>
+     * - bool: list<bool|null> (a two-level contrast, as in R)
+     * - string: list<string|null> (the model sorts levels, as R does)
+     * - date: days since 1970-01-01; datetime: seconds since epoch
+     * - factor: ['levels' => list<string>, 'codes' => list<?int>, 'ordered' => bool],
+     *   with 0-based codes, null for NA, and every level in frame order
+     *
+     * List-columns cannot be modelled and throw.
+     *
+     * @param list<string>|null $names Columns to include; all by default.
+     * @return array<string, list<mixed>|array{levels: list<string>, codes: list<?int>, ordered: bool}>
+     */
+    public function toModelData(?array $names = null): array
+    {
+        $out = [];
+        foreach ($names ?? $this->columns() as $name) {
+            $column = $this->storage($name);
+            $out[$name] = match ($column->type()) {
+                Type::Factor => [
+                    'levels' => $column->levels(),
+                    'codes' => $column->codes(),
+                    'ordered' => $column->isOrdered(),
+                ],
+                Type::Date, Type::DateTime => Infer::convert($column, Type::Float, $name)->values(),
+                Type::List => throw new InvalidArgumentException(
+                    "Column '{$name}' is a list-column and cannot be used in a model."
+                ),
+                default => $column->values(),
+            };
+        }
+
+        return $out;
     }
 
     // ---------------------------------------------------------------
@@ -790,15 +1062,20 @@ final readonly class Frame implements Table, Stringable
     // ---------------------------------------------------------------
 
     /**
-     * Rows per group in order of first appearance. Ungrouped frames have
-     * one group holding every row.
+     * Rows per group, with groups sorted by key as dplyr does (ascending,
+     * factors by level, NA last, strings in byte order). Ungrouped frames
+     * have one group holding every row; rowwise frames one group per row.
      *
      * @return list<array{0: array<string, mixed>, 1: list<int>}>
      */
     private function groupIndex(): array
     {
+        $all = $this->rows === 0 ? [] : range(0, $this->rows - 1);
+        if ($this->rowwise) {
+            return array_map(fn (int $i) => [array_map(fn (string $g) => $this->data[$g]->get($i), array_combine($this->groups, $this->groups)), [$i]], $all);
+        }
         if ($this->groups === []) {
-            return [[[], $this->rows === 0 ? [] : range(0, $this->rows - 1)]];
+            return [[[], $all]];
         }
 
         $keys = array_map(fn (string $g) => $this->data[$g]->values(), array_combine($this->groups, $this->groups));
@@ -809,8 +1086,50 @@ final readonly class Frame implements Table, Stringable
             $index[$hash] ??= [$key, []];
             $index[$hash][1][] = $i;
         }
+        $index = array_values($index);
 
-        return array_values($index);
+        $sorts = array_map(fn (string $g) => $this->sortable($g), $this->groups);
+        usort($index, function (array $a, array $b) use ($sorts): int {
+            foreach ($sorts as [$values, $isString]) {
+                $cmp = self::compare($values[$a[1][0]], $values[$b[1][0]], $isString, false);
+                if ($cmp !== 0) {
+                    return $cmp;
+                }
+            }
+
+            return 0;
+        });
+
+        return $index;
+    }
+
+    /**
+     * Values to sort a column by: factor codes, else the values.
+     *
+     * @return array{0: list<mixed>, 1: bool}
+     */
+    private function sortable(string $name): array
+    {
+        $column = $this->storage($name);
+        if ($column->type() === Type::List) {
+            throw new InvalidArgumentException("Can't sort by list-column '{$name}'.");
+        }
+
+        return [
+            $column instanceof FactorColumn ? $column->codes() : $column->values(),
+            $column->type() === Type::String,
+        ];
+    }
+
+    /** NA sorts last in both directions. */
+    private static function compare(mixed $x, mixed $y, bool $isString, bool $desc): int
+    {
+        if ($x === null || $y === null) {
+            return ($x === null) <=> ($y === null);
+        }
+        $cmp = $isString ? strcmp($x, $y) <=> 0 : $x <=> $y;
+
+        return $desc ? -$cmp : $cmp;
     }
 
     /** @param array<string, mixed> $values */
@@ -818,7 +1137,7 @@ final readonly class Frame implements Table, Stringable
     {
         return serialize(array_map(
             fn ($v) => match (true) {
-                $v instanceof DateTimeInterface => 'date:'.$v->format('Y-m-d\TH:i:s.uP'),
+                $v instanceof DateTimeInterface => 'date:'.$v->format('Y-m-d\\TH:i:s.uP'),
                 $v instanceof Table => 'table:'.serialize($v->toColumns()),
                 is_object($v) => 'object:'.spl_object_id($v),
                 default => $v,
@@ -828,16 +1147,24 @@ final readonly class Frame implements Table, Stringable
     }
 
     /**
-     * @param list<int> $indices
-     * @param list<string> $groups
+     * A copy with some parts replaced; grouping and rowwise carry over.
+     *
+     * @param array<string, Column>|null $data
+     * @param list<string>|null $groups
      */
-    private function take(array $indices, array $groups): self
+    private function copy(?array $data = null, ?int $rows = null, ?array $groups = null, ?bool $rowwise = null): self
     {
-        return new self(
-            array_map(fn (Column $c) => $c->take($indices), $this->data),
-            count($indices),
-            $groups,
-        );
+        return new self($data ?? $this->data, $rows ?? $this->rows, $groups ?? $this->groups, $rowwise ?? $this->rowwise);
+    }
+
+    /**
+     * Rows as a new ungrouped frame, as handed to group closures.
+     *
+     * @param list<int> $indices
+     */
+    private function subset(array $indices): self
+    {
+        return new self(array_map(fn (Column $c) => $c->take($indices), $this->data), count($indices));
     }
 
     /** @return list<mixed>|Column */
@@ -862,7 +1189,7 @@ final readonly class Frame implements Table, Stringable
 
         $values = array_fill(0, $this->rows, null);
         foreach ($this->groupIndex() as [$_, $indices]) {
-            $group = $this->take($indices, []);
+            $group = $this->subset($indices);
             foreach ($group->toRows() as $j => $row) {
                 $values[$indices[$j]] = $definition(new Row($row), $group);
             }

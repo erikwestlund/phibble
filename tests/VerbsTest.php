@@ -94,14 +94,14 @@ it('rejects unknown sort directions', function () {
     penguins()->arrange([['mass', 'up']]);
 })->throws(InvalidArgumentException::class);
 
-it('iterates groups in first-appearance order with ungrouped tables', function () {
+it('iterates groups in sorted key order with ungrouped tables', function () {
     $groups = iterator_to_array(penguins()->groupBy(['species', 'year'])->eachGroup(), false);
 
     expect(array_column($groups, 'key'))->toBe([
         ['species' => 'Adelie', 'year' => 2007],
         ['species' => 'Adelie', 'year' => 2008],
-        ['species' => 'Gentoo', 'year' => 2007],
         ['species' => 'Chinstrap', 'year' => 2009],
+        ['species' => 'Gentoo', 'year' => 2007],
         ['species' => 'Gentoo', 'year' => 2008],
     ])
         ->and($groups[0]['table']->groups())->toBe([]);
@@ -126,9 +126,9 @@ it('summarises per group and drops the last grouping level', function () {
         ]);
 
     expect($result->toRows())->toBe([
-        ['island' => 'Torgersen', 'species' => 'Adelie', 'n' => 1, 'mass' => 3750.0],
         ['island' => 'Biscoe', 'species' => 'Adelie', 'n' => 1, 'mass' => 3800.0],
         ['island' => 'Biscoe', 'species' => 'Gentoo', 'n' => 2, 'mass' => 5200.0],
+        ['island' => 'Torgersen', 'species' => 'Adelie', 'n' => 1, 'mass' => 3750.0],
     ])
         ->and($result->groups())->toBe(['island']);
 });

@@ -1,0 +1,317 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Phibble;
+
+use DateTimeInterface;
+use InvalidArgumentException;
+use Phibble\Column\Column;
+use Phibble\Column\FactorColumn;
+use Phibble\Column\Infer;
+
+/**
+ * dplyr 1.1 joins for in-memory frames.
+ *
+ * @internal Use Frame::join().
+ */
+final class Join
+{
+    private const array TYPES = ['inner', 'left', 'right', 'full', 'semi', 'anti', 'cross'];
+
+    /**
+     * @param list<string|array{0: string, 1: string}>|array<string, string> $by
+     * @param array{0: string, 1: string} $suffix
+     */
+    public static function run(
+        Frame $x,
+        Frame $y,
+        array $by,
+        string $type = 'inner',
+        array $suffix = ['.x', '.y'],
+        bool $keep = false,
+        bool $naMatches = true,
+        string $multiple = 'all',
+        ?string $relationship = null,
+        string $unmatched = 'drop',
+    ): Frame {
+        if (! in_array($type, self::TYPES, true)) {
+            throw new InvalidArgumentException("Unknown join type '{$type}'. Use one of: ".implode(', ', self::TYPES).'.');
+        }
+        if (! in_array($multiple, ['all', 'any', 'first', 'last'], true)) {
+            throw new InvalidArgumentException("multiple must be all, any, first or last, got '{$multiple}'.");
+        }
+        if (! in_array($relationship, [null, 'one-to-one', 'one-to-many', 'many-to-one', 'many-to-many'], true)) {
+            throw new InvalidArgumentException("Unknown relationship '{$relationship}'.");
+        }
+        if (! in_array($unmatched, ['drop', 'error'], true)) {
+            throw new InvalidArgumentException("unmatched must be drop or error, got '{$unmatched}'.");
+        }
+
+        $pairs = self::pairs($by);
+        if ($type === 'cross' && $pairs !== []) {
+            throw new InvalidArgumentException('A cross join takes no keys.');
+        }
+        if ($type !== 'cross' && $pairs === []) {
+            throw new InvalidArgumentException('Join keys are required; pass by.');
+        }
+        foreach ($pairs as [$left, $right]) {
+            $x->storage($left);
+            $y->storage($right);
+        }
+
+        $xKeys = self::keys($x, array_column($pairs, 0), $naMatches);
+        $yKeys = self::keys($y, array_column($pairs, 1), $naMatches);
+
+        $index = [];
+        foreach ($yKeys as $j => $key) {
+            if ($key !== null) {
+                $index[$key][] = $j;
+            }
+        }
+
+        // Matches per x row, in y order.
+        $matches = [];
+        foreach ($xKeys as $i => $key) {
+            $found = $type === 'cross' ? array_keys($yKeys) : ($key === null ? [] : ($index[$key] ?? []));
+            $matches[$i] = match ($multiple) {
+                'all' => $found,
+                'any', 'first' => array_slice($found, 0, 1),
+                'last' => array_slice($found, -1),
+            };
+        }
+        $matchedY = [];
+        foreach ($matches as $i => $found) {
+            foreach ($found as $j) {
+                $matchedY[$j][] = $i;
+            }
+        }
+
+        if ($type !== 'cross') {
+            self::checkRelationship($relationship, $matches, $matchedY, $type);
+            self::checkUnmatched($unmatched, $type, $matches, $matchedY, $y->nrow());
+        }
+
+        if ($type === 'semi' || $type === 'anti') {
+            $rows = array_keys(array_filter($matches, fn (array $m) => ($m !== []) === ($type === 'semi')));
+
+            return $x->take($rows);
+        }
+
+        $xRows = [];
+        $yRows = [];
+        foreach ($matches as $i => $found) {
+            foreach ($found as $j) {
+                $xRows[] = $i;
+                $yRows[] = $j;
+            }
+            if ($found === [] && in_array($type, ['left', 'full'], true)) {
+                $xRows[] = $i;
+                $yRows[] = null;
+            }
+        }
+        if (in_array($type, ['right', 'full'], true)) {
+            for ($j = 0; $j < $y->nrow(); $j++) {
+                if (! isset($matchedY[$j])) {
+                    $xRows[] = null;
+                    $yRows[] = $j;
+                }
+            }
+        }
+
+        return self::assemble($x, $y, $pairs, $xRows, $yRows, $suffix, $keep);
+    }
+
+    /**
+     * @param list<array{0: string, 1: string}> $pairs
+     * @param list<?int> $xRows
+     * @param list<?int> $yRows
+     * @param array{0: string, 1: string} $suffix
+     */
+    private static function assemble(Frame $x, Frame $y, array $pairs, array $xRows, array $yRows, array $suffix, bool $keep): Frame
+    {
+        $xKeyNames = array_column($pairs, 0);
+        $yKeyNames = array_column($pairs, 1);
+        $yOut = $keep ? $y->columns() : array_values(array_diff($y->columns(), $yKeyNames));
+        $xNames = $x->columns();
+
+        $columns = [];
+        foreach ($xNames as $name) {
+            $isKey = in_array($name, $xKeyNames, true);
+            $column = $x->storage($name)->take($xRows);
+            if ($isKey && ! $keep && in_array(null, $xRows, true)) {
+                $right = $yKeyNames[array_search($name, $xKeyNames, true)];
+                $column = self::coalesce($column, $y->storage($right)->take($yRows), $xRows, $name);
+            }
+            $outName = ($keep || ! $isKey) && in_array($name, $yOut, true) ? $name.$suffix[0] : $name;
+            $columns[$outName] = $column;
+        }
+        foreach ($yOut as $name) {
+            $outName = in_array($name, $xNames, true) ? $name.$suffix[1] : $name;
+            if (isset($columns[$outName])) {
+                throw new InvalidArgumentException("Join would create a duplicate column '{$outName}'; choose other suffixes.");
+            }
+            $columns[$outName] = $y->storage($name)->take($yRows);
+        }
+
+        $out = Frame::fromColumns($columns);
+        $groups = array_values(array_filter($x->groups(), fn (string $g) => isset($columns[$g])));
+
+        return $groups === [] ? $out : $out->groupBy($groups);
+    }
+
+    /**
+     * Fill x's key column from y's key where the row came from y only.
+     *
+     * @param list<?int> $xRows
+     */
+    private static function coalesce(Column $left, Column $right, array $xRows, string $name): Column
+    {
+        $values = $left->values();
+        $fill = $right->values();
+        foreach ($xRows as $k => $i) {
+            if ($i === null) {
+                $values[$k] = $fill[$k];
+            }
+        }
+
+        if ($left instanceof FactorColumn) {
+            $levels = $left->levels();
+            $extra = $right instanceof FactorColumn ? $right->levels() : array_map(strval(...), array_filter($fill, fn ($v) => $v !== null));
+
+            return FactorColumn::fromValues($values, array_values(array_unique([...$levels, ...$extra])), $left->isOrdered());
+        }
+
+        return $left->type() === $right->type() || $right->type() === Type::Bool && array_all($fill, fn ($v) => $v === null)
+            ? Infer::column($values, $left->type(), $name)
+            : Infer::column($values, null, $name);
+    }
+
+    /**
+     * Normalise by into [left, right] pairs.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function pairs(array $by): array
+    {
+        $pairs = [];
+        foreach ($by as $left => $right) {
+            $pairs[] = match (true) {
+                is_array($right) && count($right) === 2 => [(string) $right[0], (string) $right[1]],
+                is_array($right) => throw new InvalidArgumentException('Inequality joins are not supported yet.'),
+                is_string($left) => [$left, (string) $right],
+                default => [(string) $right, (string) $right],
+            };
+        }
+
+        return $pairs;
+    }
+
+    /**
+     * One match key per row; null when the row can never match.
+     *
+     * @param list<string> $names
+     * @return list<?string>
+     */
+    private static function keys(Frame $frame, array $names, bool $naMatches): array
+    {
+        $columns = array_map(fn (string $n) => $frame->column($n), $names);
+        $keys = [];
+        for ($i = 0; $i < $frame->nrow(); $i++) {
+            $parts = [];
+            foreach ($columns as $values) {
+                $value = $values[$i];
+                if ($value === null && ! $naMatches) {
+                    $parts = null;
+
+                    break;
+                }
+                $parts[] = self::normalise($value);
+            }
+            $keys[] = $parts === null ? null : implode("\x1F", $parts);
+        }
+
+        return $keys;
+    }
+
+    /** 1 and 1.0 match; factors match strings by label. */
+    private static function normalise(mixed $value): string
+    {
+        return match (true) {
+            $value === null => 'NA',
+            is_bool($value) => $value ? 'b:1' : 'b:0',
+            is_int($value) => 'n:'.$value,
+            is_float($value) => is_finite($value) && floor($value) === $value && abs($value) < 2 ** 53
+                ? 'n:'.(int) $value
+                : 'n:'.Infer::formatFloat($value),
+            $value instanceof DateTimeInterface => 'd:'.$value->format('U.u'),
+            is_string($value) => 's:'.$value,
+            default => 'o:'.serialize($value),
+        };
+    }
+
+    /**
+     * @param array<int, list<int>> $matches
+     * @param array<int, list<int>> $matchedY
+     */
+    private static function checkRelationship(?string $relationship, array $matches, array $matchedY, string $type): void
+    {
+        $xMulti = null;
+        foreach ($matches as $i => $found) {
+            if (count($found) > 1) {
+                $xMulti = $i;
+
+                break;
+            }
+        }
+        $yMulti = null;
+        foreach ($matchedY as $j => $found) {
+            if (count($found) > 1) {
+                $yMulti = $j;
+
+                break;
+            }
+        }
+
+        if (in_array($relationship, ['one-to-one', 'many-to-one'], true) && $xMulti !== null) {
+            throw new InvalidArgumentException('Each row in `x` must match at most 1 row in `y`. Row '.($xMulti + 1).' of `x` matches multiple rows in `y`.');
+        }
+        if (in_array($relationship, ['one-to-one', 'one-to-many'], true) && $yMulti !== null) {
+            throw new InvalidArgumentException('Each row in `y` must match at most 1 row in `x`. Row '.($yMulti + 1).' of `y` matches multiple rows in `x`.');
+        }
+        if ($relationship === null && $xMulti !== null && $yMulti !== null && ! in_array($type, ['semi', 'anti'], true)) {
+            trigger_error(
+                "Detected an unexpected many-to-many relationship between `x` and `y`.\n"
+                .'ℹ Row '.($xMulti + 1)." of `x` matches multiple rows in `y`.\n"
+                .'ℹ Row '.($yMulti + 1)." of `y` matches multiple rows in `x`.\n"
+                .'ℹ If a many-to-many relationship is expected, set `relationship = "many-to-many"` to silence this warning.',
+                E_USER_WARNING,
+            );
+        }
+    }
+
+    /**
+     * @param array<int, list<int>> $matches
+     * @param array<int, list<int>> $matchedY
+     */
+    private static function checkUnmatched(string $unmatched, string $type, array $matches, array $matchedY, int $yRows): void
+    {
+        if ($unmatched !== 'error') {
+            return;
+        }
+        if (in_array($type, ['inner', 'right'], true)) {
+            foreach ($matches as $i => $found) {
+                if ($found === []) {
+                    throw new InvalidArgumentException('Each row of `x` must have a match in `y`. Row '.($i + 1).' of `x` does not have a match.');
+                }
+            }
+        }
+        if (in_array($type, ['inner', 'left'], true)) {
+            for ($j = 0; $j < $yRows; $j++) {
+                if (! isset($matchedY[$j])) {
+                    throw new InvalidArgumentException('Each row of `y` must be matched by `x`. Row '.($j + 1).' of `y` was not matched.');
+                }
+            }
+        }
+    }
+}
