@@ -5,7 +5,7 @@ All notable changes to phibble are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0, minor versions may
 change the public API.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-16
 
 The first release. phibble is a PHP 8.5 port of R's tibble, with readr-style
 input and output, and the shared table type for phplyr, phpolars, php-stats,
