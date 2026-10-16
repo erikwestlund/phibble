@@ -1,0 +1,158 @@
+---
+title: "Expressions"
+---
+
+`Phibble\Expr` describes a computation over columns as a tree of objects. The
+in-memory `Frame` evaluates the tree, `SqlTable` compiles it to SQL, and
+phpolars maps it to Polars expressions. An expression gives the same result on
+each backend because every backend implements the same list of functions with
+R's semantics.
+
+A PHP closure can only be run. An expression can also be inspected,
+translated, and serialized. phibble's verbs accept either, and a backend that
+cannot run a closure itself loads the rows and runs it in memory.
+
+## Building expressions
+
+An expression has four kinds of nodes:
+
+- `Col` reads a column: `col('price')`.
+- `Lit` holds a literal value: `lit(3)`, `lit('north')`, a date, or a list of
+  values for `in`.
+- `Call` applies a registered function to arguments.
+- `Desc` marks a sort key or ranking as descending.
+
+Methods on any expression build operator calls. Arguments that are not
+expressions are wrapped in `lit()`.
+
+| Method | Operator |
+| --- | --- |
+| `add`, `sub`, `mul`, `div`, `mod`, `pow` | `+`, `-`, `*`, `/`, `%%`, `^` |
+| `neg` | unary minus |
+| `eq`, `ne`, `lt`, `le`, `gt`, `ge` | `==`, `!=`, `<`, `<=`, `>`, `>=` |
+| `and`, `or`, `not` | `&`, <code>&#124;</code>, `!` |
+| `isNa()` | `is.na()` |
+| `isIn([...])` | `%in%` |
+| `between($low, $high)` | `between()` |
+| `desc()` | `desc()` |
+
+Functions in the `Phibble\Expr` namespace build the other calls. Options are
+named arguments, as in `mean(col('x'), na_rm: true)` or
+`lag(col('x'), n: 2, default: 0)`. `var_()` stands for `var()`, which is a
+reserved word in PHP. `call('name', ...)` builds a call to any registered
+function by name.
+
+`columns()` lists the columns an expression reads, and `toArray()` returns the
+tree as plain arrays:
+
+{{< include examples/_expr-build.md >}}
+
+## Using expressions with verbs
+
+Each verb evaluates expressions per group:
+
+- `filter()` keeps rows where the expression is true. NA counts as false.
+- `mutate()` adds a column with one value per row. An aggregate such as
+  `mean()` gives one value per group, which is repeated for each row of the
+  group.
+- `summarise()` needs one value per group. Anything else throws a
+  `LengthException`.
+- `arrange()` sorts by expressions over the whole table, ignoring groups. Wrap
+  a key in `desc()` to sort it in descending order.
+
+{{< include examples/_expr-verbs.md >}}
+
+{{< include examples/_expr-summarise.md >}}
+
+## Functions
+
+The registry in `Phibble\Expr\Functions::REGISTRY` lists every function an
+expression may call, with its arguments and options. Calling anything else
+throws when the expression is built.
+
+### Scalar functions
+
+Scalar functions return one value per row.
+
+| Function | Notes |
+| --- | --- |
+| `is_na(x)` | True for NA and NaN. |
+| `if_else(cond, true, false, missing:)` | `missing` is used where `cond` is NA. |
+| `case_when(c1, v1, c2, v2, ..., default:)` | The first true condition wins. NA conditions count as false. |
+| `coalesce(x, y, ...)` | The first non-NA value. |
+| `x->isIn([...])` | Never NA. NA is in the set only if NA is listed. |
+| `between(x, low, high)` | Inclusive. NA if any argument is NA. |
+| `na_if(x, y)` | NA where `x == y`. |
+| `near(x, y, tol:)` | Equality within a tolerance. |
+| `abs`, `sqrt`, `exp`, `log(x, base:)`, `log10`, `floor`, `ceiling` | Math functions. |
+| `round(x, digits:)` | Rounds as R 4 does. |
+| `as_int`, `as_float`, `as_string`, `as_bool` | Casts with R's `as.*()` rules. |
+| `str_lower`, `str_upper`, `str_length`, `str_trim(x, side:)` | Text functions. |
+| `str_sub(x, start, end)` | 1-based and inclusive. Negative positions count from the end, as in stringr. |
+| `str_detect`, `str_starts`, `str_ends` (with `negate:`) | Fixed patterns. |
+| `str_replace`, `str_replace_all` | Fixed patterns. `str_replace` replaces the first match. |
+| `paste0(...)`, `paste(..., sep:)` | NA becomes the text `NA`, as in R. |
+
+### Aggregates
+
+An aggregate returns one value per group. Each takes `na_rm:`, which is false
+by default, so an aggregate over a group containing NA returns NA unless
+`na_rm: true`.
+
+| Function | Notes |
+| --- | --- |
+| `n()` | Rows in the group. |
+| `sum`, `mean`, `median`, `min`, `max` | `sum` of no values is 0 and `mean` is NaN. |
+| `sd`, `var_` | Sample statistics, with `n - 1`. |
+| `quantile(x, p)`, `iqr(x)` | R's default type 7. These throw on NA unless `na_rm: true`, as R does. |
+| `n_distinct(x, ...)` | Counts NA as a value unless `na_rm: true`. Takes several columns. |
+| `first`, `last`, `nth(x, n)` | Take `default:` and `order_by:`. Negative `n` counts from the end. |
+| `any`, `all` | Three-valued, as in R. |
+
+### Window functions
+
+A window function returns one value per row, computed over the rows of the
+group in row order.
+
+| Function | Notes |
+| --- | --- |
+| `lag(x, n:, default:, order_by:)`, `lead(...)` | Shift values within the group. |
+| `row_number(x)` | Ranks with ties broken by position. Without `x`, the row's position. |
+| `min_rank`, `dense_rank`, `percent_rank`, `cume_dist` | NA values stay NA and are not counted. Pass `desc(x)` to rank in descending order. |
+| `ntile(x, n:)` | Splits rows into `n` groups of nearly equal size, larger groups first. |
+| `cumsum`, `cumprod`, `cummean`, `cummin`, `cummax` | Every value after the first NA is NA. |
+| `cumall`, `cumany` | Follow dplyr's NA rules. |
+| `consecutive_id(...)` | Increments when any argument changes. |
+
+{{< include examples/_expr-window.md >}}
+
+## NA and arithmetic
+
+Expressions follow R's rules for missing values and arithmetic:
+
+- Arithmetic and comparisons with NA give NA.
+- `&` and `|` use three-valued logic. `FALSE & NA` is false and `TRUE | NA` is
+  true.
+- `/` and `^` always return floats. Division by zero gives `Inf`, `-Inf`, or
+  `NaN`.
+- `%%` takes the sign of the divisor, so `-7 %% 3` is 2.
+- `round()` takes, of the two candidates, the one closer to the stored value,
+  and an exact tie goes to the even digit. `round(2.5)` is 2, and
+  `round(2.675, digits: 2)` is 2.67 because 2.675 is stored as slightly less
+  than 2.675.
+- Text compares and sorts in byte order.
+
+{{< include examples/_expr-na.md >}}
+
+## Serialization
+
+`toArray()` returns a JSON-friendly array, and `Expr::fromArray()` rebuilds the
+expression. Each node has a `type` key: `col`, `lit`, `call`, or `desc`. A call
+lists its positional arguments under `args` and its options under `named`. A
+date literal carries `dtype` (`date` or `datetime`).
+
+{{< include examples/_expr-roundtrip.md >}}
+
+The test suite checks the in-memory evaluator against dplyr. The script
+`tests/r/expr.R` evaluates the same expressions in R and stores the results in
+`tests/fixtures/expr/expected.json`, which other backends can reuse.

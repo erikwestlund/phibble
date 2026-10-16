@@ -1,0 +1,36 @@
+project:
+  type: website
+  output-dir: _site
+  render:
+    - "*.qmd"
+  resources:
+    - data/*.csv
+
+website:
+  site-url: "https://erikwestlund.github.io/phibble/"
+  title: "phibble"
+  repo-url: "https://github.com/erikwestlund/phibble"
+  sidebar:
+    style: docked
+    search: true
+    contents:
+      - index.qmd
+      - getting-started.qmd
+      - coming-from-tibble.qmd
+      - section: "Guides"
+        contents:
+          - types.qmd
+          - io.qmd
+          - expr.qmd
+          - sql.qmd
+      - section: "For backend authors"
+        contents:
+          - contract.qmd
+      - development.qmd
+
+format:
+  html:
+    theme: cosmo
+    toc: true
+    code-copy: true
+    highlight-style: github

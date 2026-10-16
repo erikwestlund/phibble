@@ -1,0 +1,101 @@
+---
+title: "SQL tables"
+---
+
+`Phibble\Sql\SqlTable` is a table backed by a SQL query, like dbplyr's `tbl()`.
+It implements the same `Table` contract as `Frame`. Verbs called with
+[expressions](expr.qmd) are compiled into SQL, and no query runs until the
+rows are needed. SQLite, PostgreSQL, and MySQL are supported.
+
+## Opening a table
+
+`tbl($pdo, 'name')` opens a table or view. `tbl($pdo, 'SELECT ...', $bindings)`
+starts from a query with positional (`?`) or named (`:name`) bindings. The
+same tables can be opened with `SqlTable::table()` and `SqlTable::query()`.
+`SqlTable::fromQuery($builder)` starts from a Laravel or Doctrine query builder,
+and `SqlTable::fromSource($pdoSource)` from a `PdoSource`.
+
+phibble reads the column names when the table is opened. It runs the query
+itself when the rows are needed: `collect()` returns a `Frame`, and `toRows()`,
+`nrow()`, iteration, and printing also run it.
+
+`showQuery()` returns the SQL with `?` placeholders, and `bindings()` returns
+their values in order.
+
+{{< include examples/_sql-tbl.md >}}
+
+Each verb wraps the previous query in a subquery, so each step's SQL stays
+simple. Database planners usually flatten the nesting.
+
+## What compiles to SQL
+
+These verbs compile when their arguments are expressions or column names:
+`select()`, `rename()`, `filter()`, `mutate()`, `arrange()`, `groupBy()`,
+`summarise()`, `distinct()`, `slice()`, `head()`, and `join()`.
+
+The compiled SQL keeps R's semantics:
+
+- An aggregate returns NA when its group contains NA, unless `na_rm: true`.
+  SQL aggregates skip NULL, so phibble adds a check on the count of non-NULL
+  values.
+- Cumulative functions return NA after the first NA.
+- Ranks leave NA rows unranked.
+- `isIn()` never returns NA.
+- `/` returns a float, and division by zero gives NA.
+- Groups in `summarise()` output are sorted, with NA last.
+
+## When the table falls back to memory
+
+Some arguments have no faithful SQL translation. A `SqlTable` then collects
+the rows and runs the verb in memory, and the verb returns a `Frame`. Results
+match `Frame` in either case. The fallbacks are:
+
+- any PHP closure,
+- `round()`, because SQL's `ROUND` does not round half to even,
+- `as_string()` and `as_bool()`,
+- `str_replace()`, which replaces only the first match,
+- `paste()` and `paste0()` with arguments other than text literals, because SQL
+  formats numbers differently from R,
+- `first()`, `last()`, `nth()`, `iqr()`, `cumprod()`, and `consecutive_id()`,
+- `median()` and `quantile()` outside PostgreSQL,
+- `quantile()` without `na_rm: true`,
+- `take()`, `eachGroup()`, `rowwise()`, `mutateGroups()` with closures, and
+  `filterGroups()`,
+- joins with `multiple`, `relationship`, or `unmatched` set, joins between
+  different connections, full joins in MySQL, and full joins with NA matching in
+  PostgreSQL.
+
+{{< include examples/_sql-fallback.md >}}
+
+## Window functions
+
+Grouped `mutate()` and `filter()` compile aggregates and window functions to
+`OVER (PARTITION BY ...)`. Window functions such as `lag()` and `cumsum()` need
+a row order. phibble uses the order set by `arrange()`, or the `order_by:`
+option of `lag()` and `lead()`. Without either, compiling throws and the table
+falls back to memory.
+
+{{< include examples/_sql-window.md >}}
+
+## Joins
+
+`join()` between two tables on the same PDO connection compiles to a SQL join.
+The output columns follow `Frame::join()`: x's columns, then y's other columns,
+with `.x` and `.y` suffixes on clashing names. NA keys match each other, as in
+dplyr, through `IS` in SQLite, `IS NOT DISTINCT FROM` in PostgreSQL, and `<=>`
+in MySQL. Pass `naMatches: false` for SQL's usual equality. The order of rows
+from a SQL join is not defined, so call `arrange()` when it matters.
+
+{{< include examples/_sql-join.md >}}
+
+## Dialects
+
+`Dialect::for($pdo)` chooses the dialect from the PDO driver. The dialects
+differ in identifier quoting, cast types, string functions, and NULL-safe
+equality. The SQL for one expression in each dialect:
+
+{{< include examples/_sql-dialects.md >}}
+
+The test suite runs the dplyr reference cases through `SqlTable` on SQLite, and
+on PostgreSQL and MySQL when their DSNs are set. See
+[Development](development.qmd).

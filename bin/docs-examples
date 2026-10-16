@@ -1,0 +1,66 @@
+#!/usr/bin/env php
+<?php
+
+/*
+ * Run every docs/examples/*.php and write docs/examples/_<name>.md with the
+ * example's code and its actual output, for Quarto to include. Examples run
+ * with docs/data as the working directory, after a hidden prelude that
+ * imports Frame, Type, SqlTable, the Phibble\ functions (tibble, tribble,
+ * as_tibble, enframe, deframe, tbl) and every Phibble\Expr\ helper.
+ *
+ * Usage: bin/docs-examples [name ...]
+ * Environment: PHP (the PHP 8.5 binary, default: this one).
+ */
+
+declare(strict_types=1);
+
+$root = dirname(__DIR__);
+require $root.'/vendor/autoload.php';
+
+$functions = fn (string $namespace) => array_values(array_filter(
+    get_defined_functions()['user'],
+    fn (string $f) => str_starts_with($f, strtolower($namespace).'\\')
+        && ! str_contains(substr($f, strlen($namespace) + 1), '\\')
+        && ! str_starts_with((new ReflectionFunction($f))->getShortName(), 'call_with'),
+));
+$short = fn (array $fs) => array_map(fn (string $f) => (new ReflectionFunction($f))->getShortName(), $fs);
+
+$phibble = $short($functions('Phibble'));
+$expr = $short($functions('Phibble\\Expr'));
+sort($phibble);
+sort($expr);
+$prelude = "use Phibble\\Frame;\nuse Phibble\\Type;\nuse Phibble\\Sql\\SqlTable;\n"
+    ."use function Phibble\\{".implode(', ', $phibble)."};\n"
+    ."use function Phibble\\Expr\\{".implode(', ', $expr)."};\n";
+
+$php = getenv('PHP') ?: PHP_BINARY;
+
+$only = array_slice($argv, 1);
+$failed = 0;
+foreach (glob($root.'/docs/examples/*.php') as $file) {
+    $name = basename($file, '.php');
+    if ($only !== [] && ! in_array($name, $only, true)) {
+        continue;
+    }
+    $code = trim((string) preg_replace('/^<\?php\s*(declare\(strict_types=1\);\s*)?/', '', file_get_contents($file)));
+    $script = tempnam(sys_get_temp_dir(), 'phibble-doc').'.php';
+    file_put_contents($script, "<?php\n\ndeclare(strict_types=1);\n\nrequire ".var_export($root.'/vendor/autoload.php', true).";\n\n".$prelude."\n".$code."\n");
+    $proc = proc_open([$php, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $root.'/docs/data');
+    $out = stream_get_contents($pipes[1]);
+    $err = stream_get_contents($pipes[2]);
+    $status = proc_close($proc);
+    unlink($script);
+    if ($status !== 0 || trim($err) !== '') {
+        fwrite(STDERR, "{$name}: failed\n{$out}{$err}\n");
+        $failed++;
+
+        continue;
+    }
+    $md = "```php\n{$code}\n```\n\n";
+    if (trim($out) !== '') {
+        $md .= "```{.text .output}\n".rtrim($out)."\n```\n";
+    }
+    file_put_contents($root."/docs/examples/_{$name}.md", $md);
+    echo "{$name}: ok\n";
+}
+exit($failed > 0 ? 1 : 0);

@@ -1,0 +1,123 @@
+---
+title: "Reading and writing data"
+---
+
+## CSV files
+
+`Frame::fromCsv()` reads delimited text the way readr's `read_csv()` and
+`read_delim()` do. It takes a path (files ending in `.gz` are decompressed) or
+an open stream. `Frame::fromCsvString()` reads from a string.
+
+readr's options are named arguments in camelCase:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `types` | guess | Column types, as a compact string or by name. |
+| `delimiter` | `','` | The field separator. |
+| `na` | `['', 'NA']` | Text that is read as NA. |
+| `colNames` | `true` | `true` reads a header row, `false` names columns `X1`, `X2`, and so on, and a list gives the names. |
+| `select` | all | Columns to keep, in this order. |
+| `skip` | `0` | Lines to skip before the header. |
+| `nMax` | all | The most rows to read. |
+| `comment` | `''` | Lines starting with this text are skipped. |
+| `quote` | `'"'` | The quoting character. |
+| `trimWs` | `true` | Trim spaces around unquoted values. |
+| `skipEmptyRows` | `true` | Skip blank lines. |
+| `guessMax` | `1000` | Rows used to guess types. |
+| `nameRepair` | `'unique'` | How to repair empty or duplicated names. |
+| `decimalMark`, `groupingMark` | `'.'`, none | Number formatting, as in readr's `locale()`. |
+
+{{< include examples/_csv-options.md >}}
+
+## Column types
+
+`types` accepts readr's compact string, with one letter per column:
+
+| Letter | Type |
+| --- | --- |
+| `c` | string |
+| `i` | int |
+| `d` | float |
+| `n` | float, reading numbers with grouping marks and other characters |
+| `l` | bool |
+| `f` | factor |
+| `D` | date |
+| `T` | datetime |
+| `t` | string (phibble has no time-of-day type) |
+| `?` | guess |
+| `_` or `-` | skip the column |
+
+`types` also accepts an array by column name. A value is a `Type`, a type name
+such as `'factor'`, or a letter. The key `.default` sets the type of every
+column not named.
+
+{{< include examples/_col-types.md >}}
+
+## Guessing
+
+Without explicit types, phibble guesses each column from up to `guessMax` rows,
+sampled the way readr 2 samples them. A column is:
+
+- bool if every value is `T`, `F`, `TRUE`, `FALSE`, `True`, `False`, `true`, or
+  `false`,
+- int if every value is a whole number (readr guesses double here),
+- float if every value is a number, including `Inf` and `NaN`,
+- date if every value is an ISO 8601 date,
+- datetime if every value is an ISO 8601 date and time,
+- string otherwise.
+
+Numbers with leading zeros such as `007` stay strings, as in readr.
+
+When a value cannot be parsed as its column's type, or a row has the wrong
+number of fields, phibble still returns the data. The value becomes NA, and the
+read raises one `E_USER_WARNING` that lists the problems.
+
+{{< include examples/_csv-problems.md >}}
+
+## Writing CSV
+
+`writeCsv($path)` writes a file and `toCsv()` returns the text. The format
+follows readr's `write_csv()`. Values are quoted only when needed, NA is written
+as `NA`, logicals as `TRUE` and `FALSE`, dates in ISO 8601, and datetimes in
+UTC with a `Z`. Factors are written as their labels, and list-columns throw.
+
+{{< include examples/_write-csv.md >}}
+
+The options are `delimiter`, `na`, `append`, `colNames`, `quote` (`'needed'`,
+`'all'`, or `'none'`), `escape`, and `eol`.
+
+## JSON
+
+`toJson()` writes a list of records, and `toJson('columns')` writes an object of
+columns. NA is written as `null` and kept in every record. `Frame::fromJson()`
+reads either shape and detects which one it has.
+
+{{< include examples/_json.md >}}
+
+## Databases
+
+`Frame::fromPdo()` runs a query with positional or named bindings and loads the
+result. Drivers that return numbers as text, as MySQL's does, are handled by
+parsing all-text columns with the CSV guessing rules.
+
+{{< include examples/_pdo.md >}}
+
+`Frame::fromQuery()` loads a query builder without depending on its library:
+
+- A Laravel query builder, Eloquent builder, or relation is read through
+  `toSql()`, `getBindings()`, and its connection's PDO object.
+- A Doctrine DBAL `QueryBuilder` is read through `getSQL()` and
+  `getParameters()`. Pass a PDO or DBAL connection as the second argument to
+  run the SQL through PDO. Without one, the builder runs the query itself.
+
+To keep a query in the database and run verbs there, use a
+[SQL table](sql.qmd) instead.
+
+## Laravel collections
+
+`Frame::fromCollection()` reads any object with an `all()` or `toArray()`
+method, such as a Laravel `Collection`. The items may be arrays, objects, or
+Eloquent models. `toCollection()` returns an `Illuminate\Support\Collection` of
+row arrays and throws when Laravel is not installed.
+
+{{< include examples/_collections.md >}}
