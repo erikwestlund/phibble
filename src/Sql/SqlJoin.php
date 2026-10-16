@@ -40,8 +40,12 @@ final class SqlJoin
         }
         $keep = $keep === true;
 
+        // Fix each side's row order into its row column first.
+        $x = $x->ordered();
+        $y = $y->ordered();
         $dialect = $x->dialect();
         $q = $dialect->quote(...);
+        $row = $q(SqlTable::ROW);
         $jx = 'j'.$x->alias().'x';
         $jy = 'j'.$x->alias().'y';
         $all = [...$pairs, ...array_map(fn ($c) => [$c[0], $c[2]], $inequalities), ...($closest ? [[$closest[0], $closest[2]]] : [])];
@@ -114,6 +118,8 @@ final class SqlJoin
             'full' => 'FULL JOIN',
             'cross' => 'CROSS JOIN',
         };
+        // Number rows as dplyr orders them: x order, matches in y order, then y-only rows.
+        $items[] = "ROW_NUMBER() OVER (ORDER BY ({$jx}.{$row} IS NULL), {$jx}.{$row}, ({$jy}.{$row} IS NULL), {$jy}.{$row}) AS {$row}";
         $xFrom = $x->fragment();
         if ($closest !== null) {
             // Number x's rows so the closest match can be picked per x row.
@@ -138,7 +144,7 @@ final class SqlJoin
                 [$sql],
             );
             $sql = Fragment::format(
-                'SELECT '.implode(', ', array_map($q, $columns))." FROM ({}) AS {$jx}k WHERE {$q('__phibble_rank')} = 1",
+                'SELECT '.implode(', ', array_map($q, [...$columns, SqlTable::ROW]))." FROM ({}) AS {$jx}k WHERE {$q('__phibble_rank')} = 1",
                 [$ranked],
             );
         }

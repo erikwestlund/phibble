@@ -4,7 +4,13 @@
 /*
  * Benchmark Table backends on the data from bench/generate.php.
  *
- * Usage: bin/bench [--backend=frame|sqlite] [--runs=3] [workload ...]
+ * Usage: bin/bench [--backend=frame|sqlite|Some\\Backend\\Class] [--bootstrap=file.php]
+ *                  [--data=dir] [--runs=3] [workload ...]
+ *
+ * Another package can benchmark its own backend: implement
+ * Phibble\Bench\Backend, then run vendor/erikwestlund/phibble/bin/bench with
+ * --bootstrap pointing at a file that loads it (or its vendor/autoload.php)
+ * and --backend set to the class name.
  *
  * Prints one JSON line per workload: backend, workload, rows, median and
  * min seconds, and peak memory in MB.
@@ -12,7 +18,20 @@
 
 declare(strict_types=1);
 
-require dirname(__DIR__).'/vendor/autoload.php';
+// Works from a phibble checkout and from vendor/erikwestlund/phibble.
+foreach ([dirname(__DIR__).'/vendor/autoload.php', dirname(__DIR__, 3).'/autoload.php'] as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+
+        break;
+    }
+}
+// The bench classes are autoload-dev, so load them directly when installed as a dependency.
+foreach (['Backend', 'FrameBackend', 'SqliteBackend', 'Workloads'] as $class) {
+    if (! class_exists("Phibble\\Bench\\{$class}") && ! interface_exists("Phibble\\Bench\\{$class}")) {
+        require_once dirname(__DIR__)."/bench/src/{$class}.php";
+    }
+}
 
 use Phibble\Bench\FrameBackend;
 use Phibble\Bench\SqliteBackend;
@@ -20,11 +39,14 @@ use Phibble\Bench\Workloads;
 
 ini_set('memory_limit', '-1');
 
-$options = getopt('', ['backend:', 'runs:'], $rest);
+$options = getopt('', ['backend:', 'runs:', 'bootstrap:', 'data:'], $rest);
+if (isset($options['bootstrap'])) {
+    require $options['bootstrap'];
+}
 $backendName = $options['backend'] ?? 'frame';
 $runs = (int) ($options['runs'] ?? 3);
 $only = array_slice($argv, $rest);
-$data = dirname(__DIR__).'/bench/data';
+$data = $options['data'] ?? dirname(__DIR__).'/bench/data';
 if (! is_file("{$data}/events.csv")) {
     fwrite(STDERR, "No data. Run: php bench/generate.php [rows]\n");
     exit(1);
@@ -66,7 +88,9 @@ if ($backendName === 'frame') {
 $backend = match ($backendName) {
     'frame' => new FrameBackend(),
     'sqlite' => new SqliteBackend(),
-    default => throw new InvalidArgumentException("Unknown backend {$backendName}"),
+    default => class_exists($backendName) && is_subclass_of($backendName, Phibble\Bench\Backend::class)
+        ? new $backendName()
+        : throw new InvalidArgumentException("Unknown backend {$backendName}: use frame, sqlite, or a class implementing Phibble\\Bench\\Backend."),
 };
 $events = $backend->load("{$data}/events.csv");
 $dims = $backend->load("{$data}/dims.csv");

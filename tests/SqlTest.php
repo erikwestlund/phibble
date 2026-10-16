@@ -150,7 +150,7 @@ it('shows the query and keeps bindings in order', function () {
         ->filter(col('x')->gt(0))
         ->mutate(['y' => col('x')->add(10)]);
 
-    expect($t->showQuery())->toBe('SELECT "x", ("x" + ?) AS "y" FROM (SELECT * FROM (SELECT ? AS x UNION ALL SELECT ?) AS q1 WHERE ("x" > ?)) AS q2')
+    expect($t->showQuery())->toBe('SELECT "x", "y" FROM (SELECT "x", ("x" + ?) AS "y", "__phibble_row" FROM (SELECT * FROM (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT ? AS x UNION ALL SELECT ?) AS phibble_source) AS q1 WHERE ("x" > ?)) AS q2) AS q3 ORDER BY ("__phibble_row" IS NULL), "__phibble_row"')
         ->and($t->bindings())->toBe([10, 1, 2, 0])
         ->and($t->collect()->column('y'))->toBe([11, 12])
         ->and($t->groupBy(['x'])->summarise(['n' => n(), 's' => sum(col('y'))])->collect()->toRows())
@@ -245,4 +245,38 @@ it('translates first, last, nth and str_replace to SQL', function (Closure $conn
     $replaced = sqlFrom($pdo, exprFrame())->arrange(['i'])->mutate(['r' => Phibble\Expr\str_replace(col('s'), 'a', 'A')]);
     expect($replaced)->toBeInstanceOf(SqlTable::class)
         ->and($replaced->collect()->column('r'))->toBe(expected('str_replace'));
+})->with('connections');
+
+// Reported by phpolars: windows without arrange() must follow the source row
+// order, also when a later entry falls back to memory.
+it('runs windows in source row order without arrange', function (Closure $connect) {
+    $pdo = $connect();
+    $sales = Frame::fromColumns([
+        'id' => [1, 2, 3, 4, 5, 6, 7, 8],
+        'store' => [16, 3, 16, 3, 16, 3, 16, 3],
+        'day' => [4, 2, 1, 1, 3, 4, 2, 3],
+        'units' => [4, null, 2, 5, 7, 1, null, 3],
+    ]);
+    $pipeline = fn ($t) => $t->groupBy(['store'])->mutate([
+        'prev' => lag(col('units'), order_by: col('day')),
+        'running' => Phibble\Expr\cumsum(col('units')),
+        'rn' => Phibble\Expr\row_number(),
+        'r' => Phibble\Expr\round(col('units')), // falls back to memory
+        'run2' => Phibble\Expr\cumsum(col('units')),
+    ]);
+
+    $memory = $pipeline($sales);
+    $lazy = $pipeline(sqlFrom($pdo, $sales));
+
+    expect($lazy->collect()->ungroup()->toRows())->toBe($memory->ungroup()->toRows());
+})->with('connections');
+
+it('keeps row order through select and distinct after arrange', function (Closure $connect) {
+    $sql = sqlFrom($connect(), exprFrame());
+
+    expect($sql->arrange([desc(col('x'))])->select(['g'])->collect()->column('g'))
+        ->toBe(exprFrame()->arrange([desc(col('x'))])->select(['g'])->column('g'))
+        ->and($sql->arrange([desc(col('i'))])->distinct(['g'])->collect()->column('g'))
+        ->toBe(exprFrame()->arrange([desc(col('i'))])->distinct(['g'])->column('g'))
+        ->and($sql->distinct(['g'])->collect()->column('g'))->toBe(['a', 'b', null]);
 })->with('connections');

@@ -24,7 +24,7 @@ echo $summary->collect();
 ```{.text .output}
 Phibble\Sql\SqlTable
 
-SELECT * FROM (SELECT "species", COUNT(*) AS "n", AVG(CAST("body_mass" AS REAL)) AS "mass" FROM (SELECT * FROM (SELECT * FROM "penguins") AS q1 WHERE ("year" = ?)) AS q2 GROUP BY "species") AS q3 ORDER BY ("species" IS NULL), "species"
+SELECT "species", "n", "mass" FROM (SELECT "species", "n", "mass", ROW_NUMBER() OVER (ORDER BY ("species" IS NULL), "species") AS "__phibble_row" FROM (SELECT "species", COUNT(*) AS "n", AVG(CAST("body_mass" AS REAL)) AS "mass" FROM (SELECT * FROM (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT * FROM "penguins") AS phibble_source) AS q1 WHERE ("year" = ?)) AS q2 GROUP BY "species") AS q3) AS q4 ORDER BY ("__phibble_row" IS NULL), "__phibble_row"
 
 [2008]
 

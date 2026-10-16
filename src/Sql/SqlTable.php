@@ -38,6 +38,14 @@ use Phibble\Type;
 final readonly class SqlTable implements Table
 {
     /**
+     * Hidden column carrying each row's position. SQL has no row order, so
+     * it is assigned when the table is opened and carried through every
+     * subquery: it orders collected rows, breaks ties after arrange() (which
+     * is stable in dplyr), and orders window functions when nothing else does.
+     */
+    public const string ROW = '__phibble_row';
+
+    /**
      * @param list<string> $columns
      * @param list<string> $groups
      * @param list<array{0: Expr, 1: bool}> $order
@@ -100,7 +108,9 @@ final readonly class SqlTable implements Table
             $columns[] = $meta === false ? "column{$i}" : $meta['name'];
         }
 
-        return new self($pdo, $dialect, $from, $columns);
+        $numbered = Fragment::format('SELECT *, ROW_NUMBER() OVER () AS '.$dialect->quote(self::ROW).' FROM ({}) AS phibble_source', [$from]);
+
+        return new self($pdo, $dialect, $numbered, $columns);
     }
 
     // ---------------------------------------------------------------
@@ -156,12 +166,8 @@ final readonly class SqlTable implements Table
     {
         $this->check([$name]);
         // Fetch one column but keep the row order, which may use other columns.
-        $template = 'SELECT '.$this->dialect->quote($name).' FROM ({}) AS '.$this->alias();
-        $parts = [$this->from];
-        if ($this->order !== []) {
-            $template .= ' ORDER BY {}';
-            $parts[] = (new Compiler($this->dialect))->orderBy($this->order);
-        }
+        $template = 'SELECT '.$this->dialect->quote($name).' FROM ({}) AS '.$this->alias().' ORDER BY {}';
+        $parts = [$this->from, (new Compiler($this->dialect))->orderBy($this->rowOrder())];
         $rows = $this->run(Fragment::format($template, $parts))->fetchAll(PDO::FETCH_ASSOC);
         $hints = array_intersect_key($this->hints, [$name => true]);
 
@@ -231,9 +237,10 @@ final readonly class SqlTable implements Table
     {
         $this->check($names);
         $names = [...array_values(array_diff($this->groups, $names)), ...array_values(array_unique($names))];
-        $list = Fragment::join(', ', array_map(fn (string $n) => Fragment::raw($this->dialect->quote($n)), $names));
+        $source = $this->keepOrder($names) === $this->order ? $this : $this->ordered();
+        $list = Fragment::join(', ', array_map(fn (string $n) => Fragment::raw($source->dialect->quote($n)), $names));
 
-        return $this->wrap($list, $names, order: $this->keepOrder($names));
+        return $source->wrap($list, $names);
     }
 
     public function filter(Closure|Expr $predicate): Table
@@ -248,11 +255,11 @@ final readonly class SqlTable implements Table
         }
 
         if (! Compiler::hasWindow($predicate)) {
-            return $this->wrap(Fragment::raw('*'), $this->columns, where: $condition);
+            return $this->wrap(Fragment::raw('*'), $this->columns, where: $condition, carryRow: false);
         }
         // Window conditions can't sit in WHERE: compute a flag column first.
         $flag = '__phibble_keep';
-        $inner = $this->wrap(Fragment::format('*, {} AS '.$this->dialect->quote($flag), [$condition]), [...$this->columns, $flag]);
+        $inner = $this->wrap(Fragment::format('*, {} AS '.$this->dialect->quote($flag), [$condition]), [...$this->columns, $flag], carryRow: false);
         $list = Fragment::join(', ', array_map(fn (string $n) => Fragment::raw($this->dialect->quote($n)), $this->columns));
 
         return $inner->wrap($list, $this->columns, where: Fragment::raw($this->dialect->quote($flag).' = TRUE'));
@@ -444,8 +451,10 @@ final readonly class SqlTable implements Table
             default => throw new InvalidArgumentException("Unknown .groups value '{$groups}'."),
         };
 
-        return $this->wrap(Fragment::join(', ', $parts), $names, groupBy: $groupBy, order: $order, hints: $hints)
-            ->withGroups($outGroups);
+        $grouped = $this->wrap(Fragment::join(', ', $parts), $names, groupBy: $groupBy, order: [], hints: $hints, carryRow: false);
+
+        // Rows come out in group order (NA last), as in dplyr.
+        return $grouped->renumber($order, hasRow: false)->withGroups($outGroups);
     }
 
     public function summarize(array $aggregates, ?string $groups = null): Table
@@ -457,15 +466,24 @@ final readonly class SqlTable implements Table
     {
         $this->check($names);
         $names = $names === [] ? $this->columns : [...array_values(array_diff($this->groups, $names)), ...$names];
-        $list = Fragment::join(', ', array_map(fn (string $n) => Fragment::raw($this->dialect->quote($n)), $names));
+        // Keep each combination's first row in the current order, as dplyr does.
+        $source = $this->ordered();
+        $list = Fragment::join(', ', array_map(fn (string $n) => Fragment::raw($source->dialect->quote($n)), $names));
+        $row = $source->dialect->quote(self::ROW);
 
-        return $this->wrap(Fragment::format('DISTINCT {}', [$list]), $names, order: $this->keepOrder($names));
+        return $source->wrap(
+            Fragment::format("{}, MIN({$row}) AS {$row}", [$list]),
+            $names,
+            groupBy: $list,
+            order: [],
+            carryRow: false,
+        );
     }
 
     public function slice(int $offset, ?int $length = null): Table
     {
         $limit = $length === null ? $this->dialect->noLimit() : 'LIMIT '.max(0, $length);
-        $sql = Fragment::format('{} '.$limit.' OFFSET '.max(0, $offset), [$this->render()]);
+        $sql = Fragment::format('{} '.$limit.' OFFSET '.max(0, $offset), [$this->render(withRow: true)]);
         $sql = Fragment::format('SELECT * FROM ({}) AS '.$this->alias(), [$sql]);
 
         return new self($this->pdo, $this->dialect, $sql, $this->columns, $this->groups, $this->order, $this->hints, $this->depth + 1);
@@ -547,20 +565,61 @@ final readonly class SqlTable implements Table
 
     private function compiler(): Compiler
     {
-        return new Compiler($this->dialect, $this->groups, $this->order);
+        return new Compiler($this->dialect, $this->groups, $this->rowOrder());
     }
 
-    /** The full query, with the pending row order applied. */
-    private function render(): Fragment
+    /**
+     * The row order: arrange() keys, then the source position.
+     *
+     * @return list<array{0: Expr, 1: bool}>
+     */
+    private function rowOrder(): array
     {
-        if ($this->order === []) {
-            return $this->from;
+        return [...$this->order, [new Col(self::ROW), false]];
+    }
+
+    /** The full query in row order, without (or with) the hidden row column. */
+    private function render(bool $withRow = false): Fragment
+    {
+        $list = $withRow ? '*' : implode(', ', array_map($this->dialect->quote(...), $this->columns));
+        if ($list === '') {
+            $list = '*';
         }
 
-        return Fragment::format('SELECT * FROM ({}) AS '.$this->alias().' ORDER BY {}', [
+        return Fragment::format("SELECT {$list} FROM ({}) AS ".$this->alias().' ORDER BY {}', [
             $this->from,
-            (new Compiler($this->dialect))->orderBy($this->order),
+            (new Compiler($this->dialect))->orderBy($this->rowOrder()),
         ]);
+    }
+
+    /**
+     * The same rows with the current order fixed into the row column, so
+     * later steps can drop the columns the order depends on.
+     *
+     * @internal
+     */
+    public function ordered(): self
+    {
+        return $this->order === [] ? $this : $this->renumber($this->order);
+    }
+
+    /**
+     * Renumber the row column by $order, then the old row number.
+     *
+     * @param list<array{0: Expr, 1: bool}> $order
+     */
+    private function renumber(array $order, bool $hasRow = true): self
+    {
+        $compiler = new Compiler($this->dialect);
+        $terms = $hasRow ? [...$order, [new Col(self::ROW), false]] : $order;
+        $over = $terms === [] ? Fragment::raw('') : Fragment::format('ORDER BY {}', [$compiler->orderBy($terms)]);
+        $list = Fragment::join(', ', array_map(fn (string $n) => Fragment::raw($this->dialect->quote($n)), $this->columns));
+        $row = $this->dialect->quote(self::ROW);
+        $items = $this->columns === []
+            ? Fragment::format("ROW_NUMBER() OVER ({}) AS {$row}", [$over])
+            : Fragment::format("{}, ROW_NUMBER() OVER ({}) AS {$row}", [$list, $over]);
+
+        return $this->wrap($items, $this->columns, order: [], carryRow: false);
     }
 
     /**
@@ -577,7 +636,11 @@ final readonly class SqlTable implements Table
         ?Fragment $groupBy = null,
         ?array $order = null,
         ?array $hints = null,
+        bool $carryRow = true,
     ): self {
+        if ($carryRow) {
+            $list = Fragment::format('{}, '.$this->dialect->quote(self::ROW), [$list]);
+        }
         $template = 'SELECT {} FROM ({}) AS '.$this->alias();
         $parts = [$list, $this->from];
         if ($where !== null) {

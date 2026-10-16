@@ -79,9 +79,13 @@ A column declared without a type stores bound values as text, so
 
 Grouped `mutate()` and `filter()` compile aggregates and window functions to
 `OVER (PARTITION BY ...)`. Window functions such as `lag()` and `cumsum()` need
-a row order. phibble uses the order set by `arrange()`, or the `order_by:`
-option of `lag()` and `lead()`. Without either, compiling throws and the table
-falls back to memory.
+a row order. SQL tables have none, so phibble numbers the rows of the source
+query when the table is opened and keeps that number through every step.
+Windows use the `order_by:` option where given, otherwise the order set by
+`arrange()`, and otherwise the source order. The same order decides the order
+of collected rows and breaks ties after `arrange()`, which is stable as in
+dplyr. The source order is the order in which the database returns the
+source query's rows. For a stored table, add `arrange()` to make it explicit.
 
 {{< include examples/_sql-window.md >}}
 
