@@ -311,3 +311,38 @@ it('matches lubridate and stringr in SQL', function (Closure $connect) {
     expect($failures)->toBe([])
         ->and($native)->toContain('year', 'month', 'wday', 'difftime_hours', 'str_count_fixed', 'str_trunc');
 })->with('connections');
+
+// Stored tables use the physical row id (SQLite rowid, PostgreSQL ctid) as
+// the source order. The PostgreSQL table is TEMP and disappears with the session.
+it('keeps source order on stored tables with physical row ids', function (Closure $connect) {
+    $pdo = $connect();
+    $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
+    if ($driver === 'mysql') {
+        test()->markTestSkipped('MySQL tables use ROW_NUMBER(), covered by the other tests.');
+    }
+    $suffix = substr(md5((string) mt_rand()), 0, 6);
+    $temp = $driver === 'pgsql' ? 'TEMP ' : '';
+    $pdo->exec("CREATE {$temp}TABLE ev_{$suffix} (g TEXT, x INTEGER)");
+    $pdo->exec("CREATE {$temp}TABLE lk_{$suffix} (g TEXT, w INTEGER)");
+    $rows = [['b', 5], ['a', 3], ['b', null], ['a', 1], ['c', 9], ['a', 4]];
+    foreach ($rows as [$g, $x]) {
+        $pdo->prepare("INSERT INTO ev_{$suffix} VALUES (?, ?)")->execute([$g, $x]);
+    }
+    foreach ([['a', 10], ['b', 20], ['a', 30]] as [$g, $w]) {
+        $pdo->prepare("INSERT INTO lk_{$suffix} VALUES (?, ?)")->execute([$g, $w]);
+    }
+    $frame = Frame::fromColumns(['g' => array_column($rows, 0), 'x' => array_column($rows, 1)]);
+    $lookup = Frame::fromColumns(['g' => ['a', 'b', 'a'], 'w' => [10, 20, 30]]);
+    $sql = SqlTable::table($pdo, "ev_{$suffix}");
+    $sqlLookup = SqlTable::table($pdo, "lk_{$suffix}");
+
+    $pipeline = fn ($t) => $t->groupBy(['g'])->mutate(['run' => Phibble\Expr\cumsum(col('x')), 'rn' => Phibble\Expr\row_number()]);
+    [$memoryJoin] = quietly(fn () => $frame->join($lookup, ['g'], 'left'));
+    [$sqlJoin] = quietly(fn () => $sql->join($sqlLookup, ['g'], 'left'));
+
+    expect($sql->showQuery())->toContain($driver === 'pgsql' ? 'ctid' : 'rowid')
+        ->and($sql->collect()->toRows())->toBe($frame->toRows())
+        ->and($pipeline($sql)->collect()->ungroup()->toRows())->toBe($pipeline($frame)->ungroup()->toRows())
+        ->and($sql->distinct(['g'])->collect()->column('g'))->toBe(['b', 'a', 'c'])
+        ->and($sqlJoin->collect()->toRows())->toBe($memoryJoin->toRows());
+})->with('connections');

@@ -45,7 +45,13 @@ final class SqlJoin
         $y = $y->ordered();
         $dialect = $x->dialect();
         $q = $dialect->quote(...);
-        $row = $q(SqlTable::ROW);
+        // Row order of the result: x's row keys, then y's (renamed to stay
+        // unique). Sorting happens once, when rows are needed in order.
+        $xRowKeys = $x->rowKeys();
+        $yRowKeys = [];
+        foreach ($y->rowKeys() as $k) {
+            $yRowKeys[$k] = SqlTable::ROW.'_'.(count($xRowKeys) + count($yRowKeys));
+        }
         $jx = 'j'.$x->alias().'x';
         $jy = 'j'.$x->alias().'y';
         $all = [...$pairs, ...array_map(fn ($c) => [$c[0], $c[2]], $inequalities), ...($closest ? [[$closest[0], $closest[2]]] : [])];
@@ -77,7 +83,7 @@ final class SqlJoin
                 [$x->fragment(), $y->fragment(), $on],
             );
 
-            return $x->derive($sql, $x->columns(), $x->groups(), $x->hints());
+            return $x->derive($sql, $x->columns(), $x->groups(), $x->hints(), $xRowKeys);
         }
 
         $xKeys = array_column($pairs, 0);
@@ -118,13 +124,17 @@ final class SqlJoin
             'full' => 'FULL JOIN',
             'cross' => 'CROSS JOIN',
         };
-        // Number rows as dplyr orders them: x order, matches in y order, then y-only rows.
-        $items[] = "ROW_NUMBER() OVER (ORDER BY ({$jx}.{$row} IS NULL), {$jx}.{$row}, ({$jy}.{$row} IS NULL), {$jy}.{$row}) AS {$row}";
+        // Row keys: x order, matches in y order, then y-only rows (x keys NULL sort last).
+        foreach ($xRowKeys as $k) {
+            $items[] = "{$jx}.{$q($k)} AS {$q($k)}";
+        }
+        foreach ($yRowKeys as $k => $as) {
+            $items[] = "{$jy}.{$q($k)} AS {$q($as)}";
+        }
+        $rowKeys = [...$xRowKeys, ...array_values($yRowKeys)];
         $xFrom = $x->fragment();
         if ($closest !== null) {
             // Number x's rows so the closest match can be picked per x row.
-            $xFrom = Fragment::format("SELECT *, ROW_NUMBER() OVER () AS {$q('__phibble_xid')} FROM ({}) AS {$jx}r", [$xFrom]);
-            $items[] = "{$jx}.{$q('__phibble_xid')} AS {$q('__phibble_xid')}";
             $items[] = "{$jy}.{$q($closest[2])} AS {$q('__phibble_r')}";
         }
         $template = 'SELECT '.implode(', ', $items)." FROM ({}) AS {$jx} {$joinSql} ({}) AS {$jy}";
@@ -140,11 +150,11 @@ final class SqlJoin
             $direction = in_array($closest[1], ['>=', '>'], true) ? 'DESC' : 'ASC';
             $r = $q('__phibble_r');
             $ranked = Fragment::format(
-                "SELECT *, RANK() OVER (PARTITION BY {$q('__phibble_xid')} ORDER BY ({$r} IS NULL), {$r} {$direction}) AS {$q('__phibble_rank')} FROM ({}) AS {$jx}c",
+                'SELECT *, RANK() OVER (PARTITION BY '.implode(', ', array_map($q, $xRowKeys))." ORDER BY ({$r} IS NULL), {$r} {$direction}) AS {$q('__phibble_rank')} FROM ({}) AS {$jx}c",
                 [$sql],
             );
             $sql = Fragment::format(
-                'SELECT '.implode(', ', array_map($q, [...$columns, SqlTable::ROW]))." FROM ({}) AS {$jx}k WHERE {$q('__phibble_rank')} = 1",
+                'SELECT '.implode(', ', array_map($q, [...$columns, ...$rowKeys]))." FROM ({}) AS {$jx}k WHERE {$q('__phibble_rank')} = 1",
                 [$ranked],
             );
         }
@@ -154,6 +164,7 @@ final class SqlJoin
             $columns,
             array_values(array_intersect($x->groups(), $columns)),
             $hints,
+            $rowKeys,
         );
     }
 }
