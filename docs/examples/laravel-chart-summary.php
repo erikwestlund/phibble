@@ -2,7 +2,7 @@
 
 require '../examples/support/laravel.php';
 // ---
-use Phiz\Plot;
+use Phit\Plot;
 
 // The grouping and the means run in the database.
 $byYear = Penguin::query()
@@ -21,4 +21,4 @@ $plot = Plot::of($byYear)
     ->labs(title: 'Mean body mass by year', x: 'Year', y: 'Mean body mass (g)');
 
 // ===
-echo "<!--phiz-->\n", Phiz\Html::embed($plot);
+echo "<!--phit-->\n", Phit\Html::embed($plot);
