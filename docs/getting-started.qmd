@@ -14,7 +14,8 @@ use function Phibble\Expr\{col, desc, mean, n};
 ```
 
 `Phibble\Expr` has functions named `min`, `max`, `sum`, `round`, `abs`, `log`,
-and a few others that share names with PHP built-ins. In a file that imports
+`floor`, `str_pad`, `str_split`, `str_replace`, and a few others that share
+names with PHP built-ins. In a file that imports
 them, a bare `round($x)` calls phibble's expression helper. Write `\round($x)`
 for PHP's function.
 

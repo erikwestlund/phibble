@@ -243,6 +243,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#functions" id="toc-functions" class="nav-link" data-scroll-target="#functions">Functions</a>
   <ul class="collapse">
   <li><a href="#scalar-functions" id="toc-scalar-functions" class="nav-link" data-scroll-target="#scalar-functions">Scalar functions</a></li>
+  <li><a href="#text-functions-stringr" id="toc-text-functions-stringr" class="nav-link" data-scroll-target="#text-functions-stringr">Text functions (stringr)</a></li>
+  <li><a href="#dates-and-times-lubridate" id="toc-dates-and-times-lubridate" class="nav-link" data-scroll-target="#dates-and-times-lubridate">Dates and times (lubridate)</a></li>
   <li><a href="#aggregates" id="toc-aggregates" class="nav-link" data-scroll-target="#aggregates">Aggregates</a></li>
   <li><a href="#window-functions" id="toc-window-functions" class="nav-link" data-scroll-target="#window-functions">Window functions</a></li>
   </ul></li>
@@ -495,24 +497,124 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>Casts with R’s <code>as.*()</code> rules.</td>
 </tr>
 <tr class="even">
-<td><code>str_lower</code>, <code>str_upper</code>, <code>str_length</code>, <code>str_trim(x, side:)</code></td>
-<td>Text functions.</td>
-</tr>
-<tr class="odd">
-<td><code>str_sub(x, start, end)</code></td>
-<td>1-based and inclusive. Negative positions count from the end, as in stringr.</td>
-</tr>
-<tr class="even">
-<td><code>str_detect</code>, <code>str_starts</code>, <code>str_ends</code> (with <code>negate:</code>)</td>
-<td>Fixed patterns.</td>
-</tr>
-<tr class="odd">
-<td><code>str_replace</code>, <code>str_replace_all</code></td>
-<td>Fixed patterns. <code>str_replace</code> replaces the first match.</td>
-</tr>
-<tr class="even">
 <td><code>paste0(...)</code>, <code>paste(..., sep:)</code></td>
 <td>NA becomes the text <code>NA</code>, as in R.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="text-functions-stringr" class="level3">
+<h3 class="anchored" data-anchor-id="text-functions-stringr">Text functions (stringr)</h3>
+<p>As in stringr, a pattern given as text is a regular expression. phibble uses PCRE and matches by Unicode character; stringr uses ICU, and the two agree on common patterns. <code>fixed('...')</code> matches the text literally, and <code>regex('...', ignore_case: true)</code> sets options.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>str_detect</code>, <code>str_starts</code>, <code>str_ends</code> (with <code>negate:</code>)</td>
+<td><code>str_starts</code> and <code>str_ends</code> anchor the pattern.</td>
+</tr>
+<tr class="even">
+<td><code>str_count(x, pattern)</code></td>
+<td>Non-overlapping matches.</td>
+</tr>
+<tr class="odd">
+<td><code>str_extract(x, pattern)</code></td>
+<td>The first match, or NA.</td>
+</tr>
+<tr class="even">
+<td><code>str_extract_all(x, pattern)</code>, <code>str_split(x, pattern)</code></td>
+<td>A list-column. NA gives a list holding NA.</td>
+</tr>
+<tr class="odd">
+<td><code>str_split_i(x, pattern, i)</code></td>
+<td>The i-th piece; negative <code>i</code> counts from the end; NA when out of range.</td>
+</tr>
+<tr class="even">
+<td><code>str_replace</code>, <code>str_replace_all</code></td>
+<td><code>\1</code> in the replacement refers to a group. An NA replacement gives NA where the pattern matches.</td>
+</tr>
+<tr class="odd">
+<td><code>str_pad(x, width, side:, pad:)</code></td>
+<td><code>side</code> is <code>left</code> (default), <code>right</code>, or <code>both</code>.</td>
+</tr>
+<tr class="even">
+<td><code>str_trunc(x, width, side:, ellipsis:)</code></td>
+<td><code>side</code> is <code>right</code> (default), <code>left</code>, or <code>center</code>.</td>
+</tr>
+<tr class="odd">
+<td><code>str_to_upper</code>, <code>str_to_lower</code>, <code>str_to_title</code>, <code>str_squish</code></td>
+<td>Title case capitalizes after a hyphen but not after an apostrophe, as ICU does.</td>
+</tr>
+<tr class="even">
+<td><code>str_length</code>, <code>str_trim(x, side:)</code>, <code>str_sub(x, start, end)</code></td>
+<td><code>str_sub</code> is 1-based and inclusive; negative positions count from the end.</td>
+</tr>
+<tr class="odd">
+<td><code>str_lower</code>, <code>str_upper</code></td>
+<td>Aliases of <code>str_to_lower</code> and <code>str_to_upper</code>.</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="dates-and-times-lubridate" class="level3">
+<h3 class="anchored" data-anchor-id="dates-and-times-lubridate">Dates and times (lubridate)</h3>
+<p>Date functions accept dates and datetimes, and a date stays a date: results such as <code>floor_date(d, 'month')</code> or <code>d + days(1)</code> are dates when <code>d</code> is.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ymd</code>, <code>dmy</code>, <code>mdy</code>, <code>ymd_hms</code>, <code>dmy_hms</code>, <code>mdy_hms</code> (with <code>tz:</code>)</td>
+<td>Parse text. Separators are optional; invalid input gives NA.</td>
+</tr>
+<tr class="even">
+<td><code>parse_date_time(x, orders, tz:)</code></td>
+<td>Orders made of <code>Y</code>, <code>y</code>, <code>m</code>, <code>d</code>, <code>H</code>, <code>M</code>, and <code>S</code>, such as <code>'Ymd HMS'</code>; the first that fits wins.</td>
+</tr>
+<tr class="odd">
+<td><code>year</code>, <code>month</code>, <code>day</code>, <code>yday</code>, <code>quarter</code>, <code>hour</code>, <code>minute</code>, <code>second</code></td>
+<td>Parts as numbers.</td>
+</tr>
+<tr class="even">
+<td><code>wday(x, week_start:)</code></td>
+<td>1 is Sunday by default, as in lubridate; <code>week_start: 1</code> makes Monday 1.</td>
+</tr>
+<tr class="odd">
+<td><code>floor_date</code>, <code>ceiling_date</code>, <code>round_date</code> (<code>x, unit, week_start:</code>)</td>
+<td>Units from <code>second</code> to <code>year</code>, with multiples such as <code>'15 minutes'</code>. <code>ceiling_date</code> moves a date that is already on a boundary to the next one, as lubridate does for dates.</td>
+</tr>
+<tr class="even">
+<td><code>seconds</code>, <code>minutes</code>, <code>hours</code>, <code>days</code>, <code>weeks</code>, <code>months</code>, <code>years</code></td>
+<td>Periods, used as <code>col('d')-&gt;add(months(1))</code>. Month and year arithmetic that lands on a date that does not exist gives NA.</td>
+</tr>
+<tr class="odd">
+<td><code>difftime(x, y, units:)</code></td>
+<td>A number in <code>secs</code>, <code>mins</code>, <code>hours</code>, <code>days</code> (default), or <code>weeks</code>. <code>date - date</code> gives days and <code>datetime - datetime</code> seconds.</td>
+</tr>
+<tr class="even">
+<td><code>with_tz(x, tz)</code>, <code>force_tz(x, tz)</code></td>
+<td>The same instant in another zone; the same clock time in another zone (NA for a time the zone skips).</td>
+</tr>
+<tr class="odd">
+<td><code>today(tz:)</code>, <code>now(tz:)</code></td>
+<td>Read <code>Phibble\Expr\Clock</code>, which tests can freeze.</td>
 </tr>
 </tbody>
 </table>

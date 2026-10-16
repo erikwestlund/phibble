@@ -15,7 +15,7 @@ foreach ([new SqliteDialect(), new PostgresDialect(), new MysqlDialect()] as $di
     echo "-- {$dialect->name()}\n";
     $compiler = new Compiler($dialect, mode: 'summary');
     foreach ($expressions as $label => $expr) {
-        echo str_pad($label, 16), $compiler->compile($expr)->sql, "\n";
+        echo \str_pad($label, 16), $compiler->compile($expr)->sql, "\n";
     }
     echo "\n";
 }
