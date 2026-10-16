@@ -15,7 +15,7 @@ use Phibble\Type;
  *
  * - Laravel query and Eloquent builders: toSql(), getBindings() and
  *   getConnection()->getPdo(). Eloquent builders and relations are
- *   unwrapped with getQuery().
+ *   unwrapped with toBase(), so global scopes apply.
  * - Doctrine DBAL QueryBuilder: getSQL() and getParameters(). Pass a PDO
  *   or a DBAL connection to run the SQL through PDO; without one, the
  *   builder runs the query itself.
@@ -25,8 +25,16 @@ final class QuerySource
     /** @param array<string, Type|string> $types */
     public static function fromBuilder(object $builder, ?object $connection = null, array $types = []): Source
     {
-        for ($i = 0; $i < 3 && ! method_exists($builder, 'toSql') && method_exists($builder, 'getQuery'); $i++) {
-            $builder = $builder->getQuery();
+        // Eloquent builders and relations: toBase() applies global scopes
+        // (soft deletes, tenancy); getQuery() would skip them.
+        for ($i = 0; $i < 3 && ! method_exists($builder, 'toSql'); $i++) {
+            if (method_exists($builder, 'toBase')) {
+                $builder = $builder->toBase();
+            } elseif (method_exists($builder, 'getQuery')) {
+                $builder = $builder->getQuery();
+            } else {
+                break;
+            }
         }
 
         if (method_exists($builder, 'toSql') && method_exists($builder, 'getBindings')) {
