@@ -1,2 +1,6 @@
 # CSV fixtures are compared byte for byte (some use CRLF line endings).
 tests/fixtures/** -text
+
+# Other backends (phpolars) run phibble's Expr reference cases from the
+# installed package: keep tests/Support/ExprCases.php and
+# tests/fixtures/expr/ out of export-ignore.
