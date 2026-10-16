@@ -61,6 +61,7 @@ final readonly class SqlTable implements Table
         private array $hints = [],
         private int $depth = 0,
         private array $rowKeys = [self::ROW],
+        private array $text = [],
     ) {}
 
     /** A table (or view) by name. */
@@ -104,9 +105,13 @@ final readonly class SqlTable implements Table
         self::bind($probe, $from->bindings);
         $probe->execute();
         $columns = [];
+        $text = [];
         for ($i = 0; $i < $probe->columnCount(); $i++) {
             $meta = $probe->getColumnMeta($i);
-            $columns[] = $meta === false ? "column{$i}" : $meta['name'];
+            $columns[] = $name = $meta === false ? "column{$i}" : $meta['name'];
+            if ($meta !== false && $dialect->isTextColumn($meta)) {
+                $text[] = $name;
+            }
         }
 
         // The row's position: a stored table's physical row id when it has one
@@ -128,7 +133,7 @@ final readonly class SqlTable implements Table
             ? Fragment::raw("SELECT *, {$physical} AS {$row} FROM {$table}")
             : Fragment::format("SELECT *, ROW_NUMBER() OVER () AS {$row} FROM ({}) AS phibble_source", [$from]);
 
-        return new self($pdo, $dialect, $numbered, $columns);
+        return new self($pdo, $dialect, $numbered, $columns, text: $text);
     }
 
     // ---------------------------------------------------------------
@@ -185,7 +190,7 @@ final readonly class SqlTable implements Table
         $this->check([$name]);
         // Fetch one column but keep the row order, which may use other columns.
         $template = 'SELECT '.$this->dialect->quote($name).' FROM ({}) AS '.$this->alias().' ORDER BY {}';
-        $parts = [$this->from, (new Compiler($this->dialect))->orderBy($this->rowOrder())];
+        $parts = [$this->from, (new Compiler($this->dialect, text: $this->text))->orderBy($this->rowOrder())];
         $rows = $this->run(Fragment::format($template, $parts))->fetchAll(PDO::FETCH_ASSOC);
         $hints = array_intersect_key($this->hints, [$name => true]);
 
@@ -306,7 +311,7 @@ final readonly class SqlTable implements Table
             } catch (Untranslatable) {
                 return $table->collect()->mutate(array_slice($columns, array_search($name, array_keys($columns), true), null, true));
             }
-            $table = $table->withExpression($name, $sql, Compiler::isLogical($expr) ? Type::Bool : null);
+            $table = $table->withExpression($name, $sql, Compiler::isLogical($expr) ? Type::Bool : null, Compiler::isText($expr, $table->text));
         }
 
         return $table;
@@ -344,7 +349,7 @@ final readonly class SqlTable implements Table
             $hints[$newByOld[$c] ?? $c] = $type;
         }
 
-        return $this->wrap($list, $names, order: $order, hints: $hints)
+        return $this->wrap($list, $names, order: $order, hints: $hints, text: array_map(fn (string $c) => $newByOld[$c] ?? $c, $this->text))
             ->withGroups(array_map(fn (string $g) => $newByOld[$g] ?? $g, $this->groups));
     }
 
@@ -360,7 +365,7 @@ final readonly class SqlTable implements Table
             };
         }
         try {
-            (new Compiler($this->dialect))->orderBy($order);
+            (new Compiler($this->dialect, text: $this->text))->orderBy($order);
         } catch (Untranslatable) {
             return $this->collect()->arrange($keys);
         }
@@ -368,7 +373,7 @@ final readonly class SqlTable implements Table
             $this->check($expr->columns());
         }
 
-        return new self($this->pdo, $this->dialect, $this->from, $this->columns, $this->groups, $order, $this->hints, $this->depth, $this->rowKeys);
+        return new self($this->pdo, $this->dialect, $this->from, $this->columns, $this->groups, $order, $this->hints, $this->depth, $this->rowKeys, $this->text);
     }
 
     public function groupBy(array $names, bool $drop = true): Table
@@ -442,23 +447,27 @@ final readonly class SqlTable implements Table
      */
     private function summariseCompiled(array $aggregates, ?string $groups, array $baseHints): Table
     {
-        $compiler = new Compiler($this->dialect, mode: 'summary');
-        $parts = array_map(fn (string $g) => Fragment::raw($this->dialect->quote($g)), $this->groups);
+        $compiler = new Compiler($this->dialect, mode: 'summary', text: $this->text);
+        // Group keys compare in byte order (text) and keep their names.
+        $keys = array_map(fn (string $g) => $compiler->compile(new Col($g)), $this->groups);
+        $parts = array_map(fn (Fragment $k, string $g) => Fragment::format('{} AS '.$this->dialect->quote($g), [$k]), $keys, $this->groups);
         $hints = array_intersect_key($baseHints, array_flip($this->groups));
+        $text = array_values(array_intersect($this->text, $this->groups));
         try {
             foreach ($aggregates as $name => $expr) {
                 $parts[] = Fragment::format('{} AS '.$this->dialect->quote((string) $name), [$compiler->compile($expr)]);
                 if (Compiler::isLogical($expr)) {
                     $hints[(string) $name] = Type::Bool;
                 }
+                if (Compiler::isText($expr, $this->text)) {
+                    $text[] = (string) $name;
+                }
             }
         } catch (Untranslatable) {
             return $this->collect()->summarise($aggregates, $groups);
         }
 
-        $groupBy = $this->groups === []
-            ? null
-            : Fragment::join(', ', array_map(fn (string $g) => Fragment::raw($this->dialect->quote($g)), $this->groups));
+        $groupBy = $this->groups === [] ? null : Fragment::join(', ', $keys);
         $names = [...$this->groups, ...array_map(strval(...), array_keys($aggregates))];
         $order = array_map(fn (string $g) => [new Col($g), false], $this->groups);
 
@@ -469,7 +478,7 @@ final readonly class SqlTable implements Table
             default => throw new InvalidArgumentException("Unknown .groups value '{$groups}'."),
         };
 
-        $grouped = $this->wrap(Fragment::join(', ', $parts), $names, groupBy: $groupBy, order: [], hints: $hints, carryRow: false);
+        $grouped = $this->wrap(Fragment::join(', ', $parts), $names, groupBy: $groupBy, order: [], hints: $hints, carryRow: false, text: $text);
 
         // Rows come out in group order (NA last), as in dplyr.
         return $grouped->renumber($order, hasRow: false)->withGroups($outGroups);
@@ -486,13 +495,15 @@ final readonly class SqlTable implements Table
         $names = $names === [] ? $this->columns : [...array_values(array_diff($this->groups, $names)), ...$names];
         // Keep each combination's first row in the current order, as dplyr does.
         $source = $this->numbered();
-        $list = Fragment::join(', ', array_map(fn (string $n) => Fragment::raw($source->dialect->quote($n)), $names));
+        $compiler = new Compiler($source->dialect, text: $source->text);
+        $keys = array_map(fn (string $n) => $compiler->compile(new Col($n)), $names);
+        $list = Fragment::join(', ', array_map(fn (Fragment $k, string $n) => Fragment::format('{} AS '.$source->dialect->quote($n), [$k]), $keys, $names));
         $row = $source->dialect->quote(self::ROW);
 
         return $source->wrap(
             Fragment::format("{}, MIN({$row}) AS {$row}", [$list]),
             $names,
-            groupBy: $list,
+            groupBy: Fragment::join(', ', $keys),
             order: [],
             carryRow: false,
         );
@@ -504,7 +515,7 @@ final readonly class SqlTable implements Table
         $sql = Fragment::format('{} '.$limit.' OFFSET '.max(0, $offset), [$this->render(withRow: true)]);
         $sql = Fragment::format('SELECT * FROM ({}) AS '.$this->alias(), [$sql]);
 
-        return new self($this->pdo, $this->dialect, $sql, $this->columns, $this->groups, $this->order, $this->hints, $this->depth + 1, $this->rowKeys);
+        return new self($this->pdo, $this->dialect, $sql, $this->columns, $this->groups, $this->order, $this->hints, $this->depth + 1, $this->rowKeys, $this->text);
     }
 
     public function head(int $n = 6): Table
@@ -580,9 +591,15 @@ final readonly class SqlTable implements Table
      * @param list<string> $groups
      * @param array<string, Type> $hints
      */
-    public function derive(Fragment $from, array $columns, array $groups, array $hints, array $rowKeys = [self::ROW]): self
+    public function derive(Fragment $from, array $columns, array $groups, array $hints, array $rowKeys = [self::ROW], ?array $text = null): self
     {
-        return new self($this->pdo, $this->dialect, $from, $columns, $groups, [], $hints, $this->depth + 1, $rowKeys);
+        return new self($this->pdo, $this->dialect, $from, $columns, $groups, [], $hints, $this->depth + 1, $rowKeys, $text ?? array_values(array_intersect($this->text, $columns)));
+    }
+
+    /** @internal @return list<string> Text columns, compared in byte order. */
+    public function text(): array
+    {
+        return $this->text;
     }
 
     /** @internal */
@@ -593,7 +610,7 @@ final readonly class SqlTable implements Table
 
     private function compiler(): Compiler
     {
-        return new Compiler($this->dialect, $this->groups, $this->rowOrder());
+        return new Compiler($this->dialect, $this->groups, $this->rowOrder(), text: $this->text);
     }
 
     /**
@@ -616,7 +633,7 @@ final readonly class SqlTable implements Table
 
         return Fragment::format("SELECT {$list} FROM ({}) AS ".$this->alias().' ORDER BY {}', [
             $this->from,
-            (new Compiler($this->dialect))->orderBy($this->rowOrder()),
+            (new Compiler($this->dialect, text: $this->text))->orderBy($this->rowOrder()),
         ]);
     }
 
@@ -650,7 +667,7 @@ final readonly class SqlTable implements Table
      */
     private function renumber(array $order, bool $hasRow = true): self
     {
-        $compiler = new Compiler($this->dialect);
+        $compiler = new Compiler($this->dialect, text: $this->text);
         $terms = $hasRow ? [...$order, ...array_map(fn (string $k) => [new Col($k), false], $this->rowKeys)] : $order;
         $over = $terms === [] ? Fragment::raw('') : Fragment::format('ORDER BY {}', [$compiler->orderBy($terms)]);
         $list = Fragment::join(', ', array_map(fn (string $n) => Fragment::raw($this->dialect->quote($n)), $this->columns));
@@ -678,6 +695,7 @@ final readonly class SqlTable implements Table
         ?array $hints = null,
         bool $carryRow = true,
         ?array $rowKeys = null,
+        ?array $text = null,
     ): self {
         if ($carryRow) {
             $list = Fragment::format('{}, '.implode(', ', array_map($this->dialect->quote(...), $this->rowKeys)), [$list]);
@@ -704,10 +722,11 @@ final readonly class SqlTable implements Table
             $hints,
             $this->depth + 1,
             $rowKeys ?? $this->rowKeys,
+            $text ?? array_values(array_intersect($this->text, $columns)),
         );
     }
 
-    private function withExpression(string $name, Fragment $sql, ?Type $hint): self
+    private function withExpression(string $name, Fragment $sql, ?Type $hint, bool $isText = false): self
     {
         $exists = in_array($name, $this->columns, true);
         $items = [];
@@ -725,13 +744,18 @@ final readonly class SqlTable implements Table
             $hints[$name] = $hint;
         }
 
-        return $this->wrap(Fragment::join(', ', $items), $exists ? $this->columns : [...$this->columns, $name], hints: $hints);
+        $text = array_values(array_diff($this->text, [$name]));
+        if ($isText) {
+            $text[] = $name;
+        }
+
+        return $this->wrap(Fragment::join(', ', $items), $exists ? $this->columns : [...$this->columns, $name], hints: $hints, text: $text);
     }
 
     /** @param list<string> $groups */
     private function withGroups(array $groups): self
     {
-        return new self($this->pdo, $this->dialect, $this->from, $this->columns, $groups, $this->order, $this->hints, $this->depth, $this->rowKeys);
+        return new self($this->pdo, $this->dialect, $this->from, $this->columns, $groups, $this->order, $this->hints, $this->depth, $this->rowKeys, $this->text);
     }
 
     /**

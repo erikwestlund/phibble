@@ -41,6 +41,17 @@ final class MysqlDialect extends Dialect
         return 'LIMIT 18446744073709551615';
     }
 
+    public function collate(Fragment $x): Fragment
+    {
+        // The default collation is case-insensitive; binary UTF-8 compares code points.
+        return Fragment::format('(CONVERT({} USING utf8mb4) COLLATE utf8mb4_bin)', [$x]);
+    }
+
+    public function isTextColumn(array $meta): bool
+    {
+        return in_array($meta['native_type'] ?? '', ['VAR_STRING', 'STRING', 'BLOB'], true);
+    }
+
     public function datePart(string $part, Fragment $x): Fragment
     {
         return match ($part) {

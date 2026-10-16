@@ -76,6 +76,26 @@ abstract class Dialect
         return $aggregate(Fragment::format($fn === 'sd' ? 'STDDEV_SAMP({})' : 'VAR_SAMP({})', [$x]));
     }
 
+    /**
+     * Text in byte (C) order and case-sensitive, as R compares strings.
+     * Wrapped around text columns wherever values are compared, sorted,
+     * grouped or joined.
+     */
+    public function collate(Fragment $x): Fragment
+    {
+        return $x;
+    }
+
+    /**
+     * Whether a column is text, from PDOStatement::getColumnMeta().
+     *
+     * @param array<string, mixed> $meta
+     */
+    public function isTextColumn(array $meta): bool
+    {
+        return false;
+    }
+
     /** A date part as a number: year, month, day, hour, minute, second, yday, dow (0 = Sunday). */
     abstract public function datePart(string $part, Fragment $x): Fragment;
 

@@ -61,19 +61,26 @@ final class SqlJoin
             }
         }
 
+        // Text keys compare in byte order, case-sensitively, as R does.
+        $side = function (string $alias, string $column, bool $text) use ($q, $dialect): Fragment {
+            $sql = Fragment::raw("{$alias}.{$q($column)}");
+
+            return $text ? $dialect->collate($sql) : $sql;
+        };
+        $isText = fn (string $l, string $r) => in_array($l, $x->text(), true) || in_array($r, $y->text(), true);
         $conditions = [];
         foreach ($pairs as [$l, $r]) {
-            $left = Fragment::raw("{$jx}.{$q($l)}");
-            $right = Fragment::raw("{$jy}.{$q($r)}");
+            $left = $side($jx, $l, $isText($l, $r));
+            $right = $side($jy, $r, $isText($l, $r));
             $conditions[] = $naMatches ? $dialect->nullSafeEquals($left, $right) : Fragment::format('({} = {})', [$left, $right]);
         }
         // With NA matching, NA equals NA: it satisfies >= and <= but not > or <.
         foreach ([...$inequalities, ...($closest ? [$closest] : [])] as [$l, $op, $r]) {
-            $left = "{$jx}.{$q($l)}";
-            $right = "{$jy}.{$q($r)}";
-            $conditions[] = Fragment::raw($naMatches && in_array($op, ['>=', '<='], true)
-                ? "(({$left} {$op} {$right}) OR ({$left} IS NULL AND {$right} IS NULL))"
-                : "({$left} {$op} {$right})");
+            $left = $side($jx, $l, $isText($l, $r));
+            $right = $side($jy, $r, $isText($l, $r));
+            $conditions[] = $naMatches && in_array($op, ['>=', '<='], true)
+                ? Fragment::format("(({} {$op} {}) OR ({} IS NULL AND {} IS NULL))", [$left, $right, $left, $right])
+                : Fragment::format("({} {$op} {})", [$left, $right]);
         }
         $on = $conditions === [] ? null : Fragment::join(' AND ', $conditions);
 
@@ -92,6 +99,7 @@ final class SqlJoin
         $items = [];
         $columns = [];
         $hints = [];
+        $text = [];
         foreach ($x->columns() as $name) {
             $isKey = in_array($name, $xKeys, true);
             $out = ($keep || ! $isKey) && in_array($name, $yOut, true) ? $name.$suffix[0] : $name;
@@ -104,6 +112,9 @@ final class SqlJoin
             if (isset($x->hints()[$name])) {
                 $hints[$out] = $x->hints()[$name];
             }
+            if (in_array($name, $x->text(), true)) {
+                $text[] = $out;
+            }
         }
         foreach ($yOut as $name) {
             $out = in_array($name, $x->columns(), true) ? $name.$suffix[1] : $name;
@@ -114,6 +125,9 @@ final class SqlJoin
             $columns[] = $out;
             if (isset($y->hints()[$name])) {
                 $hints[$out] = $y->hints()[$name];
+            }
+            if (in_array($name, $y->text(), true)) {
+                $text[] = $out;
             }
         }
 
@@ -165,6 +179,7 @@ final class SqlJoin
             array_values(array_intersect($x->groups(), $columns)),
             $hints,
             $rowKeys,
+            $text,
         );
     }
 }

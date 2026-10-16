@@ -380,3 +380,11 @@ it('uses the native reader only when available, supported and not disabled', fun
     expect($native)->toBe(2) // a header probe and the read
         ->and($calls)->toBe(2);
 });
+
+it('reads a byte-order mark before a quoted header and CR line endings, as readr does', function () {
+    $bom = Frame::fromCsvString("\xEF\xBB\xBF\"id\",\"x\"\n1,2\n");
+    $cr = Frame::fromCsvString("a,b\r1,2\r3,4\r");
+
+    expect($bom->columns())->toBe(['id', 'x'])
+        ->and($cr->toColumns())->toBe(['a' => [1, 3], 'b' => [2, 4]]);
+});

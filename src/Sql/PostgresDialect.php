@@ -32,6 +32,16 @@ final class PostgresDialect extends Dialect
         return false;
     }
 
+    public function collate(Fragment $x): Fragment
+    {
+        return Fragment::format('({} COLLATE "C")', [$x]);
+    }
+
+    public function isTextColumn(array $meta): bool
+    {
+        return in_array($meta['native_type'] ?? '', ['text', 'varchar', 'bpchar', 'name', 'citext'], true);
+    }
+
     public function datePart(string $part, Fragment $x): Fragment
     {
         $field = ['year' => 'YEAR', 'month' => 'MONTH', 'day' => 'DAY', 'hour' => 'HOUR', 'minute' => 'MINUTE', 'second' => 'SECOND', 'yday' => 'DOY', 'dow' => 'DOW'][$part];

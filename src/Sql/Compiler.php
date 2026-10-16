@@ -41,15 +41,42 @@ final class Compiler
         private readonly array $groups = [],
         private readonly array $order = [],
         private readonly string $mode = 'row',
+        private readonly array $text = [],
     ) {}
 
     public function compile(Expr $expr): Fragment
     {
         return match (true) {
-            $expr instanceof Col => Fragment::raw($this->dialect->quote($expr->name)),
+            $expr instanceof Col => in_array($expr->name, $this->text, true)
+                ? $this->dialect->collate(Fragment::raw($this->dialect->quote($expr->name)))
+                : Fragment::raw($this->dialect->quote($expr->name)),
             $expr instanceof Lit => $this->literal($expr),
             $expr instanceof Call => $this->call($expr),
             $expr instanceof Desc => throw new Untranslatable('desc() is only allowed in arrange(), ranking functions and order_by.'),
+        };
+    }
+
+    /**
+     * Whether the expression yields text, given the text columns. Used to
+     * carry byte-order collation onto computed columns.
+     *
+     * @param list<string> $text
+     */
+    public static function isText(Expr $expr, array $text): bool
+    {
+        return match (true) {
+            $expr instanceof Col => in_array($expr->name, $text, true),
+            $expr instanceof Lit => is_string($expr->value),
+            $expr instanceof Call => match ($expr->fn) {
+                'str_lower', 'str_upper', 'str_to_lower', 'str_to_upper', 'str_to_title', 'str_trim', 'str_sub',
+                'str_replace', 'str_replace_all', 'str_pad', 'str_trunc', 'str_squish', 'str_extract', 'paste', 'paste0', 'as_string' => true,
+                'min', 'max', 'first', 'last', 'nth', 'lag', 'lead', 'na_if' => self::isText($expr->args[0], $text),
+                'coalesce' => array_any($expr->args, fn (Expr $a) => self::isText($a, $text)),
+                'if_else' => self::isText($expr->args[1], $text) || self::isText($expr->args[2], $text),
+                'case_when' => array_any(array_filter($expr->args, fn ($a, $i) => $i % 2 === 1, ARRAY_FILTER_USE_BOTH), fn (Expr $a) => self::isText($a, $text)),
+                default => false,
+            },
+            default => false,
         };
     }
 
@@ -439,7 +466,7 @@ final class Compiler
 
     private function partition(?Fragment $extra = null): Fragment
     {
-        $terms = array_map(fn (string $g) => Fragment::raw($this->dialect->quote($g)), $this->groups);
+        $terms = array_map(fn (string $g) => $this->compile(new Col($g)), $this->groups);
         if ($extra !== null) {
             $terms[] = $extra;
         }

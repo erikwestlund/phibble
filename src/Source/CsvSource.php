@@ -257,7 +257,7 @@ final readonly class CsvSource implements Source
     private function fastRecords(int $line): Generator
     {
         $o = $this->options;
-        $text = stream_get_contents($this->handle);
+        $text = self::normalize((string) stream_get_contents($this->handle), $line === 0);
         // Without quotes or carriage returns, every line is a record and every
         // delimiter separates fields, so plain splitting gives fgetcsv's result.
         if (! str_contains($text, $o->quote) && ! str_contains($text, "\r")) {
@@ -294,7 +294,7 @@ final readonly class CsvSource implements Source
     private function slowRecords(int $line): Generator
     {
         $o = $this->options;
-        $text = stream_get_contents($this->handle);
+        $text = self::normalize((string) stream_get_contents($this->handle), $line === 0);
         if ($text === false) {
             return;
         }
@@ -394,6 +394,22 @@ final readonly class CsvSource implements Source
             $fields[] = $field;
             yield $line => $fields;
         }
+    }
+
+    /**
+     * Strip a UTF-8 byte-order mark (Excel writes one, even before a quoted
+     * header) and accept old Mac files whose lines end in CR alone.
+     */
+    private static function normalize(string $text, bool $atStart): string
+    {
+        if ($atStart && str_starts_with($text, "\xEF\xBB\xBF")) {
+            $text = substr($text, 3);
+        }
+        if (! str_contains($text, "\n") && str_contains($text, "\r")) {
+            $text = str_replace("\r", "\n", $text);
+        }
+
+        return $text;
     }
 
     private function finish(): void

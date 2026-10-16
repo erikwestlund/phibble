@@ -48,14 +48,19 @@ echo $penguins
 - **Types:** float, int, bool, string, factor (with ordered factors and the
   forcats functions), date, datetime, and list-columns. Casts follow R's
   `as.*()` rules.
-- **Input and output:** CSV with readr's options and type guessing, JSON,
-  PDO queries, Laravel and Doctrine query builders, and Laravel collections.
+- **Input and output:** CSV with readr's options and type guessing (and the
+  php-stats extension's native reader when it is loaded), JSON, PDO queries,
+  Laravel and Doctrine query builders, and Laravel collections.
 - **Verbs:** `select`, `filter`, `mutate`, `arrange`, `groupBy`, `summarise`,
-  `distinct`, `join`, `nest`, and `unnest`, with dplyr 1.1 semantics.
+  `distinct`, joins (including `join_by` comparisons and rolling joins),
+  `nest`, `unnest`, and tidyr's spec-based pivots, with dplyr 1.1 semantics.
 - **Expressions:** `Phibble\Expr` describes computations as inspectable,
-  serializable trees that follow dplyr's semantics.
+  serializable trees that follow dplyr's semantics, with stringr and
+  lubridate basics.
 - **SQL tables:** `SqlTable` compiles verbs to SQL for SQLite, PostgreSQL, and
-  MySQL, like dbplyr.
+  MySQL, like dbplyr. Anything SQL cannot compute exactly runs in memory, so
+  results match `Frame`.
+- **Laravel:** `->toFrame()` and `->phibble()` on queries and collections.
 - **The Table contract:** `Phibble\Contracts\Table` lets other backends, such
   as phpolars, run the same pipelines.
 
@@ -63,7 +68,7 @@ echo $penguins
 
 ```bash
 composer install
-php vendor/bin/pest
+vendor/bin/pest
 ```
 
 See the [development guide](https://erikwestlund.github.io/phibble/development.html)

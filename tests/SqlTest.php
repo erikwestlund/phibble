@@ -47,7 +47,10 @@ function sqlFrom(PDO $pdo, Frame $frame): SqlTable
         $items = [];
         foreach ($row as $name => $value) {
             $type = $frame->type($name);
-            $items[] = 'CAST(? AS '.$castFor($type).')'.($i === 0 ? ' AS '.$quote($name) : '');
+            // Text gets a locale collation (as on a typical Linux server), so the
+            // tests catch comparisons that need byte order to match R.
+            $collate = $type === Type::String && $driver === 'pgsql' ? ' COLLATE "en-x-icu"' : '';
+            $items[] = 'CAST(? AS '.$castFor($type).')'.$collate.($i === 0 ? ' AS '.$quote($name) : '');
             $bindings[] = match (true) {
                 $value instanceof DateTimeInterface => $value->format($type === Type::Date ? 'Y-m-d' : 'Y-m-d H:i:s'),
                 $type === Type::Bool && $value !== null && $driver !== 'pgsql' => (int) $value,
@@ -345,4 +348,24 @@ it('keeps source order on stored tables with physical row ids', function (Closur
         ->and($pipeline($sql)->collect()->ungroup()->toRows())->toBe($pipeline($frame)->ungroup()->toRows())
         ->and($sql->distinct(['g'])->collect()->column('g'))->toBe(['b', 'a', 'c'])
         ->and($sqlJoin->collect()->toRows())->toBe($memoryJoin->toRows());
+})->with('connections');
+
+// R compares strings in C (byte) order and case-sensitively. PostgreSQL's
+// locale collations and MySQL's default (case-insensitive) collation don't.
+it('compares, sorts, groups and joins text in byte order like R', function (Closure $connect) {
+    $pdo = $connect();
+    $frame = Frame::fromColumns(['s' => ['b', 'B', 'a', 'A', '  pad', 'b'], 'v' => [1, 2, 3, 4, 5, 6]]);
+    $sql = sqlFrom($pdo, $frame);
+    $other = Frame::fromColumns(['s' => ['a', 'B'], 'w' => [10, 20]]);
+
+    expect($sql->arrange(['s', 'v'])->collect()->column('s'))->toBe($frame->arrange(['s', 'v'])->column('s'))
+        ->and($sql->filter(col('s')->eq('a'))->collect()->column('v'))->toBe([3])
+        ->and($sql->filter(col('s')->lt('a'))->arrange(['v'])->collect()->column('v'))->toBe([2, 4, 5])
+        ->and($sql->groupBy(['s'])->summarise(['n' => n()])->collect()->toRows())
+        ->toBe($frame->groupBy(['s'])->summarise(['n' => n()])->toRows())
+        ->and($sql->summarise(['m' => Phibble\Expr\max(col('s')), 'lo' => Phibble\Expr\min(col('s'))])->collect()->toRows())
+        ->toBe([['m' => 'b', 'lo' => '  pad']])
+        ->and($sql->distinct(['s'])->collect()->column('s'))->toBe(['b', 'B', 'a', 'A', '  pad'])
+        ->and($sql->join(sqlFrom($pdo, $other), ['s'], 'inner')->arrange(['v'])->collect()->column('v'))->toBe([2, 3])
+        ->and($sql->groupBy(['s'])->mutate(['k' => n()])->arrange(['v'])->collect()->column('k'))->toBe([2, 1, 1, 1, 1, 2]);
 })->with('connections');
