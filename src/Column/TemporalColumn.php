@@ -65,7 +65,15 @@ final readonly class TemporalColumn implements Column
     /** Days since 1970-01-01 for a calendar date. */
     public static function days(int $year, int $month, int $day): int
     {
-        return intdiv(gmmktime(0, 0, 0, $month, $day, $year), 86400);
+        // Howard Hinnant's days_from_civil: exact for every proleptic Gregorian
+        // year, unlike gmmktime(), which reads years 0-100 as two-digit years.
+        $y = $month <= 2 ? $year - 1 : $year;
+        $era = intdiv($y >= 0 ? $y : $y - 399, 400);
+        $yoe = $y - $era * 400;
+        $doy = intdiv(153 * ($month + ($month > 2 ? -3 : 9)) + 2, 5) + $day - 1;
+        $doe = $yoe * 365 + intdiv($yoe, 4) - intdiv($yoe, 100) + $doy;
+
+        return $era * 146097 + $doe - 719468;
     }
 
     /** @return list<?int> Days or microseconds since the epoch. */

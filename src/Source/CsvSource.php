@@ -12,6 +12,7 @@ use Phibble\Io\CsvOptions;
 use Phibble\Io\NativeCsv;
 use Phibble\Io\TextParser;
 use Phibble\NameRepair;
+use Phibble\Type;
 use RuntimeException;
 
 /**
@@ -166,7 +167,8 @@ final readonly class CsvSource implements Source
             }
             $values = $columns[$i];
             if ($spec === null) {
-                $type = $parser->guess(array_map(fn (int $row) => $values[$row], $sample));
+                // readr reads the columns of a header-only file as text.
+                $type = $count === 0 ? Type::String : $parser->guess(array_map(fn (int $row) => $values[$row], $sample));
                 $spec = ['type' => $type, 'number' => false, 'levels' => null, 'ordered' => false];
                 $grouping = true;
             } else {
@@ -268,7 +270,7 @@ final readonly class CsvSource implements Source
             }
             foreach ($lines as $content) {
                 $line++;
-                yield $line => ($content === '' ? null : explode($o->delimiter, $content));
+                yield $line => (trim($content, " \t") === '' ? null : explode($o->delimiter, $content));
             }
 
             return;
@@ -280,7 +282,7 @@ final readonly class CsvSource implements Source
         rewind($memory);
         while (($record = fgetcsv($memory, null, $o->delimiter, $o->quote, '')) !== false) {
             $line++;
-            yield $line => ($record === [null] ? null : $record);
+            yield $line => ($record === [null] || self::blank($record) ? null : $record);
         }
         fclose($memory);
     }
@@ -392,8 +394,14 @@ final readonly class CsvSource implements Source
                 continue;
             }
             $fields[] = $field;
-            yield $line => $fields;
+            yield $line => self::blank($fields) ? null : $fields;
         }
+    }
+
+    /** A line holding only spaces or tabs counts as empty, as in readr. */
+    private static function blank(array $record): bool
+    {
+        return count($record) === 1 && trim((string) $record[0], " \t") === '';
     }
 
     /**

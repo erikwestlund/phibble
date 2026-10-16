@@ -201,7 +201,7 @@ it('reads empty input and header-only files', function () {
     expect($empty->ncol())->toBe(0)
         ->and($header->columns())->toBe(['a', 'b'])
         ->and($header->nrow())->toBe(0)
-        ->and($header->type('a'))->toBe(Type::Bool);
+        ->and($header->type('a'))->toBe(Type::String); // readr reads a header-only file's columns as character
 });
 
 it('repairs names like vctrs', function () {

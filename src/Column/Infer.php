@@ -157,7 +157,12 @@ final class Infer
         [$mantissa, $exponent] = explode('e', sprintf('%.'.($digits - 1).'e', $x));
         $exponent = (int) $exponent;
         $scientific = $mantissa.'e'.($exponent < 0 ? '-' : '+').str_pad((string) abs($exponent), 2, '0', STR_PAD_LEFT);
-        $fixed = sprintf('%.'.max(0, $digits - 1 - $exponent).'f', $x);
+        $places = max(0, $digits - 1 - $exponent);
+        if ($places > 50) {
+            // Fixed notation would be far longer, and sprintf caps precision at 53.
+            return $scientific;
+        }
+        $fixed = sprintf('%.'.$places.'f', $x);
 
         return strlen($fixed) <= strlen($scientific) ? $fixed : $scientific;
     }
@@ -187,6 +192,8 @@ final class Infer
             isset($seen['string']) => Type::String,
             isset($seen['date']) && count($seen) === 1 => Type::Date,
             isset($seen['date'], $seen['datetime']) && count($seen) === 2 => Type::DateTime,
+            // c(Date, 1L) is a Date in R: numbers count days.
+            isset($seen['date']) && array_diff(array_keys($seen), ['date', 'int', 'float', 'bool']) === [] => Type::Date,
             isset($seen['datetime']) => count($seen) === 1 ? Type::DateTime : Type::String,
             isset($seen['float']) => Type::Float,
             isset($seen['int']) => Type::Int,
@@ -276,7 +283,7 @@ final class Infer
                 is_float($value) => self::formatFloat($value),
                 $value instanceof DateTimeInterface => $from === Type::Date || ($from === null && $value->format('H:i:s.u') === '00:00:00.000000')
                     ? $value->format('Y-m-d')
-                    : $value->format('Y-m-d H:i:s'),
+                    : $value->format('Y-m-d H:i:s').(rtrim($value->format('u'), '0') === '' ? '' : '.'.rtrim($value->format('u'), '0')),
                 default => self::$fail,
             },
             Type::Date => match (true) {
@@ -292,7 +299,7 @@ final class Infer
                 $value instanceof DateTimeInterface => DateTimeImmutable::createFromInterface($value),
                 is_string($value) => self::parseDateTime(trim($value)) ?? self::parseDate(trim($value)) ?? self::$fail,
                 is_int($value), is_float($value) => is_finite((float) $value)
-                    ? DateTimeImmutable::createFromFormat('U.u', sprintf('%.6F', $value), new DateTimeZone('UTC')) ?: self::$fail
+                    ? self::fromEpoch((float) $value)
                     : self::$fail,
                 default => self::$fail,
             },
@@ -303,9 +310,23 @@ final class Infer
     /** Days (dates) or seconds (datetimes) since 1970-01-01, as R's as.numeric(). */
     private static function epoch(DateTimeInterface $value, ?Type $from): float
     {
-        $seconds = (float) $value->format('U.u');
+        // getTimestamp() floors; the microseconds then count forward from it.
+        $seconds = $value->getTimestamp() + (int) $value->format('u') / 1e6;
 
         return $from === Type::Date ? floor($seconds / 86400) : $seconds;
+    }
+
+    /** Seconds since the epoch (fraction allowed, negative allowed) as a UTC datetime. */
+    private static function fromEpoch(float $value): DateTimeImmutable
+    {
+        $seconds = (int) floor($value);
+        $micro = (int) round(($value - $seconds) * 1e6);
+        if ($micro === 1_000_000) {
+            $seconds++;
+            $micro = 0;
+        }
+
+        return new DateTimeImmutable('@'.$seconds)->setTimezone(new DateTimeZone('UTC'))->setMicrosecond($micro);
     }
 
     private static function isNumber(string $v): bool

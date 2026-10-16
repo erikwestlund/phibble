@@ -224,23 +224,45 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
                 }
             }
 
-            $types = array_unique(array_map(fn (Column $c) => $c->type()->value, $columns));
-            $data[$name] = match (true) {
-                $types === [Type::Factor->value] => FactorColumn::fromValues(
-                    $values,
-                    count(array_unique(array_map(fn (FactorColumn $c) => serialize($c->levels()), $columns))) === 1
-                        ? $columns[0]->levels()
-                        : null,
-                ),
-                count($types) === 1 => Infer::column($values, $columns[0]->type(), $name),
-                default => Infer::column($values, null, $name),
-            };
+            $data[$name] = self::combine($columns, $values, $name);
         }
 
         $rows = array_sum(array_map(fn (self $f) => $f->rows, $frames));
         $groups = array_values(array_filter($frames[0]->groups, fn (string $g) => in_array($g, $names, true)));
 
-        return new self($data, $rows, $groups);
+        return new self($data, $rows, $groups, false, $frames[0]->drop);
+    }
+
+    /**
+     * One column from several, as vctrs::vec_c() combines them: factors
+     * take the union of levels in order of appearance (and stay ordered
+     * when all share the same levels; ordered factors with different levels
+     * can't combine), factor and text give text, numbers widen to double.
+     *
+     * @param list<Column> $columns The columns present (some tables may lack it).
+     * @param list<mixed> $values All values, in order, with NA for missing tables.
+     */
+    private static function combine(array $columns, array $values, string $name): Column
+    {
+        $types = array_values(array_unique(array_map(fn (Column $c) => $c->type()->value, $columns)));
+        if ($types === [Type::Factor->value]) {
+            $ordered = array_filter($columns, fn (FactorColumn $c) => $c->isOrdered());
+            $sameLevels = count(array_unique(array_map(fn (FactorColumn $c) => serialize($c->levels()), $columns))) === 1;
+            if ($ordered !== [] && ! $sameLevels) {
+                throw new InvalidArgumentException("Can't combine ordered factors with different levels in column '{$name}'.");
+            }
+            $levels = array_values(array_unique(array_merge(...array_map(fn (FactorColumn $c) => $c->levels(), $columns))));
+
+            return FactorColumn::fromValues($values, $levels, count($ordered) === count($columns));
+        }
+        if (in_array(Type::Factor->value, $types, true) && array_diff($types, [Type::Factor->value, Type::String->value]) === []) {
+            return Infer::column($values, Type::String, $name);
+        }
+        if (count($types) === 1) {
+            return Infer::column($values, $columns[0]->type(), $name);
+        }
+
+        return Infer::column($values, null, $name);
     }
 
     // ---------------------------------------------------------------
@@ -313,7 +335,8 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             }
 
             if ($column === null) {
-                $column = Infer::column(array_fill(0, $size, $value), null, $name);
+                // The type comes from the value itself, also when the size is 0.
+                $column = Infer::column(array_fill(0, $size, $value), Infer::column([$value], null, $name)->type(), $name);
             } elseif ($length === 1 && $size !== 1) {
                 $column = $column->take(array_fill(0, $size, 0));
             }
@@ -478,7 +501,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
 
         $stacked = self::concat([$this->ungroup()->slice(0, $position), $new, $this->ungroup()->slice($position)]);
 
-        return $stacked->copy(groups: $this->groups, rowwise: $this->rowwise)->copyColumnsFrom($this);
+        return $stacked->copy(groups: $this->groups, rowwise: $this->rowwise, drop: $this->drop)->copyColumnsFrom($this);
     }
 
     /**
@@ -825,7 +848,8 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
     {
         $frame = $this;
         foreach ($columns as $name => $definition) {
-            $frame = $frame->withColumn((string) $name, $frame->evaluate((string) $name, $definition));
+            $values = $frame->evaluate((string) $name, $definition);
+            $frame = $frame->withColumn((string) $name, $frame->factorResult($definition, $values) ?? $values);
         }
 
         return $frame;
@@ -837,7 +861,8 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         foreach ($columns as $name => $definition) {
             $name = (string) $name;
             if (! $definition instanceof Closure) {
-                $frame = $frame->withColumn($name, $frame->evaluate($name, $definition));
+                $values = $frame->evaluate($name, $definition);
+                $frame = $frame->withColumn($name, $frame->factorResult($definition, $values) ?? $values);
 
                 continue;
             }
@@ -942,17 +967,21 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         $order = $rows === 0 ? [] : range(0, $rows - 1);
         $args = [];
         foreach ($sorts as [$values, $isString, $desc]) {
+            // The rank of missing values: 0 a value, 1 NaN, 2 NA; R sorts NaN after
+            // numbers and NA last, in both directions.
             $missing = [];
             $keys = [];
             $numeric = ! $isString;
+            $allInt = true;
             foreach ($values as $v) {
-                if ($v === null) {
-                    $missing[] = 1;
+                if ($v === null || (is_float($v) && is_nan($v))) {
+                    $missing[] = $v === null ? 2 : 1;
                     $keys[] = $numeric ? 0 : '';
 
                     continue;
                 }
                 $missing[] = 0;
+                $allInt = $allInt && is_int($v);
                 if ($v instanceof DateTimeInterface) {
                     $v = (float) $v->format('U.u');
                 } elseif (is_bool($v)) {
@@ -965,7 +994,13 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
                 }
                 $keys[] = $v;
             }
-            array_push($args, $missing, SORT_ASC, SORT_NUMERIC, $keys, $desc ? SORT_DESC : SORT_ASC, $numeric ? SORT_NUMERIC : SORT_STRING);
+            // Integers compare exactly (SORT_NUMERIC would compare them as doubles).
+            $flag = match (true) {
+                ! $numeric => SORT_STRING,
+                $allInt => SORT_REGULAR,
+                default => SORT_NUMERIC,
+            };
+            array_push($args, $missing, SORT_ASC, SORT_NUMERIC, $keys, $desc ? SORT_DESC : SORT_ASC, $flag);
         }
 
         if ($args === null) {
@@ -1056,6 +1091,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
      */
     public function summarise(array $aggregates, ?string $groups = null): static
     {
+        $definitions = $aggregates;
         $index = $this->groupIndex();
         $first = array_map(fn (array $g) => $g[1][0] ?? null, $index);
 
@@ -1089,7 +1125,8 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             }
         }
         foreach ($results as $name => $values) {
-            $data[(string) $name] = Infer::column($values, null, (string) $name);
+            $data[(string) $name] = $this->factorResult($definitions[$name] ?? null, $values)
+                ?? Infer::column($values, null, (string) $name);
         }
 
         $groups ??= $this->rowwise ? 'keep' : 'drop_last';
@@ -1128,19 +1165,27 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
 
     public function slice(int $offset, ?int $length = null): static
     {
-        $indices = $this->rows === 0 ? [] : array_slice(range(0, $this->rows - 1), $offset, $length);
+        // array_slice() bounds, computed without building every row index.
+        $start = $offset < 0 ? max(0, $this->rows + $offset) : min($offset, $this->rows);
+        $end = match (true) {
+            $length === null => $this->rows,
+            $length < 0 => max($start, $this->rows + $length),
+            default => min($this->rows, $start + $length),
+        };
 
-        return $this->take($indices);
+        return $this->take($start < $end ? range($start, $end - 1) : []);
     }
 
+    /** The first n rows; a negative n drops the last |n| rows, as in R. */
     public function head(int $n = 6): static
     {
-        return $this->slice(0, max(0, $n));
+        return $this->slice(0, $n >= 0 ? $n : max(0, $this->rows + $n));
     }
 
+    /** The last n rows; a negative n drops the first |n| rows, as in R. */
     public function tail(int $n = 6): self
     {
-        return $this->slice(max(0, $this->rows - $n));
+        return $this->slice($n >= 0 ? max(0, $this->rows - $n) : min($this->rows, -$n));
     }
 
     public function take(array $indices): static
@@ -1194,8 +1239,11 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             }
         }
         $names = NameRepair::repair($names, 'unique');
+        $out = Frame::fromColumns(array_combine($names, $columns));
+        // The result keeps the first table's grouping, as bind_cols() does.
+        $groups = $frames === [] ? [] : array_values(array_intersect($frames[0]->groups, $names));
 
-        return Frame::fromColumns(array_combine($names, $columns));
+        return $groups === [] ? $out : $out->groupBy($groups, $frames[0]->drop);
     }
 
     /**
@@ -1280,8 +1328,9 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         }
 
         $tables = array_values(array_filter($parts, fn ($p) => $p !== null));
-        $innerColumns = $tables === [] ? [] : Frame::concat($tables)->columns();
-        $empty = Frame::fromColumns(array_fill_keys($innerColumns, [null]));
+        // An empty row is an NA row of the combined columns, so types and
+        // factor levels carry over.
+        $empty = $tables === [] ? Frame::fromColumns([]) : Frame::concat($tables)->ungroup()->take([null]);
         $stacked = Frame::concat(array_map(fn ($p) => $p ?? $empty, $parts) ?: [Frame::fromColumns([])]);
 
         $data = [];
@@ -1299,7 +1348,10 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             $data[$column] = $storage->take($outer);
         }
 
-        return new self($data, count($outer), array_values(array_intersect($this->groups, array_keys($data))), $this->rowwise);
+        // tidyr's unnest() returns a plain tibble from a rowwise one.
+        return $this->rowwise
+            ? new self($data, count($outer))
+            : new self($data, count($outer), array_values(array_intersect($this->groups, array_keys($data))), false, $this->drop);
     }
 
     // ---------------------------------------------------------------
@@ -1503,6 +1555,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             count($types) <= 1 => $types === [] ? Type::Bool : Type::from($types[0]),
             array_diff($types, ['bool', 'int', 'float']) === [] => in_array('float', $types, true) ? Type::Float : Type::Int,
             array_diff($types, ['date', 'datetime']) === [] => Type::DateTime,
+            array_diff($types, ['factor', 'string']) === [] => Type::String, // vctrs: factor and text give text
             default => throw new InvalidArgumentException(sprintf(
                 "Can't combine `%s` <%s> and `%s` <%s>.",
                 $present[0], $this->data[$present[0]]->type()->abbreviation(),
@@ -1877,9 +1930,11 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             }
         } else {
             for ($i = 0; $i < $this->rows; $i++) {
+                // Length-prefixed parts: values can't run together into another key.
                 $key = '';
                 foreach ($encoded as $column) {
-                    $key .= $column[$i]."\x1F";
+                    $part = (string) $column[$i];
+                    $key .= strlen($part).':'.$part;
                 }
                 $rowsByKey[$key][] = $i;
             }
@@ -1920,7 +1975,8 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
     private function encodeKeys(string $name): array
     {
         $column = $this->data[$name];
-        $na = "\0NA";
+        // NA is a lone NUL; text is prefixed, so no string can equal NA's key.
+        $na = "\0";
         if ($column instanceof FactorColumn) {
             return array_map(fn (?int $c) => $c ?? $na, $column->codes());
         }
@@ -1929,9 +1985,15 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         }
 
         return match ($column->type()) {
-            Type::Int, Type::String => array_map(fn ($v) => $v ?? $na, $column->values()),
+            Type::Int => array_map(fn (?int $v) => $v ?? $na, $column->values()),
+            Type::String => array_map(fn (?string $v) => $v === null ? $na : 's'.$v, $column->values()),
             Type::Bool => array_map(fn (?bool $v) => $v === null ? $na : (int) $v, $column->values()),
-            Type::Float => array_map(fn (?float $v) => $v === null ? $na : 'f'.($v == 0.0 ? '0' : (string) $v), $column->values()),
+            Type::Float => array_map(fn (?float $v) => match (true) {
+                $v === null => $na,
+                is_nan($v) => 'fNaN',
+                $v == 0.0 => 'f0',
+                default => 'f'.var_export($v, true),
+            }, $column->values()),
             Type::Date, Type::DateTime => array_map(fn ($v) => $v === null ? $na : 'd'.$v->format('U.u'), $column->values()),
             default => array_map(fn ($v) => self::hashKey([$v]), $column->values()),
         };
@@ -2027,6 +2089,12 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         if ($x === null || $y === null) {
             return ($x === null) <=> ($y === null);
         }
+        // NaN sorts after numbers and before NA, in both directions.
+        $xNan = is_float($x) && is_nan($x);
+        $yNan = is_float($y) && is_nan($y);
+        if ($xNan || $yNan) {
+            return $xNan <=> $yNan;
+        }
         $cmp = $isString ? strcmp($x, $y) <=> 0 : $x <=> $y;
 
         return $desc ? -$cmp : $cmp;
@@ -2037,6 +2105,8 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
     {
         return serialize(array_map(
             fn ($v) => match (true) {
+                $v === 0.0 => 0.0, // -0.0 equals 0.0, as in R
+                is_float($v) && is_nan($v) => 'NaN',
                 $v instanceof DateTimeInterface => 'date:'.$v->format('Y-m-d\\TH:i:s.uP'),
                 $v instanceof Table => 'table:'.serialize($v->toColumns()),
                 is_object($v) => 'object:'.spl_object_id($v),
@@ -2068,6 +2138,78 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
      *
      * @param list<int> $indices
      */
+    /**
+     * A factor column for an expression that passes a factor's values
+     * through (col(), first(), lag(), if_else() over factors, ...), so the
+     * result stays a factor with the same levels, as in R. Null otherwise.
+     *
+     * @param list<mixed>|Column $values
+     */
+    private function factorResult(mixed $definition, array|Column $values): ?FactorColumn
+    {
+        if (! $definition instanceof Expr || $values instanceof Column) {
+            return null;
+        }
+        $sources = self::passThrough($definition);
+        if ($sources === null || $sources === []) {
+            return null;
+        }
+        $factors = [];
+        foreach (array_unique($sources) as $name) {
+            $column = $this->data[$name] ?? null;
+            if (! $column instanceof FactorColumn) {
+                return null;
+            }
+            $factors[] = $column;
+        }
+        $first = $factors[0];
+        foreach ($factors as $factor) {
+            if ($factor->levels() !== $first->levels() || $factor->isOrdered() !== $first->isOrdered()) {
+                return null;
+            }
+        }
+
+        return FactorColumn::fromValues($values, $first->levels(), $first->isOrdered());
+    }
+
+    /**
+     * The columns whose values an expression returns unchanged, or null when
+     * it computes new values.
+     *
+     * @return list<string>|null
+     */
+    private static function passThrough(Expr $expr): ?array
+    {
+        $all = function (array $exprs): ?array {
+            $names = [];
+            foreach ($exprs as $e) {
+                $part = self::passThrough($e);
+                if ($part === null) {
+                    return null;
+                }
+                array_push($names, ...$part);
+            }
+
+            return $names;
+        };
+
+        return match (true) {
+            $expr instanceof Col => [$expr->name],
+            $expr instanceof Lit => $expr->value === null ? [] : null,
+            $expr instanceof Call => match ($expr->fn) {
+                'first', 'last', 'nth', 'lag', 'lead', 'na_if' => $all([$expr->args[0]]),
+                'if_else' => $all([$expr->args[1], $expr->args[2], ...($expr->option('missing') ? [$expr->option('missing')] : [])]),
+                'coalesce' => $all($expr->args),
+                'case_when' => $all([
+                    ...array_values(array_filter($expr->args, fn ($a, $i) => $i % 2 === 1, ARRAY_FILTER_USE_BOTH)),
+                    ...($expr->option('default') ? [$expr->option('default')] : []),
+                ]),
+                default => null,
+            },
+            default => null,
+        };
+    }
+
     /**
      * An evaluator over the given rows that slices only the columns an
      * expression reads. All rows in order means the whole columns.
@@ -2163,8 +2305,9 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
                 $count++;
                 $acc = match ($expr->fn) {
                     'sum', 'mean' => ($acc ?? 0) + $v,
-                    'min' => $acc === null || $v < $acc ? $v : $acc,
-                    'max' => $acc === null || $v > $acc ? $v : $acc,
+                    // NaN wins once seen, as in R: min(c(1, NaN)) is NaN.
+                    'min' => $acc === null || (is_float($v) && is_nan($v)) || (! (is_float($acc) && is_nan($acc)) && $v < $acc) ? $v : $acc,
+                    'max' => $acc === null || (is_float($v) && is_nan($v)) || (! (is_float($acc) && is_nan($acc)) && $v > $acc) ? $v : $acc,
                 };
             }
             $out[] = match (true) {
