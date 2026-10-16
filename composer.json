@@ -1,0 +1,37 @@
+{
+    "name": "erikwestlund/phibble",
+    "description": "A typed, immutable in-memory data frame for PHP.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.5",
+        "ext-pdo": "*"
+    },
+    "require-dev": {
+        "pestphp/pest": "^4.0"
+    },
+    "suggest": {
+        "ext-pdo_sqlite": "Used by the test suite for the PDO source"
+    },
+    "autoload": {
+        "psr-4": {
+            "Phibble\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "platform": {
+            "php": "8.5.10"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
