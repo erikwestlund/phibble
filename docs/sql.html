@@ -241,6 +241,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#opening-a-table" id="toc-opening-a-table" class="nav-link active" data-scroll-target="#opening-a-table">Opening a table</a></li>
   <li><a href="#what-compiles-to-sql" id="toc-what-compiles-to-sql" class="nav-link" data-scroll-target="#what-compiles-to-sql">What compiles to SQL</a></li>
   <li><a href="#when-the-table-falls-back-to-memory" id="toc-when-the-table-falls-back-to-memory" class="nav-link" data-scroll-target="#when-the-table-falls-back-to-memory">When the table falls back to memory</a></li>
+  <li><a href="#known-differences" id="toc-known-differences" class="nav-link" data-scroll-target="#known-differences">Known differences</a></li>
   <li><a href="#window-functions" id="toc-window-functions" class="nav-link" data-scroll-target="#window-functions">Window functions</a></li>
   <li><a href="#joins" id="toc-joins" class="nav-link" data-scroll-target="#joins">Joins</a></li>
   <li><a href="#dialects" id="toc-dialects" class="nav-link" data-scroll-target="#dialects">Dialects</a></li>
@@ -297,7 +298,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$summary</span>-&gt;collect()<span class="ot">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <pre class="text output"><code>Phibble\Sql\SqlTable
 
-SELECT "species", "n", "mass" FROM (SELECT "species", "n", "mass", ROW_NUMBER() OVER (ORDER BY ("species" IS NULL), "species") AS "__phibble_row" FROM (SELECT "species", COUNT(*) AS "n", AVG(CAST("body_mass" AS REAL)) AS "mass" FROM (SELECT * FROM (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT * FROM "penguins") AS phibble_source) AS q1 WHERE ("year" = ?)) AS q2 GROUP BY "species") AS q3) AS q4 ORDER BY ("__phibble_row" IS NULL), "__phibble_row"
+SELECT "species", "n", "mass" FROM (SELECT "species", "n", "mass", ROW_NUMBER() OVER (ORDER BY ("species" IS NULL), "species") AS "__phibble_row" FROM (SELECT "species" AS "species", COUNT(*) AS "n", (CASE WHEN COUNT("body_mass") = 0 THEN NULL ELSE AVG(CAST("body_mass" AS REAL)) END) AS "mass" FROM (SELECT * FROM (SELECT *, rowid AS "__phibble_row" FROM "penguins") AS q1 WHERE ("year" = ?)) AS q2 GROUP BY "species") AS q3) AS q4 ORDER BY ("__phibble_row" IS NULL), "__phibble_row"
 
 [2008]
 
@@ -335,6 +336,9 @@ SELECT "species", "n", "mass" FROM (SELECT "species", "n", "mass", ROW_NUMBER() 
 <li>parsing text to dates (<code>ymd()</code> and the others) on columns, <code>floor_date()</code>, <code>ceiling_date()</code>, <code>round_date()</code>, period arithmetic, <code>with_tz()</code>, and <code>force_tz()</code>, because the result type depends on the column type, which SQL tables do not track. Date parts (<code>year()</code> and the others), <code>wday()</code>, and <code>difftime()</code> are translated; a call on literals only, such as <code>ymd('2024-01-01')</code>, is evaluated once and passed as a value,</li>
 <li><code>first()</code>, <code>last()</code>, and <code>nth()</code> without a row order (from <code>arrange()</code> or <code>order_by:</code>), or with <code>default:</code> or <code>na_rm:</code>,</li>
 <li><code>iqr()</code> outside PostgreSQL, <code>cumprod()</code>, and <code>consecutive_id()</code>,</li>
+<li><code>sd()</code> and <code>var()</code> in SQLite, whose formula would lose precision,</li>
+<li><code>str_trim()</code>, because R removes all Unicode white space and SQL <code>TRIM</code> removes spaces,</li>
+<li>nested aggregates such as <code>mean(x - mean(x))</code>, <code>summarise()</code> entries that are not one value per group, and <code>slice()</code> with negative positions,</li>
 <li><code>median()</code> and <code>quantile()</code> outside PostgreSQL,</li>
 <li><code>quantile()</code> without <code>na_rm: true</code>,</li>
 <li><code>median()</code>, <code>quantile()</code>, and <code>n_distinct()</code> inside grouped <code>mutate()</code> or <code>filter()</code>, because SQL has no window form of them,</li>
@@ -365,6 +369,17 @@ Phibble\Frame
 2     2   3.5     4</code></pre>
 <p>SQLite compares by storage class, and it orders all text above all numbers. A column declared without a type stores bound values as text, so <code>col('x')-&gt;gt(0)</code> is true for every row of such a column. Declare column types (<code>INTEGER</code>, <code>REAL</code>, <code>TEXT</code>) when creating SQLite tables that phibble will query.</p>
 </section>
+<section id="known-differences" class="level2">
+<h2 class="anchored" data-anchor-id="known-differences">Known differences</h2>
+<p>These cases can differ from <code>Frame</code>, because the database cannot represent R’s result:</p>
+<ul>
+<li>MySQL has no infinity or NaN. Results that are <code>Inf</code>, <code>-Inf</code>, or <code>NaN</code> in R, such as <code>x / 0</code>, <code>log(0)</code>, or <code>mean()</code> of no values, are NA in MySQL. SQLite stores infinities but has no NaN, so <code>NaN</code> is NA there.</li>
+<li>Integer arithmetic beyond 64 bits fails in the database, where <code>Frame</code> switches to a double.</li>
+<li>Joins do not warn about unexpected many-to-many matches.</li>
+<li>Column names starting with <code>__phibble_</code> are reserved for the hidden columns that keep row order and window results.</li>
+</ul>
+<p>Text compares in byte order and case-sensitively, as R does: phibble applies <code>COLLATE "C"</code> in PostgreSQL and <code>utf8mb4_0900_bin</code> in MySQL to text columns wherever values are compared, sorted, grouped, or joined.</p>
+</section>
 <section id="window-functions" class="level2">
 <h2 class="anchored" data-anchor-id="window-functions">Window functions</h2>
 <p>Grouped <code>mutate()</code> and <code>filter()</code> compile aggregates and window functions to <code>OVER (PARTITION BY ...)</code>. Window functions such as <code>lag()</code> and <code>cumsum()</code> need a row order. SQL tables have none, so phibble numbers the rows of the source query when the table is opened and keeps that number through every step. Windows use the <code>order_by:</code> option where given, otherwise the order set by <code>arrange()</code>, and otherwise the source order. The same order decides the order of collected rows and breaks ties after <code>arrange()</code>, which is stable as in dplyr. The source order is the order in which the database returns the source query’s rows. For a stored table, add <code>arrange()</code> to make it explicit.</p>
@@ -385,7 +400,7 @@ Phibble\Frame
 <span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="st">echo $out-&gt;showQuery(), "\n\n";</span></span>
 <span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="st">echo $out-&gt;collect();</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<pre class="text output"><code>SELECT "store", "week", "units", "running", "of_best" FROM (SELECT "store", "week", "units", "running", (CAST("units" AS REAL) / NULLIF(MAX("units") OVER (PARTITION BY "store"), 0)) AS "of_best", "__phibble_row" FROM (SELECT "store", "week", "units", (CASE WHEN COUNT(*) OVER (PARTITION BY "store" ORDER BY ("store" IS NULL), "store", ("week" IS NULL), "week", ("__phibble_row" IS NULL), "__phibble_row" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) &gt; COUNT("units") OVER (PARTITION BY "store" ORDER BY ("store" IS NULL), "store", ("week" IS NULL), "week", ("__phibble_row" IS NULL), "__phibble_row" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) THEN NULL ELSE SUM("units") OVER (PARTITION BY "store" ORDER BY ("store" IS NULL), "store", ("week" IS NULL), "week", ("__phibble_row" IS NULL), "__phibble_row" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) END) AS "running", "__phibble_row" FROM (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT 'a' AS store, 1 AS week, 10 AS units
+<pre class="text output"><code>SELECT "store", "week", "units", "running", "of_best" FROM (SELECT "store", "week", "units", "running", (CASE WHEN (CASE WHEN COUNT("units") OVER (PARTITION BY "store") = 0 THEN -9e999 ELSE MAX("units") OVER (PARTITION BY "store") END) = 0 THEN (CASE WHEN "units" &gt; 0 THEN 9e999 WHEN "units" &lt; 0 THEN -9e999 WHEN "units" = 0 THEN NULL END) ELSE CAST("units" AS REAL) / (CASE WHEN COUNT("units") OVER (PARTITION BY "store") = 0 THEN -9e999 ELSE MAX("units") OVER (PARTITION BY "store") END) END) AS "of_best", "__phibble_row" FROM (SELECT "store", "week", "units", (CASE WHEN COUNT(*) OVER (PARTITION BY "store" ORDER BY ("store" IS NULL), "store", ("week" IS NULL), "week", ("__phibble_row" IS NULL), "__phibble_row" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) &gt; COUNT("units") OVER (PARTITION BY "store" ORDER BY ("store" IS NULL), "store", ("week" IS NULL), "week", ("__phibble_row" IS NULL), "__phibble_row" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) THEN NULL ELSE SUM("units") OVER (PARTITION BY "store" ORDER BY ("store" IS NULL), "store", ("week" IS NULL), "week", ("__phibble_row" IS NULL), "__phibble_row" ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) END) AS "running", "__phibble_row" FROM (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT 'a' AS store, 1 AS week, 10 AS units
 UNION ALL SELECT 'a', 2, 14 UNION ALL SELECT 'a', 3, 9
 UNION ALL SELECT 'b', 1, 7 UNION ALL SELECT 'b', 2, NULL) AS phibble_source) AS q1) AS q2) AS q3 ORDER BY ("store" IS NULL), "store", ("week" IS NULL), "week", ("__phibble_row" IS NULL), "__phibble_row"
 
@@ -410,7 +425,7 @@ UNION ALL SELECT 'b', 1, 7 UNION ALL SELECT 'b', 2, NULL) AS phibble_source) AS 
 <span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$joined</span>-&gt;showQuery()<span class="ot">,</span> <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span><span class="ot">;</span></span>
 <span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$joined</span>-&gt;arrange([<span class="st">'bp'</span>])-&gt;collect()<span class="ot">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<pre class="text output"><code>SELECT "clinic_id", "bp", "name" FROM (SELECT jq1x."clinic_id" AS "clinic_id", jq1x."bp" AS "bp", jq1y."name" AS "name", ROW_NUMBER() OVER (ORDER BY (jq1x."__phibble_row" IS NULL), jq1x."__phibble_row", (jq1y."__phibble_row" IS NULL), jq1y."__phibble_row") AS "__phibble_row" FROM (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT 1 AS clinic_id, 120 AS bp UNION ALL SELECT 2, 135 UNION ALL SELECT NULL, 128) AS phibble_source) AS jq1x LEFT JOIN (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT 1 AS id, 'north' AS name UNION ALL SELECT NULL, 'unassigned') AS phibble_source) AS jq1y ON (jq1x."clinic_id" IS jq1y."id")) AS q2 ORDER BY ("__phibble_row" IS NULL), "__phibble_row"
+<pre class="text output"><code>SELECT "clinic_id", "bp", "name" FROM (SELECT jq1x."clinic_id" AS "clinic_id", jq1x."bp" AS "bp", jq1y."name" AS "name", jq1x."__phibble_row" AS "__phibble_row", jq1y."__phibble_row" AS "__phibble_row_1" FROM (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT 1 AS clinic_id, 120 AS bp UNION ALL SELECT 2, 135 UNION ALL SELECT NULL, 128) AS phibble_source) AS jq1x LEFT JOIN (SELECT *, ROW_NUMBER() OVER () AS "__phibble_row" FROM (SELECT 1 AS id, 'north' AS name UNION ALL SELECT NULL, 'unassigned') AS phibble_source) AS jq1y ON (jq1x."clinic_id" IS jq1y."id")) AS q2 ORDER BY ("__phibble_row" IS NULL), "__phibble_row", ("__phibble_row_1" IS NULL), "__phibble_row_1"
 
 # A tibble: 3 × 3
   clinic_id    bp name      
@@ -446,20 +461,20 @@ UNION ALL SELECT 'b', 1, 7 UNION ALL SELECT 'b', 2, NULL) AS phibble_source) AS 
 <span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a><span class="va">$window</span> <span class="op">=</span> <span class="kw">new</span> Compiler(<span class="kw">new</span> PostgresDialect()<span class="ot">,</span> groups<span class="ot">:</span> [<span class="st">'clinic'</span>]<span class="ot">,</span> order<span class="ot">:</span> [[col(<span class="st">'visit'</span>)<span class="ot">,</span> <span class="kw">false</span>]])<span class="ot">;</span></span>
 <span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$window</span>-&gt;compile(cumsum(col(<span class="st">'bp'</span>)))-&gt;sql<span class="ot">,</span> <span class="st">"</span><span class="sc">\n</span><span class="st">"</span><span class="ot">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <pre class="text output"><code>-- SQLite
-mean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT("bp") THEN NULL ELSE AVG(CAST("bp" AS REAL)) END)
-ratio           (CAST("bp" AS REAL) / NULLIF("baseline", 0))
+mean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT("bp") THEN NULL ELSE (CASE WHEN COUNT("bp") = 0 THEN NULL ELSE AVG(CAST("bp" AS REAL)) END) END)
+ratio           (CASE WHEN "baseline" = 0 THEN (CASE WHEN "bp" &gt; 0 THEN 9e999 WHEN "bp" &lt; 0 THEN -9e999 WHEN "bp" = 0 THEN NULL END) ELSE CAST("bp" AS REAL) / "baseline" END)
 contains        (INSTR("name", ?) &gt; 0)
 in, with NA     (COALESCE("arm" IN (?), FALSE) OR "arm" IS NULL)
 
 -- PostgreSQL
-mean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT("bp") THEN NULL ELSE AVG(CAST("bp" AS DOUBLE PRECISION)) END)
-ratio           (CAST("bp" AS DOUBLE PRECISION) / NULLIF("baseline", 0))
+mean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT("bp") THEN NULL ELSE (CASE WHEN COUNT("bp") = 0 THEN 'NaN'::float8 ELSE AVG(CAST("bp" AS DOUBLE PRECISION)) END) END)
+ratio           (CASE WHEN "baseline" = 0 THEN (CASE WHEN "bp" &gt; 0 THEN 'Infinity'::float8 WHEN "bp" &lt; 0 THEN '-Infinity'::float8 WHEN "bp" = 0 THEN 'NaN'::float8 END) ELSE CAST("bp" AS DOUBLE PRECISION) / "baseline" END)
 contains        (POSITION(? IN "name") &gt; 0)
 in, with NA     (COALESCE("arm" IN (?), FALSE) OR "arm" IS NULL)
 
 -- MySQL
-mean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT(`bp`) THEN NULL ELSE AVG(CAST(`bp` AS DOUBLE)) END)
-ratio           (CAST(`bp` AS DOUBLE) / NULLIF(`baseline`, 0))
+mean, NA aware  (CASE WHEN COUNT(*) &gt; COUNT(`bp`) THEN NULL ELSE (CASE WHEN COUNT(`bp`) = 0 THEN NULL ELSE AVG(CAST(`bp` AS DOUBLE)) END) END)
+ratio           (CASE WHEN `baseline` = 0 THEN (CASE WHEN `bp` &gt; 0 THEN NULL WHEN `bp` &lt; 0 THEN NULL WHEN `bp` = 0 THEN NULL END) ELSE CAST(`bp` AS DOUBLE) / `baseline` END)
 contains        (LOCATE(?, `name`) &gt; 0)
 in, with NA     (COALESCE(`arm` IN (?), FALSE) OR `arm` IS NULL)
 
