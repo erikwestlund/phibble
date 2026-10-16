@@ -55,6 +55,20 @@ match `Frame` in either case. The fallbacks are:
 - `as_string()` and `as_bool()`,
 - `paste()` and `paste0()` with arguments other than text literals, because SQL
   formats numbers differently from R,
+- regular-expression patterns, except `str_detect()` in MySQL (which uses ICU,
+  as stringr does). Patterns wrapped in `fixed()`, and plain patterns without
+  regular-expression characters, are translated everywhere,
+- `str_extract()`, `str_extract_all()`, `str_split()`, `str_split_i()`,
+  `str_to_title()`, center `str_trunc()`, and `str_pad(side: 'both')`;
+  `str_pad()` and `str_squish()` in SQLite; `str_to_upper()` and
+  `str_to_lower()` in SQLite, whose `UPPER()` and `LOWER()` change only ASCII
+  letters,
+- parsing text to dates (`ymd()` and the others) on columns, `floor_date()`,
+  `ceiling_date()`, `round_date()`, period arithmetic, `with_tz()`, and
+  `force_tz()`, because the result type depends on the column type, which SQL
+  tables do not track. Date parts (`year()` and the others), `wday()`, and
+  `difftime()` are translated; a call on literals only, such as
+  `ymd('2024-01-01')`, is evaluated once and passed as a value,
 - `first()`, `last()`, and `nth()` without a row order (from `arrange()` or
   `order_by:`), or with `default:` or `na_rm:`,
 - `iqr()` outside PostgreSQL, `cumprod()`, and `consecutive_id()`,

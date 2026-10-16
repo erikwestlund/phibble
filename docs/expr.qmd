@@ -87,11 +87,45 @@ Scalar functions return one value per row.
 | `abs`, `sqrt`, `exp`, `log(x, base:)`, `log10`, `floor`, `ceiling` | Math functions. |
 | `round(x, digits:)` | Rounds as R 4 does. |
 | `as_int`, `as_float`, `as_string`, `as_bool` | Casts with R's `as.*()` rules. |
-| `str_lower`, `str_upper`, `str_length`, `str_trim(x, side:)` | Text functions. |
-| `str_sub(x, start, end)` | 1-based and inclusive. Negative positions count from the end, as in stringr. |
-| `str_detect`, `str_starts`, `str_ends` (with `negate:`) | Fixed patterns. |
-| `str_replace`, `str_replace_all` | Fixed patterns. `str_replace` replaces the first match. |
 | `paste0(...)`, `paste(..., sep:)` | NA becomes the text `NA`, as in R. |
+
+### Text functions (stringr)
+
+As in stringr, a pattern given as text is a regular expression. phibble uses
+PCRE and matches by Unicode character; stringr uses ICU, and the two agree on
+common patterns. `fixed('...')` matches the text literally, and
+`regex('...', ignore_case: true)` sets options.
+
+| Function | Notes |
+| --- | --- |
+| `str_detect`, `str_starts`, `str_ends` (with `negate:`) | `str_starts` and `str_ends` anchor the pattern. |
+| `str_count(x, pattern)` | Non-overlapping matches. |
+| `str_extract(x, pattern)` | The first match, or NA. |
+| `str_extract_all(x, pattern)`, `str_split(x, pattern)` | A list-column. NA gives a list holding NA. |
+| `str_split_i(x, pattern, i)` | The i-th piece; negative `i` counts from the end; NA when out of range. |
+| `str_replace`, `str_replace_all` | `\1` in the replacement refers to a group. An NA replacement gives NA where the pattern matches. |
+| `str_pad(x, width, side:, pad:)` | `side` is `left` (default), `right`, or `both`. |
+| `str_trunc(x, width, side:, ellipsis:)` | `side` is `right` (default), `left`, or `center`. |
+| `str_to_upper`, `str_to_lower`, `str_to_title`, `str_squish` | Title case capitalizes after a hyphen but not after an apostrophe, as ICU does. |
+| `str_length`, `str_trim(x, side:)`, `str_sub(x, start, end)` | `str_sub` is 1-based and inclusive; negative positions count from the end. |
+| `str_lower`, `str_upper` | Aliases of `str_to_lower` and `str_to_upper`. |
+
+### Dates and times (lubridate)
+
+Date functions accept dates and datetimes, and a date stays a date: results
+such as `floor_date(d, 'month')` or `d + days(1)` are dates when `d` is.
+
+| Function | Notes |
+| --- | --- |
+| `ymd`, `dmy`, `mdy`, `ymd_hms`, `dmy_hms`, `mdy_hms` (with `tz:`) | Parse text. Separators are optional; invalid input gives NA. |
+| `parse_date_time(x, orders, tz:)` | Orders made of `Y`, `y`, `m`, `d`, `H`, `M`, and `S`, such as `'Ymd HMS'`; the first that fits wins. |
+| `year`, `month`, `day`, `yday`, `quarter`, `hour`, `minute`, `second` | Parts as numbers. |
+| `wday(x, week_start:)` | 1 is Sunday by default, as in lubridate; `week_start: 1` makes Monday 1. |
+| `floor_date`, `ceiling_date`, `round_date` (`x, unit, week_start:`) | Units from `second` to `year`, with multiples such as `'15 minutes'`. `ceiling_date` moves a date that is already on a boundary to the next one, as lubridate does for dates. |
+| `seconds`, `minutes`, `hours`, `days`, `weeks`, `months`, `years` | Periods, used as `col('d')->add(months(1))`. Month and year arithmetic that lands on a date that does not exist gives NA. |
+| `difftime(x, y, units:)` | A number in `secs`, `mins`, `hours`, `days` (default), or `weeks`. `date - date` gives days and `datetime - datetime` seconds. |
+| `with_tz(x, tz)`, `force_tz(x, tz)` | The same instant in another zone; the same clock time in another zone (NA for a time the zone skips). |
+| `today(tz:)`, `now(tz:)` | Read `Phibble\Expr\Clock`, which tests can freeze. |
 
 ### Aggregates
 

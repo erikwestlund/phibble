@@ -36,6 +36,8 @@ function sqlFrom(PDO $pdo, Frame $frame): SqlTable
         Type::Int => ['sqlite' => 'INTEGER', 'pgsql' => 'BIGINT', 'mysql' => 'SIGNED'][$driver],
         Type::Float => ['sqlite' => 'REAL', 'pgsql' => 'DOUBLE PRECISION', 'mysql' => 'DOUBLE'][$driver],
         Type::Bool => ['sqlite' => 'INTEGER', 'pgsql' => 'BOOLEAN', 'mysql' => 'SIGNED'][$driver],
+        Type::Date => ['sqlite' => 'TEXT', 'pgsql' => 'DATE', 'mysql' => 'DATE'][$driver],
+        Type::DateTime => ['sqlite' => 'TEXT', 'pgsql' => 'TIMESTAMP', 'mysql' => 'DATETIME'][$driver],
         default => ['sqlite' => 'TEXT', 'pgsql' => 'TEXT', 'mysql' => 'CHAR'][$driver],
     };
     $quote = fn (string $n) => $driver === 'mysql' ? "`{$n}`" : "\"{$n}\"";
@@ -46,7 +48,11 @@ function sqlFrom(PDO $pdo, Frame $frame): SqlTable
         foreach ($row as $name => $value) {
             $type = $frame->type($name);
             $items[] = 'CAST(? AS '.$castFor($type).')'.($i === 0 ? ' AS '.$quote($name) : '');
-            $bindings[] = $type === Type::Bool && $value !== null && $driver !== 'pgsql' ? (int) $value : $value;
+            $bindings[] = match (true) {
+                $value instanceof DateTimeInterface => $value->format($type === Type::Date ? 'Y-m-d' : 'Y-m-d H:i:s'),
+                $type === Type::Bool && $value !== null && $driver !== 'pgsql' => (int) $value,
+                default => $value,
+            };
         }
         $selects[] = 'SELECT '.implode(', ', $items);
     }
@@ -279,4 +285,29 @@ it('keeps row order through select and distinct after arrange', function (Closur
         ->and($sql->arrange([desc(col('i'))])->distinct(['g'])->collect()->column('g'))
         ->toBe(exprFrame()->arrange([desc(col('i'))])->distinct(['g'])->column('g'))
         ->and($sql->distinct(['g'])->collect()->column('g'))->toBe(['a', 'b', null]);
+})->with('connections');
+
+// The lubridate and stringr reference cases through SQL: translated or
+// evaluated in memory, the results must match R.
+it('matches lubridate and stringr in SQL', function (Closure $connect) {
+    $pdo = $connect();
+    $failures = [];
+    $native = [];
+    foreach (lubridateStringrCases() as $case => [$frame, $expr]) {
+        $source = $frame();
+        if ($source->columns() === ['v'] || in_array($case, ['force_tz', 'with_tz', 'floor_week'], true)) {
+            continue; // text-to-date parsing and time zones are covered in memory
+        }
+        $lazy = sqlFrom($pdo, $source->mutate(['i' => range(1, $source->nrow())]))->arrange(['i'])->mutate(['out' => $expr]);
+        [$got] = quietly(fn () => $lazy->collect()->column('out'));
+        if ($lazy instanceof SqlTable) {
+            $native[] = $case;
+        }
+        if (lsFormat($got) !== lsFormat(lsExpected($case))) {
+            $failures[$case] = ['got' => lsFormat($got), 'want' => lsExpected($case), 'native' => $lazy instanceof SqlTable];
+        }
+    }
+
+    expect($failures)->toBe([])
+        ->and($native)->toContain('year', 'month', 'wday', 'difftime_hours', 'str_count_fixed', 'str_trunc');
 })->with('connections');

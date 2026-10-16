@@ -41,6 +41,32 @@ final class MysqlDialect extends Dialect
         return 'LIMIT 18446744073709551615';
     }
 
+    public function datePart(string $part, Fragment $x): Fragment
+    {
+        return match ($part) {
+            'second' => Fragment::format('(SECOND({}) + CAST(MICROSECOND({}) AS DOUBLE) / 1000000)', [$x, $x]),
+            'dow' => Fragment::format('(DAYOFWEEK({}) - 1)', [$x]),
+            default => Fragment::format(['year' => 'YEAR', 'month' => 'MONTH', 'day' => 'DAY', 'hour' => 'HOUR', 'minute' => 'MINUTE', 'yday' => 'DAYOFYEAR'][$part].'({})', [$x]),
+        };
+    }
+
+    public function secondsBetween(Fragment $x, Fragment $y): Fragment
+    {
+        // DOUBLE first: MySQL's decimal division keeps only a few decimals.
+        return Fragment::format('(CAST(TIMESTAMPDIFF(MICROSECOND, {}, {}) AS DOUBLE) / 1000000)', [$y, $x]);
+    }
+
+    public function squish(Fragment $x): Fragment
+    {
+        return Fragment::format("TRIM(REGEXP_REPLACE({}, '[[:space:]]+', ' '))", [$x]);
+    }
+
+    /** MySQL 8 uses ICU regular expressions, as stringr does. */
+    public function regexMatch(Fragment $x, string $regex, bool $ignoreCase): Fragment
+    {
+        return Fragment::format('REGEXP_LIKE({}, {}, {})', [$x, Fragment::param($regex), Fragment::param($ignoreCase ? 'i' : 'c')]);
+    }
+
     public function supportsFullJoin(): bool
     {
         return false;

@@ -121,6 +121,17 @@ final class Compiler
             return $this->window($call);
         }
 
+        // A call on literals only (ymd('2024-01-01'), today()) is evaluated now and inlined.
+        if (($folded = $this->fold($call)) !== null) {
+            return $folded;
+        }
+
+        // Arithmetic and comparisons on dates differ between SQL dialects (SQLite
+        // stores text), so date-valued operands are evaluated in memory.
+        if (in_array($fn, ['+', '-', '*', '/', '%%', '^'], true) && array_any($call->args, self::isTemporal(...))) {
+            throw new Untranslatable('Date arithmetic is evaluated in memory; use difftime() or date parts in SQL.');
+        }
+
         $a = fn (int $i) => $this->compile($call->args[$i]);
         $args = fn () => array_map(fn (Expr $e) => $this->compile($e), $call->args);
         $float = $this->dialect->castType('float');
@@ -161,12 +172,26 @@ final class Compiler
             'as_float' => Fragment::format("CAST({} AS {$float})", [$a(0)]),
             'as_string' => throw new Untranslatable('as_string() formats numbers differently in SQL.'),
             'as_bool' => throw new Untranslatable('as_bool() has no portable SQL translation.'),
-            'str_lower' => Fragment::format('LOWER({})', [$a(0)]),
-            'str_upper' => Fragment::format('UPPER({})', [$a(0)]),
+            'str_lower', 'str_to_lower' => $this->dialect->unicodeCase()
+                ? Fragment::format('LOWER({})', [$a(0)])
+                : throw new Untranslatable("{$this->dialect->name()} only lower-cases ASCII letters."),
+            'str_upper', 'str_to_upper' => $this->dialect->unicodeCase()
+                ? Fragment::format('UPPER({})', [$a(0)])
+                : throw new Untranslatable("{$this->dialect->name()} only upper-cases ASCII letters."),
+            'str_count' => $this->strCount($a(0), $this->literalPattern($call->args[1])),
+            'str_trunc' => $this->strTrunc($call),
+            'str_pad' => $this->strPad($call),
+            'str_squish' => $this->dialect->squish($a(0)),
+            'year', 'month', 'day', 'hour', 'minute', 'second', 'yday' => $this->dialect->datePart($fn, $a(0)),
+            'quarter' => Fragment::format('(FLOOR(({} - 1) / 3.0) + 1)', [$this->dialect->datePart('month', $a(0))]),
+            'wday' => $this->wday($call),
+            'difftime' => $this->difftime($call),
             'str_length' => $this->dialect->length($a(0)),
             'str_trim' => $this->trim($call),
             'str_sub' => $this->substring($call),
-            'str_detect' => $this->negate($call, Fragment::format('({} > 0)', [$this->dialect->position($a(0), $this->literalPattern($call->args[1]))])),
+            'str_detect' => $this->negate($call, $this->isLiteralPattern($call->args[1])
+                ? Fragment::format('({} > 0)', [$this->dialect->position($a(0), $this->literalPattern($call->args[1]))])
+                : $this->regexTest($a(0), $call->args[1], '', '')),
             'str_starts' => $this->negate($call, Fragment::format('(SUBSTR({}, 1, {}) = {})', [
                 $a(0), $this->dialect->length($this->literalPattern($call->args[1])), $this->literalPattern($call->args[1]),
             ])),
@@ -178,6 +203,7 @@ final class Compiler
             'str_replace_all' => Fragment::format('REPLACE({}, {}, {})', [$a(0), $this->literalPattern($call->args[1]), $this->replacement($call->args[2])]),
             'paste0' => $this->paste($call->args, null),
             'paste' => $this->paste($call->args, $call->option('sep') ?? new Lit(' ')),
+            default => throw new Untranslatable("{$fn}() is evaluated in memory."),
         };
     }
 
@@ -482,6 +508,126 @@ final class Compiler
             return Fragment::format("SUBSTR({}, {$s}, ".($e - $s + 1).')', [$x]);
         }
         throw new Untranslatable('str_sub() with negative or crossing positions is not translated.');
+    }
+
+    /** Whether an expression yields a date, datetime or period. */
+    private static function isTemporal(Expr $expr): bool
+    {
+        return ($expr instanceof Lit && $expr->value instanceof \DateTimeInterface)
+            || ($expr instanceof Call && in_array($expr->fn, [
+                'ymd', 'dmy', 'mdy', 'ymd_hms', 'dmy_hms', 'mdy_hms', 'parse_date_time', 'floor_date', 'ceiling_date',
+                'round_date', 'with_tz', 'force_tz', 'today', 'now', 'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years',
+            ], true));
+    }
+
+    /** Evaluate a call whose arguments are all literals; null when it can't be inlined. */
+    private function fold(Call $call): ?Fragment
+    {
+        if (in_array($call->fn, ['fixed', 'regex', 'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years', 'in'], true)) {
+            return null;
+        }
+        foreach ([...$call->args, ...array_values($call->named)] as $arg) {
+            if (! $arg instanceof Lit || is_array($arg->value)) {
+                return null;
+            }
+        }
+        $value = \Phibble\Expr\Evaluator::over(fn () => [], 1)->scalar($call);
+
+        return match (true) {
+            $value === null, is_scalar($value) => $this->literal(new Lit($value)),
+            $value instanceof \DateTimeInterface => $this->literal(new Lit($value)),
+            default => null,
+        };
+    }
+
+    private function isLiteralPattern(Expr $pattern): bool
+    {
+        try {
+            $this->literalPattern($pattern);
+
+            return true;
+        } catch (Untranslatable) {
+            return false;
+        }
+    }
+
+    /** A regex test where the dialect matches stringr's regex flavour. */
+    private function regexTest(Fragment $x, Expr $pattern, string $prefix, string $suffix): Fragment
+    {
+        [$regex, $ignoreCase] = match (true) {
+            $pattern instanceof Lit && is_string($pattern->value) => [$pattern->value, false],
+            $pattern instanceof Call && $pattern->fn === 'regex' && $pattern->args[0] instanceof Lit && is_string($pattern->args[0]->value) => [
+                $pattern->args[0]->value,
+                $pattern->option('ignore_case') instanceof Lit && $pattern->option('ignore_case')->value === true,
+            ],
+            default => throw new Untranslatable('Only literal patterns are translated to SQL.'),
+        };
+
+        return $this->dialect->regexMatch($x, $prefix.'(?:'.$regex.')'.$suffix, $ignoreCase);
+    }
+
+    /** Non-overlapping occurrences of a literal pattern. */
+    private function strCount(Fragment $x, Fragment $pattern): Fragment
+    {
+        return Fragment::format('CAST((({} - {}) / {}) AS '.$this->dialect->castType('int').')', [
+            $this->dialect->length($x),
+            $this->dialect->length(Fragment::format("REPLACE({}, {}, '')", [$x, $pattern])),
+            Fragment::format('NULLIF({}, 0)', [$this->dialect->length($pattern)]),
+        ]);
+    }
+
+    private function strTrunc(Call $call): Fragment
+    {
+        $width = $call->args[1];
+        $side = $call->option('side') instanceof Lit ? $call->option('side')->value : 'right';
+        $ellipsis = $call->option('ellipsis') instanceof Lit ? $call->option('ellipsis')->value : '...';
+        if (! $width instanceof Lit || ! is_int($width->value) || ! is_string($ellipsis) || ! in_array($side, ['right', 'left'], true)) {
+            throw new Untranslatable('str_trunc() needs a literal width and ellipsis, and side right or left, in SQL.');
+        }
+        $x = $this->compile($call->args[0]);
+        $keep = max(0, $width->value - mb_strlen($ellipsis));
+        $length = $this->dialect->length($x);
+        $cut = $side === 'right'
+            ? $this->dialect->concat([Fragment::format("SUBSTR({}, 1, {$keep})", [$x]), Fragment::param($ellipsis)])
+            : $this->dialect->concat([Fragment::param($ellipsis), Fragment::format("SUBSTR({}, {} - {$keep} + 1)", [$x, $length])]);
+
+        return Fragment::format("(CASE WHEN {} > {$width->value} THEN {} ELSE {} END)", [$length, $cut, $x]);
+    }
+
+    private function strPad(Call $call): Fragment
+    {
+        $width = $call->args[1];
+        $side = $call->option('side') instanceof Lit ? $call->option('side')->value : 'left';
+        $pad = $call->option('pad') instanceof Lit ? $call->option('pad')->value : ' ';
+        if (! $this->dialect->hasPad() || ! $width instanceof Lit || ! is_int($width->value) || ! is_string($pad) || mb_strlen($pad) !== 1 || ! in_array($side, ['left', 'right'], true)) {
+            throw new Untranslatable('str_pad() is translated with LPAD/RPAD, a literal width and a one-character pad.');
+        }
+        $x = $this->compile($call->args[0]);
+        $fn = $side === 'left' ? 'LPAD' : 'RPAD';
+
+        // LPAD/RPAD also cut longer strings; stringr leaves them whole.
+        return Fragment::format("(CASE WHEN {} >= {$width->value} THEN {} ELSE {$fn}({}, {$width->value}, {}) END)", [
+            $this->dialect->length($x), $x, $x, Fragment::param($pad),
+        ]);
+    }
+
+    private function wday(Call $call): Fragment
+    {
+        $start = $call->option('week_start');
+        $weekStart = $start instanceof Lit ? (int) $start->value : 7;
+        $dow = $this->dialect->datePart('dow', $this->compile($call->args[0]));
+
+        return Fragment::format('((({} - '.($weekStart % 7).' + 7) % 7) + 1)', [$dow]);
+    }
+
+    private function difftime(Call $call): Fragment
+    {
+        $units = $call->option('units');
+        $unit = $units instanceof Lit ? $units->value : 'days';
+        $factor = ['secs' => 1, 'mins' => 60, 'hours' => 3600, 'days' => 86400, 'weeks' => 604800][$unit]
+            ?? throw new Untranslatable("Unknown difftime units '{$unit}'.");
+
+        return Fragment::format("({} / {$factor}.0)", [$this->dialect->secondsBetween($this->compile($call->args[0]), $this->compile($call->args[1]))]);
     }
 
     /**

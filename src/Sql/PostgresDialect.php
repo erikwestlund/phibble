@@ -32,6 +32,25 @@ final class PostgresDialect extends Dialect
         return false;
     }
 
+    public function datePart(string $part, Fragment $x): Fragment
+    {
+        $field = ['year' => 'YEAR', 'month' => 'MONTH', 'day' => 'DAY', 'hour' => 'HOUR', 'minute' => 'MINUTE', 'second' => 'SECOND', 'yday' => 'DOY', 'dow' => 'DOW'][$part];
+
+        return $part === 'second'
+            ? Fragment::format("CAST(EXTRACT({$field} FROM CAST({} AS TIMESTAMP)) AS DOUBLE PRECISION)", [$x])
+            : Fragment::format("CAST(EXTRACT({$field} FROM CAST({} AS TIMESTAMP)) AS INTEGER)", [$x]);
+    }
+
+    public function secondsBetween(Fragment $x, Fragment $y): Fragment
+    {
+        return Fragment::format('CAST(EXTRACT(EPOCH FROM (CAST({} AS TIMESTAMP) - CAST({} AS TIMESTAMP))) AS DOUBLE PRECISION)', [$x, $y]);
+    }
+
+    public function squish(Fragment $x): Fragment
+    {
+        return Fragment::format("BTRIM(REGEXP_REPLACE({}, '\\s+', ' ', 'g'))", [$x]);
+    }
+
     public function noLimit(): string
     {
         return 'LIMIT ALL';

@@ -31,6 +31,32 @@ final class SqliteDialect extends Dialect
         return Fragment::format('({} IS {})', [$a, $b]);
     }
 
+    public function datePart(string $part, Fragment $x): Fragment
+    {
+        return match ($part) {
+            'second' => Fragment::format("CAST(strftime('%f', {}) AS REAL)", [$x]),
+            'dow' => Fragment::format("CAST(strftime('%w', {}) AS INTEGER)", [$x]),
+            default => Fragment::format('CAST(strftime(\''.['year' => '%Y', 'month' => '%m', 'day' => '%d', 'hour' => '%H', 'minute' => '%M', 'yday' => '%j'][$part].'\', {}) AS INTEGER)', [$x]),
+        };
+    }
+
+    public function secondsBetween(Fragment $x, Fragment $y): Fragment
+    {
+        // unixepoch() is exact; julianday() loses precision in the microseconds.
+        return Fragment::format("(unixepoch({}, 'subsec') - unixepoch({}, 'subsec'))", [$x, $y]);
+    }
+
+    public function unicodeCase(): bool
+    {
+        // SQLite's UPPER() and LOWER() only change ASCII letters.
+        return false;
+    }
+
+    public function hasPad(): bool
+    {
+        return false;
+    }
+
     public function noLimit(): string
     {
         return 'LIMIT -1';

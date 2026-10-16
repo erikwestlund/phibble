@@ -76,6 +76,36 @@ abstract class Dialect
         return $aggregate(Fragment::format($fn === 'sd' ? 'STDDEV_SAMP({})' : 'VAR_SAMP({})', [$x]));
     }
 
+    /** A date part as a number: year, month, day, hour, minute, second, yday, dow (0 = Sunday). */
+    abstract public function datePart(string $part, Fragment $x): Fragment;
+
+    /** Seconds from $y to $x, as a double. */
+    abstract public function secondsBetween(Fragment $x, Fragment $y): Fragment;
+
+    /** Whether UPPER() and LOWER() handle non-ASCII letters. */
+    public function unicodeCase(): bool
+    {
+        return true;
+    }
+
+    /** Collapse whitespace runs and trim (str_squish), if the dialect has regex replace. */
+    public function squish(Fragment $x): Fragment
+    {
+        throw new Untranslatable("str_squish() has no {$this->name()} translation.");
+    }
+
+    /** Whether LPAD and RPAD exist. */
+    public function hasPad(): bool
+    {
+        return true;
+    }
+
+    /** A regular-expression test with stringr's (ICU) semantics, if the dialect has them. */
+    public function regexMatch(Fragment $x, string $regex, bool $ignoreCase): Fragment
+    {
+        throw new Untranslatable("Regular expressions in {$this->name()} differ from stringr's; evaluated in memory.");
+    }
+
     /** A continuous quantile aggregate (type 7), if the dialect has one. */
     public function quantile(Fragment $x, float $p): Fragment
     {
