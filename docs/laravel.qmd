@@ -1,0 +1,79 @@
+---
+title: "phibble for Laravel developers"
+---
+
+phibble works with Laravel without configuration. Its service provider is
+registered by package discovery, and it adds two kinds of macro:
+
+- `->toFrame()` on collections and query builders runs the query and returns
+  an in-memory `Frame`.
+- `->phibble()` on query builders, Eloquent builders, and relations returns a
+  lazy `SqlTable` on the query's connection. Verbs given expressions compile
+  to SQL, so grouping and summarising run in the database.
+
+Laravel is not a dependency. The examples on this page use Eloquent with an
+in-memory SQLite database that holds the `penguins` data, through a model with a
+`measured()` scope that keeps rows with a body mass.
+
+## From a collection or query to a Frame
+
+`toFrame()` builds a frame from the rows of a collection or a query. Column
+types are inferred from the values, as for `Frame::fromRows()`.
+
+{{< include examples/_laravel-to-frame.md >}}
+
+A collection of models becomes rows of their attributes. Eloquent casts and
+accessors apply only when the models are loaded first, as in the example
+above; `Penguin::query()->toFrame()` reads the rows directly.
+
+## Queries that stay in the database
+
+`phibble()` turns a builder into a lazy table. The builder's SQL, bindings,
+and scopes become the table's source, and phibble's verbs add to that query.
+Nothing runs until the rows are needed, for example with `collect()`, printing,
+or `nrow()`.
+
+{{< include examples/_laravel-phibble.md >}}
+
+Global scopes such as `SoftDeletes` apply, because phibble reads the query
+through Eloquent's `toBase()`. Attribute casts and accessors do not apply,
+because the rows come from SQL.
+
+`showQuery()` returns the SQL that `collect()` would run. In this example a
+grouped filter keeps the heaviest penguin on each island. The comparison with
+the group maximum compiles to a window function:
+
+{{< include examples/_laravel-show-query.md >}}
+
+Expressions that SQL cannot evaluate exactly as R does, and any PHP closure,
+make the table collect its rows and continue in memory. The result is then a
+`Frame`, and the values are the same as if the whole pipeline had run in
+memory. The [SQL tables](sql.qmd) page lists these cases.
+
+## With phplyr
+
+[phplyr](https://github.com/erikwestlund/phplyr) provides dplyr's verbs as
+functions for PHP's pipe operator. Its verbs call the same table methods, so a
+phplyr pipeline on `phibble()` also runs in the database:
+
+```php
+use function Phplyr\{filter, group_by, summarise, arrange, desc, n, mean};
+
+$summary = Penguin::query()->phibble()
+    |> filter(col('year')->ge(2008))
+    |> group_by('species', 'sex')
+    |> summarise(n: n(), mass: mean(col('body_mass'), na_rm: true))
+    |> arrange(desc('mass'));
+```
+
+## Using the result
+
+A collected frame can be returned from a controller or passed to a view:
+
+- `$frame->toRows()` gives a list of associative arrays, for JSON responses
+  and Blade loops.
+- `$frame->toJson()` gives the same rows as a JSON string, or the columns with
+  `toJson('columns')`.
+- `$frame->toCollection()` returns a Laravel collection of rows.
+- `$frame->toModelData()` gives the columns in the form php-stats' model
+  functions accept.

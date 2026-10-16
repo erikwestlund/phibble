@@ -8,6 +8,8 @@
  * imports Frame, Type, SqlTable, the Phibble\ functions (tibble, tribble,
  * as_tibble, enframe, deframe, tbl) and every Phibble\Expr\ helper.
  *
+ * Code above a line "// ---" runs but is left out of the page.
+ *
  * Usage: bin/docs-examples [name ...]
  * Environment: PHP (the PHP 8.5 binary, default: this one).
  */
@@ -56,7 +58,9 @@ foreach (glob($root.'/docs/examples/*.php') as $file) {
 
         continue;
     }
-    $md = "```php\n{$code}\n```\n\n";
+    // Code above a "// ---" line runs but is not shown (setup such as a database).
+    $shown = preg_match('~^// ---\s*$~m', $code) ? trim((string) preg_split('~^// ---\s*$~m', $code, 2)[1]) : $code;
+    $md = "```php\n{$shown}\n```\n\n";
     if (trim($out) !== '') {
         $md .= "```{.text .output}\n".rtrim($out)."\n```\n";
     }

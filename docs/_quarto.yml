@@ -23,6 +23,7 @@ website:
           - io.qmd
           - expr.qmd
           - sql.qmd
+          - laravel.qmd
       - section: "For backend authors"
         contents:
           - contract.qmd
