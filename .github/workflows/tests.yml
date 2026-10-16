@@ -74,7 +74,7 @@ jobs:
           sha256sum -c php_polars-*.sha256
           tar -xzf php_polars-*.tar.gz
           sudo cp php_polars-*/php_polars.so "$(php-config --extension-dir)/"
-          echo "extension=php_polars.so" | sudo tee "$(php --ini | sed -n 's/^Scan for additional .ini files in: //p')/90-php_polars.ini"
+          echo "extension=php_polars.so" | sudo tee "$(php -r "echo PHP_CONFIG_FILE_SCAN_DIR;")/90-php_polars.ini"
           php -r 'echo Phpolars\version(), "\n";'
 
       - run: composer install --no-interaction --no-progress
