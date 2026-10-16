@@ -5,3 +5,4 @@ composer.lock
 /.claude/
 /docs/_site/
 /docs/.quarto/
+/bench/data/

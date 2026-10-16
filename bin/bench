@@ -1,0 +1,78 @@
+#!/usr/bin/env php
+<?php
+
+/*
+ * Benchmark Table backends on the data from bench/generate.php.
+ *
+ * Usage: bin/bench [--backend=frame|sqlite] [--runs=3] [workload ...]
+ *
+ * Prints one JSON line per workload: backend, workload, rows, median and
+ * min seconds, and peak memory in MB.
+ */
+
+declare(strict_types=1);
+
+require dirname(__DIR__).'/vendor/autoload.php';
+
+use Phibble\Bench\FrameBackend;
+use Phibble\Bench\SqliteBackend;
+use Phibble\Bench\Workloads;
+
+ini_set('memory_limit', '-1');
+
+$options = getopt('', ['backend:', 'runs:'], $rest);
+$backendName = $options['backend'] ?? 'frame';
+$runs = (int) ($options['runs'] ?? 3);
+$only = array_slice($argv, $rest);
+$data = dirname(__DIR__).'/bench/data';
+if (! is_file("{$data}/events.csv")) {
+    fwrite(STDERR, "No data. Run: php bench/generate.php [rows]\n");
+    exit(1);
+}
+
+$time = function (Closure $work) use ($runs): array {
+    $times = [];
+    $result = null;
+    for ($i = 0; $i < $runs; $i++) {
+        gc_collect_cycles();
+        $start = hrtime(true);
+        $result = $work();
+        $times[] = (hrtime(true) - $start) / 1e9;
+    }
+    sort($times);
+
+    return [$times[intdiv(count($times), 2)], $times[0], $result];
+};
+$report = function (string $workload, array $timing) use ($backendName): void {
+    [$median, $min, $rows] = $timing;
+    echo json_encode([
+        'backend' => $backendName,
+        'workload' => $workload,
+        'rows' => $rows,
+        'median_s' => round($median, 3),
+        'min_s' => round($min, 3),
+        'peak_mb' => round(memory_get_peak_usage(true) / 1e6),
+    ]), "\n";
+};
+
+if ($backendName === 'frame') {
+    foreach (Workloads::csv() as $name => $work) {
+        if ($only === [] || in_array($name, $only, true)) {
+            $report($name, $time(fn () => $work("{$data}/events.csv")));
+        }
+    }
+}
+
+$backend = match ($backendName) {
+    'frame' => new FrameBackend(),
+    'sqlite' => new SqliteBackend(),
+    default => throw new InvalidArgumentException("Unknown backend {$backendName}"),
+};
+$events = $backend->load("{$data}/events.csv");
+$dims = $backend->load("{$data}/dims.csv");
+
+foreach (Workloads::all() as $name => $work) {
+    if ($only === [] || in_array($name, $only, true)) {
+        $report($name, $time(fn () => $work($events, $dims)));
+    }
+}
