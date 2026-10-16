@@ -79,12 +79,13 @@ final class Compiler
     }
 
     /** ORDER BY terms with NA last in both directions. */
-    public function orderBy(array $order): Fragment
+    public function orderBy(array $order, bool $reverse = false): Fragment
     {
         $terms = [];
         foreach ($order as [$expr, $desc]) {
             $sql = $this->compile($expr);
-            $terms[] = Fragment::format('({} IS NULL), {}'.($desc ? ' DESC' : ''), [$sql, $sql]);
+            // $reverse gives the exact reverse order, NA first.
+            $terms[] = Fragment::format('({} IS NULL)'.($reverse ? ' DESC' : '').', {}'.($desc !== $reverse ? ' DESC' : ''), [$sql, $sql]);
         }
 
         return Fragment::join(', ', $terms);
@@ -171,7 +172,7 @@ final class Compiler
                 $this->dialect->length($a(0)), $this->dialect->length($a(1)),
                 $a(0), $this->dialect->length($a(0)), $this->dialect->length($a(1)), $a(1),
             ])),
-            'str_replace' => throw new Untranslatable('str_replace() replaces the first match only; SQL REPLACE replaces all.'),
+            'str_replace' => $this->replaceFirst($a(0), $a(1), $a(2)),
             'str_replace_all' => Fragment::format('REPLACE({}, {}, {})', [$a(0), $a(1), $a(2)]),
             'paste0' => $this->paste($call->args, null),
             'paste' => $this->paste($call->args, $call->option('sep') ?? new Lit(' ')),
@@ -217,7 +218,9 @@ final class Compiler
             'quantile' => $rowMode
                 ? throw new Untranslatable('quantile() is not available as a window function in SQL.')
                 : $this->quantile($call, $x, $naRm),
-            'iqr' => throw new Untranslatable('iqr() is not translated.'),
+            'iqr' => $rowMode || ! $naRm
+                ? throw new Untranslatable('iqr() is translated only in summarise with na_rm.')
+                : Fragment::format('({} - {})', [$this->dialect->quantile($x, 0.75), $this->dialect->quantile($x, 0.25)]),
             'n_distinct' => match (true) {
                 count($call->args) > 1 => throw new Untranslatable('n_distinct() of several columns is not translated.'),
                 $rowMode => throw new Untranslatable('COUNT(DISTINCT) is not available as a window function in SQL.'),
@@ -236,8 +239,34 @@ final class Compiler
                     ? [$w(Fragment::format('SUM(CASE WHEN NOT {} THEN 1 ELSE 0 END)', [$x]))]
                     : [$w(Fragment::format('SUM(CASE WHEN NOT {} THEN 1 ELSE 0 END)', [$x])), $countAll, $countX],
             ),
-            'first', 'last', 'nth' => throw new Untranslatable("{$fn}() is not translated."),
+            'first', 'last', 'nth' => $rowMode
+                ? $this->nthValue($call, $x)
+                : throw new Untranslatable("{$fn}() in summarise is computed as a window first (see SqlTable::summarise())."),
         };
+    }
+
+    /**
+     * first(), last() and nth() as window functions over the whole group,
+     * in the table's order or order_by. nth() with a negative n counts
+     * from the end, using the reversed order.
+     */
+    private function nthValue(Call $call, Fragment $x): Fragment
+    {
+        if ($call->option('default') !== null || $call->option('na_rm') !== null) {
+            throw new Untranslatable("{$call->fn}() with default or na_rm is not translated.");
+        }
+        $n = match ($call->fn) {
+            'first' => 1,
+            'last' => -1,
+            'nth' => $call->args[1] instanceof Lit && is_int($call->args[1]->value) ? $call->args[1]->value : 0,
+        };
+        if ($n === 0) {
+            throw new Untranslatable('nth() needs a literal, non-zero integer n.');
+        }
+        $whole = ' ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING';
+        $fn = abs($n) === 1 ? Fragment::format('FIRST_VALUE({})', [$x]) : Fragment::format('NTH_VALUE({}, '.abs($n).')', [$x]);
+
+        return $this->over($fn, withOrder: true, orderBy: $call->option('order_by'), frame: $whole, reverse: $n < 0);
     }
 
     private function quantile(Call $call, Fragment $x, bool $naRm): Fragment
@@ -352,7 +381,7 @@ final class Compiler
     /**
      * Wrap a function in OVER (PARTITION BY groups [ORDER BY ...]).
      */
-    private function over(Fragment $fn, bool $withOrder, ?Expr $orderBy = null, string $frame = ''): Fragment
+    private function over(Fragment $fn, bool $withOrder, ?Expr $orderBy = null, string $frame = '', bool $reverse = false): Fragment
     {
         $partition = $this->partition();
         $order = null;
@@ -363,7 +392,7 @@ final class Compiler
             if ($terms === []) {
                 throw new Untranslatable('Window functions need a row order in SQL: arrange() first or pass order_by.');
             }
-            $order = $this->orderBy($terms);
+            $order = $this->orderBy($terms, $reverse);
         }
 
         $parts = [$fn];
@@ -451,6 +480,18 @@ final class Compiler
             return Fragment::format("SUBSTR({}, {$s}, ".($e - $s + 1).')', [$x]);
         }
         throw new Untranslatable('str_sub() with negative or crossing positions is not translated.');
+    }
+
+    /** str_replace(): the first occurrence only, with fixed patterns. */
+    private function replaceFirst(Fragment $x, Fragment $pattern, Fragment $replacement): Fragment
+    {
+        $pos = $this->dialect->position($x, $pattern);
+        $before = Fragment::format('SUBSTR({}, 1, {} - 1)', [$x, $pos]);
+        $after = Fragment::format('SUBSTR({}, {} + {})', [$x, $pos, $this->dialect->length($pattern)]);
+
+        return Fragment::format('(CASE WHEN {} = 0 THEN {} ELSE {} END)', [
+            $pos, $x, $this->dialect->concat([$before, $replacement, $after]),
+        ]);
     }
 
     private function negate(Call $call, Fragment $test): Fragment

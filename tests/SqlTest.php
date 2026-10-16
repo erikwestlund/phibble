@@ -218,3 +218,31 @@ it('matches dplyr join_by in SQL', function (Closure $connect) {
 
     expect($failures)->toBe([]);
 })->with('connections');
+
+it('translates first, last, nth and str_replace to SQL', function (Closure $connect) {
+    $pdo = $connect();
+    $frame = exprFrame()->groupBy(['g'])->arrange(['i']);
+    $sql = sqlFrom($pdo, exprFrame())->groupBy(['g'])->arrange(['i']);
+    $aggs = [
+        'f' => Phibble\Expr\first(col('x')),
+        'l' => Phibble\Expr\last(col('s')),
+        'n2' => Phibble\Expr\nth(col('i'), 2),
+        'nm2' => Phibble\Expr\nth(col('i'), -2),
+        'lo' => Phibble\Expr\last(col('s'), order_by: col('x')),
+    ];
+
+    $mutated = $sql->mutate($aggs);
+    $summary = $sql->summarise($aggs);
+
+    expect($mutated)->toBeInstanceOf(SqlTable::class)
+        ->and($summary)->toBeInstanceOf(SqlTable::class)
+        ->and(normalise($mutated->collect()->column('nm2')))->toBe(normalise($frame->mutate($aggs)->column('nm2')));
+    foreach (array_keys($aggs) as $name) {
+        expect(normalise($summary->collect()->column($name)))->toBe(normalise($frame->summarise($aggs)->column($name)), $name)
+            ->and(normalise($mutated->collect()->column($name)))->toBe(normalise($frame->mutate($aggs)->column($name)), $name);
+    }
+
+    $replaced = sqlFrom($pdo, exprFrame())->arrange(['i'])->mutate(['r' => Phibble\Expr\str_replace(col('s'), 'a', 'A')]);
+    expect($replaced)->toBeInstanceOf(SqlTable::class)
+        ->and($replaced->collect()->column('r'))->toBe(expected('str_replace'));
+})->with('connections');

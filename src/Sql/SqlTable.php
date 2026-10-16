@@ -387,9 +387,39 @@ final readonly class SqlTable implements Table
         if (array_any($aggregates, fn ($a) => ! $a instanceof Expr)) {
             return $this->collect()->summarise($aggregates, $groups);
         }
+
+        // first(), last() and nth() become window columns first; every row of
+        // a group then holds the same value, which an aggregate picks up.
+        $original = $aggregates;
+        $source = $this;
+        $hidden = 0;
+        foreach ($aggregates as $name => $expr) {
+            if ($expr instanceof Call && in_array($expr->fn, ['first', 'last', 'nth'], true)) {
+                $column = '__phibble_w'.$hidden++;
+                $windowed = $source->mutate([$column => $expr]);
+                if (! $windowed instanceof self) {
+                    return $this->collect()->summarise($original, $groups);
+                }
+                $source = $windowed;
+                $aggregates[$name] = new Call('max', [new Col($column)], ['na_rm' => new Lit(true)]);
+            }
+        }
+        if ($source !== $this) {
+            return $source->summariseCompiled($aggregates, $groups, $this->hints);
+        }
+
+        return $this->summariseCompiled($aggregates, $groups, $this->hints);
+    }
+
+    /**
+     * @param array<string, Expr> $aggregates
+     * @param array<string, Type> $baseHints
+     */
+    private function summariseCompiled(array $aggregates, ?string $groups, array $baseHints): Table
+    {
         $compiler = new Compiler($this->dialect, mode: 'summary');
         $parts = array_map(fn (string $g) => Fragment::raw($this->dialect->quote($g)), $this->groups);
-        $hints = array_intersect_key($this->hints, array_flip($this->groups));
+        $hints = array_intersect_key($baseHints, array_flip($this->groups));
         try {
             foreach ($aggregates as $name => $expr) {
                 $parts[] = Fragment::format('{} AS '.$this->dialect->quote((string) $name), [$compiler->compile($expr)]);

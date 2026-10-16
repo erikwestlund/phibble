@@ -323,9 +323,9 @@ SELECT * FROM (SELECT "species", COUNT(*) AS "n", AVG(CAST("body_mass" AS REAL))
 <li>any PHP closure,</li>
 <li><code>round()</code>, because SQL’s <code>ROUND</code> does not round half to even,</li>
 <li><code>as_string()</code> and <code>as_bool()</code>,</li>
-<li><code>str_replace()</code>, which replaces only the first match,</li>
 <li><code>paste()</code> and <code>paste0()</code> with arguments other than text literals, because SQL formats numbers differently from R,</li>
-<li><code>first()</code>, <code>last()</code>, <code>nth()</code>, <code>iqr()</code>, <code>cumprod()</code>, and <code>consecutive_id()</code>,</li>
+<li><code>first()</code>, <code>last()</code>, and <code>nth()</code> without a row order (from <code>arrange()</code> or <code>order_by:</code>), or with <code>default:</code> or <code>na_rm:</code>,</li>
+<li><code>iqr()</code> outside PostgreSQL, <code>cumprod()</code>, and <code>consecutive_id()</code>,</li>
 <li><code>median()</code> and <code>quantile()</code> outside PostgreSQL,</li>
 <li><code>quantile()</code> without <code>na_rm: true</code>,</li>
 <li><code>median()</code>, <code>quantile()</code>, and <code>n_distinct()</code> inside grouped <code>mutate()</code> or <code>filter()</code>, because SQL has no window form of them,</li>
@@ -354,6 +354,7 @@ Phibble\Frame
   &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt;
 1     1   2.5     2
 2     2   3.5     4</code></pre>
+<p>SQLite compares by storage class, and it orders all text above all numbers. A column declared without a type stores bound values as text, so <code>col('x')-&gt;gt(0)</code> is true for every row of such a column. Declare column types (<code>INTEGER</code>, <code>REAL</code>, <code>TEXT</code>) when creating SQLite tables that phibble will query.</p>
 </section>
 <section id="window-functions" class="level2">
 <h2 class="anchored" data-anchor-id="window-functions">Window functions</h2>

@@ -53,10 +53,11 @@ match `Frame` in either case. The fallbacks are:
 - any PHP closure,
 - `round()`, because SQL's `ROUND` does not round half to even,
 - `as_string()` and `as_bool()`,
-- `str_replace()`, which replaces only the first match,
 - `paste()` and `paste0()` with arguments other than text literals, because SQL
   formats numbers differently from R,
-- `first()`, `last()`, `nth()`, `iqr()`, `cumprod()`, and `consecutive_id()`,
+- `first()`, `last()`, and `nth()` without a row order (from `arrange()` or
+  `order_by:`), or with `default:` or `na_rm:`,
+- `iqr()` outside PostgreSQL, `cumprod()`, and `consecutive_id()`,
 - `median()` and `quantile()` outside PostgreSQL,
 - `quantile()` without `na_rm: true`,
 - `median()`, `quantile()`, and `n_distinct()` inside grouped `mutate()` or
