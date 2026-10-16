@@ -74,6 +74,7 @@ dplyr and tidyr interface as pipe-able functions.
 | `left_join(x, y, by = c("a" = "b"))` | `$x->join($y, [['a', 'b']], 'left')` |
 | `bind_rows`, `bind_cols` | `Frame::concat([...])`, `Frame::bindCols([...])` |
 | `nest(df, data = c(x, y))`, `unnest(df, data)` | `$df->nest(['x', 'y'])`, `$df->unnest('data')` |
+| `pivot_longer_spec(df, spec)`, `pivot_wider_spec(df, spec)` | `$df->pivotLongerSpec($spec)`, `$df->pivotWiderSpec($spec)`; phplyr's `pivot_longer()` and `pivot_wider()` build the spec |
 | `drop_na(df, x)` | `$df->dropNa(['x'])` |
 
 ## Differences

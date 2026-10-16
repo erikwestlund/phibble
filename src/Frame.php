@@ -1302,6 +1302,234 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
     }
 
     // ---------------------------------------------------------------
+    // Pivots (tidyr's pivot_longer_spec() and pivot_wider_spec())
+    // ---------------------------------------------------------------
+
+    public function pivotLongerSpec(array $spec, bool $dropNa = false): static
+    {
+        [$sources, $values, $parts, $combos] = self::readSpec($spec, 'longer');
+        foreach ($sources as $source) {
+            $this->storage($source);
+        }
+        $ids = array_values(array_diff($this->columns(), $sources));
+
+        // Which source column feeds each (combination, value column).
+        $feed = [];
+        foreach ($spec as $row) {
+            $feed[self::hashKey(array_map(fn (string $p) => $row[$p], $parts))][$row['.value']] = $row['.name'];
+        }
+
+        $rowIndex = [];
+        $comboIndex = [];
+        $valueColumns = array_map(fn (string $v) => $this->combinedColumn($v, array_map(
+            fn (array $combo) => $feed[self::hashKey($combo)][$v] ?? null,
+            $combos,
+        )), array_combine($values, $values));
+        $cells = array_map(fn (Column $c) => $c->values(), $valueColumns);
+        $width = count($combos);
+        for ($i = 0; $i < $this->rows; $i++) {
+            foreach (array_keys($combos) as $c) {
+                if ($dropNa && array_all($values, fn (string $v) => $cells[$v][$i * $width + $c] === null)) {
+                    continue;
+                }
+                $rowIndex[] = $i;
+                $comboIndex[] = $c;
+            }
+        }
+
+        $data = [];
+        foreach ($ids as $id) {
+            $data[$id] = $this->data[$id]->take($rowIndex);
+        }
+        foreach ($parts as $p) {
+            $data[$p] = Infer::column(array_map(fn (int $c) => $combos[$c][$p], $comboIndex), null, $p);
+        }
+        foreach ($valueColumns as $v => $column) {
+            $data[$v] = $column->take(array_map(fn (int $i, int $c) => $i * $width + $c, $rowIndex, $comboIndex));
+        }
+
+        return new self($data, count($rowIndex), array_values(array_intersect($this->groups, $ids)));
+    }
+
+    public function pivotWiderSpec(array $spec, ?array $idColumns = null, array $valuesFill = []): static
+    {
+        [$names, $values, $from] = self::readSpec($spec, 'wider');
+        foreach ([...$values, ...$from] as $column) {
+            $this->storage($column);
+        }
+        $idColumns ??= array_values(array_diff($this->columns(), $from, $values));
+        foreach ($idColumns as $column) {
+            $this->storage($column);
+        }
+
+        // The spec row (new column) for each names_from combination and value column.
+        $target = [];
+        foreach ($spec as $row) {
+            $target[self::hashKey(array_map(fn (string $f) => FactorColumn::label($row[$f]), $from))][$row['.value']] = $row['.name'];
+        }
+
+        $idValues = array_map(fn (string $c) => $this->column($c), $idColumns);
+        $fromValues = array_map(fn (string $c) => $this->column($c), $from);
+        $groups = [];
+        $firstRow = [];
+        $cells = [];
+        $duplicates = false;
+        for ($i = 0; $i < $this->rows; $i++) {
+            $id = self::hashKey(array_map(fn (array $v) => $v[$i], $idValues));
+            if (! isset($groups[$id])) {
+                $groups[$id] = count($groups);
+                $firstRow[] = $i;
+            }
+            $g = $groups[$id];
+            $key = self::hashKey(array_map(fn (array $v) => FactorColumn::label($v[$i]), $fromValues));
+            foreach ($values as $v) {
+                $name = $target[$key][$v] ?? null;
+                if ($name === null) {
+                    continue; // combinations missing from the spec are dropped, as in tidyr
+                }
+                $cells[$name][$g][] = $i;
+                $duplicates = $duplicates || count($cells[$name][$g]) > 1;
+            }
+        }
+
+        $data = [];
+        foreach ($idColumns as $k => $column) {
+            $data[$column] = $this->data[$column]->take($firstRow);
+        }
+        $count = count($firstRow);
+        foreach ($spec as $row) {
+            $name = $row['.name'];
+            $source = $this->data[$row['.value']];
+            $sourceValues = $source->values();
+            if ($duplicates) {
+                $list = [];
+                for ($g = 0; $g < $count; $g++) {
+                    $rows = $cells[$name][$g] ?? null;
+                    $list[] = $rows === null ? null : array_map(fn (int $i) => $sourceValues[$i], $rows);
+                }
+                $data[$name] = new ArrayColumn(Type::List, $list);
+
+                continue;
+            }
+            $indices = [];
+            for ($g = 0; $g < $count; $g++) {
+                $indices[] = $cells[$name][$g][0] ?? null;
+            }
+            $column = $source->take($indices);
+            if (array_key_exists($row['.value'], $valuesFill) && in_array(null, $indices, true)) {
+                $filled = $column->values();
+                foreach ($indices as $g => $i) {
+                    if ($i === null) {
+                        $filled[$g] = $valuesFill[$row['.value']];
+                    }
+                }
+                $column = $column instanceof FactorColumn
+                    ? FactorColumn::fromValues($filled, $column->levels(), $column->isOrdered())
+                    : Infer::column($filled, $source->type(), $name);
+            }
+            $data[$name] = $column;
+        }
+
+        if ($duplicates) {
+            $value = $values[0];
+            $by = implode(', ', [...$idColumns, ...$from]);
+            trigger_error(
+                "Values from `{$value}` are not uniquely identified; output will contain list-cols.\n"
+                ."• Use `values_fn = list` to suppress this warning.\n"
+                ."• Use `values_fn = {summary_fun}` to summarise duplicates.\n"
+                ."• Use the following dplyr code to identify duplicates.\n"
+                ."  {data} |>\n"
+                ."  dplyr::summarise(n = dplyr::n(), .by = c({$by})) |>\n"
+                .'  dplyr::filter(n > 1L)',
+                E_USER_WARNING,
+            );
+        }
+
+        return new self($data, $count, array_values(array_intersect($this->groups, $idColumns)));
+    }
+
+    /**
+     * Validate a spec. Longer: [sources, value columns, name parts, unique
+     * name-part combinations in spec order]. Wider: [new names, value
+     * columns, names_from columns].
+     *
+     * @param list<array<string, mixed>> $spec
+     */
+    private static function readSpec(array $spec, string $kind): array
+    {
+        if ($spec === [] || ! array_is_list($spec)) {
+            throw new InvalidArgumentException('A pivot spec is a non-empty list of rows.');
+        }
+        $keys = array_keys($spec[0]);
+        foreach ($spec as $row) {
+            if (! isset($row['.name'], $row['.value']) || array_keys($row) !== $keys) {
+                throw new InvalidArgumentException('Every spec row needs .name, .value and the same name columns, in the same order.');
+            }
+        }
+        $names = array_map(fn (array $r) => (string) $r['.name'], $spec);
+        if (count(array_unique($names)) !== count($names)) {
+            throw new InvalidArgumentException('Spec .name values must be unique.');
+        }
+        $values = array_values(array_unique(array_map(fn (array $r) => (string) $r['.value'], $spec)));
+        $parts = array_values(array_diff($keys, ['.name', '.value']));
+        if ($kind === 'wider') {
+            return [$names, $values, $parts];
+        }
+
+        $combos = [];
+        foreach ($spec as $row) {
+            $combo = [];
+            foreach ($parts as $p) {
+                $combo[$p] = $row[$p];
+            }
+            $combos[self::hashKey($combo)] = $combo;
+        }
+
+        return [$names, $values, $parts, array_values($combos)];
+    }
+
+    /**
+     * One value column for pivotLongerSpec(): for every row, the values of
+     * each source in turn (null source: NA), combined with vctrs rules.
+     *
+     * @param list<?string> $sources One per name-part combination.
+     */
+    private function combinedColumn(string $name, array $sources): Column
+    {
+        $present = array_values(array_filter($sources, fn ($s) => $s !== null));
+        $types = array_values(array_unique(array_map(fn (string $s) => $this->data[$s]->type()->value, $present)));
+        $type = match (true) {
+            count($types) <= 1 => $types === [] ? Type::Bool : Type::from($types[0]),
+            array_diff($types, ['bool', 'int', 'float']) === [] => in_array('float', $types, true) ? Type::Float : Type::Int,
+            array_diff($types, ['date', 'datetime']) === [] => Type::DateTime,
+            default => throw new InvalidArgumentException(sprintf(
+                "Can't combine `%s` <%s> and `%s` <%s>.",
+                $present[0], $this->data[$present[0]]->type()->abbreviation(),
+                $present[array_key_last($present)], $this->data[$present[array_key_last($present)]]->type()->abbreviation(),
+            )),
+        };
+
+        $columns = array_map(fn (?string $s) => $s === null ? null : $this->data[$s]->values(), $sources);
+        $values = [];
+        for ($i = 0; $i < $this->rows; $i++) {
+            foreach ($columns as $column) {
+                $values[] = $column === null ? null : $column[$i];
+            }
+        }
+        $first = $present === [] ? null : $this->data[$present[0]];
+        if ($type === Type::Factor && $first instanceof FactorColumn) {
+            $levels = [];
+            foreach ($present as $s) {
+                array_push($levels, ...$this->data[$s]->levels());
+            }
+
+            return FactorColumn::fromValues($values, array_values(array_unique($levels)), $first->isOrdered());
+        }
+
+        return Infer::column($values, $type, $name);
+    }
+
+    // ---------------------------------------------------------------
     // Types and NA
     // ---------------------------------------------------------------
 

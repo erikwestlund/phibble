@@ -494,6 +494,16 @@ final readonly class SqlTable implements Table
         return $this->slice(0, max(0, $n));
     }
 
+    public function pivotLongerSpec(array $spec, bool $dropNa = false): Table
+    {
+        return $this->collect()->pivotLongerSpec($spec, $dropNa);
+    }
+
+    public function pivotWiderSpec(array $spec, ?array $idColumns = null, array $valuesFill = []): Table
+    {
+        return $this->collect()->pivotWiderSpec($spec, $idColumns, $valuesFill);
+    }
+
     public function take(array $indices): Table
     {
         return $this->collect()->take($indices);

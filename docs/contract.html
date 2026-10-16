@@ -362,6 +362,14 @@ ul.task-list li input[type="checkbox"] {
 <td>Keeps the first row of each combination of the named columns (and the grouping columns), and only those columns. An empty list means all columns.</td>
 </tr>
 <tr class="even">
+<td><code>pivotLongerSpec($spec, dropNa:)</code></td>
+<td>tidyr’s <code>pivot_longer_spec()</code>. Spec rows are <code>['.name' =&gt; source, '.value' =&gt; value column, ...name parts]</code>. Output: id columns, name parts, then one column per <code>.value</code>; each input row yields one row per name-part combination in spec order. Values combine by vctrs rules.</td>
+</tr>
+<tr class="odd">
+<td><code>pivotWiderSpec($spec, idColumns:, valuesFill:)</code></td>
+<td>tidyr’s <code>pivot_wider_spec()</code>. Spec rows are <code>['.name' =&gt; new column, '.value' =&gt; values column, ...names_from values]</code>. New columns follow spec order; rows follow the first appearance of each id combination. Duplicates make every new column a list-column and raise tidyr’s warning.</td>
+</tr>
+<tr class="even">
 <td><code>take($indices)</code></td>
 <td>Rows by 0-based position, in the given order. A <code>null</code> index gives an all-NA row. Keeps types, factor levels, and grouping.</td>
 </tr>

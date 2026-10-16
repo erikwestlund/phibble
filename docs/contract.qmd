@@ -68,6 +68,8 @@ implementation follows and the semantics of each method.
 | `eachGroup()` | Yields `['key' => [...], 'table' => Table]` for each group, with ungrouped tables. An ungrouped table yields one group with an empty key. |
 | `summarise($aggregates)` | Returns one row per group: the keys, then one column per entry. Each entry is a closure given the group's table or an expression of size 1. The result drops the last grouping level, and a rowwise table keeps its id columns. The optional second argument is dplyr's `.groups`: `'drop_last'` (the default), `'drop'`, `'keep'`, or `'rowwise'`. |
 | `distinct($names)` | Keeps the first row of each combination of the named columns (and the grouping columns), and only those columns. An empty list means all columns. |
+| `pivotLongerSpec($spec, dropNa:)` | tidyr's `pivot_longer_spec()`. Spec rows are `['.name' => source, '.value' => value column, ...name parts]`. Output: id columns, name parts, then one column per `.value`; each input row yields one row per name-part combination in spec order. Values combine by vctrs rules. |
+| `pivotWiderSpec($spec, idColumns:, valuesFill:)` | tidyr's `pivot_wider_spec()`. Spec rows are `['.name' => new column, '.value' => values column, ...names_from values]`. New columns follow spec order; rows follow the first appearance of each id combination. Duplicates make every new column a list-column and raise tidyr's warning. |
 | `take($indices)` | Rows by 0-based position, in the given order. A `null` index gives an all-NA row. Keeps types, factor levels, and grouping. |
 | `slice($offset, $length)`, `head($n)` | Rows by position. These ignore grouping. |
 | `join($other, $by, $type, ...)` | Joins with dplyr 1.1 semantics, described below. |

@@ -208,6 +208,37 @@ interface Table extends \Countable, \IteratorAggregate
         string $unmatched = 'drop',
     ): Table;
 
+    /**
+     * tidyr's pivot_longer_spec(). Each spec row is
+     * ['.name' => source column, '.value' => value column, ...name parts].
+     * Output: the other (id) columns, the name-part columns, then one column
+     * per distinct .value. Each input row gives one row per distinct
+     * name-part combination, in spec order; a missing (combination, .value)
+     * is NA. $dropNa drops rows whose value columns are all NA. Values
+     * combine by vctrs rules (int and double give double); incompatible
+     * types throw "Can't combine".
+     *
+     * @param list<array<string, mixed>> $spec
+     */
+    public function pivotLongerSpec(array $spec, bool $dropNa = false): Table;
+
+    /**
+     * tidyr's pivot_wider_spec(). Each spec row is
+     * ['.name' => new column, '.value' => values_from column,
+     * ...names_from column => value]. New columns appear in spec order after
+     * the id columns, which default to every column not used by the spec;
+     * rows follow the first appearance of each id combination. Missing
+     * cells take $valuesFill[valueColumn] or NA. When some cell has several
+     * values, every new column becomes a list-column (a list of values per
+     * cell, null when empty) and tidyr's "not uniquely identified" warning
+     * is raised.
+     *
+     * @param list<array<string, mixed>> $spec
+     * @param list<string>|null $idColumns
+     * @param array<string, mixed> $valuesFill
+     */
+    public function pivotWiderSpec(array $spec, ?array $idColumns = null, array $valuesFill = []): Table;
+
     /** Rows [$offset, $offset + $length). Ignores groups. */
     public function slice(int $offset, ?int $length = null): Table;
 
