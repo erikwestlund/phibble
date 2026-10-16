@@ -8,6 +8,7 @@ use DateTimeImmutable;
 use DateTimeInterface;
 use DateTimeZone;
 use InvalidArgumentException;
+use Phibble\CalendarDate;
 use Phibble\Type;
 
 /**
@@ -116,7 +117,11 @@ final readonly class TemporalColumn implements Column
     {
         static $prototypes = [];
 
-        return $prototypes[$this->timezone] ??= new DateTimeImmutable('@0')->setTimezone(new DateTimeZone($this->timezone));
+        $key = $this->type->value.':'.$this->timezone;
+
+        return $prototypes[$key] ??= $this->type === Type::Date
+            ? new CalendarDate('@0')->setTimezone(new DateTimeZone('UTC'))
+            : new DateTimeImmutable('@0')->setTimezone(new DateTimeZone($this->timezone));
     }
 
     private function object(DateTimeImmutable $prototype, int $t): DateTimeImmutable

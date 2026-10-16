@@ -174,6 +174,7 @@ final class Infer
                 is_float($v) => 'float',
                 $v instanceof \Phibble\Contracts\Table => 'list',
                 is_string($v), $v instanceof Stringable, $v instanceof BackedEnum => 'string',
+                $v instanceof \Phibble\CalendarDate => 'date',
                 $v instanceof DateTimeInterface => 'datetime',
                 default => 'list',
             }] = true;
@@ -184,6 +185,8 @@ final class Infer
             $seen === [] => Type::Bool,
             isset($seen['list']) => Type::List,
             isset($seen['string']) => Type::String,
+            isset($seen['date']) && count($seen) === 1 => Type::Date,
+            isset($seen['date'], $seen['datetime']) && count($seen) === 2 => Type::DateTime,
             isset($seen['datetime']) => count($seen) === 1 ? Type::DateTime : Type::String,
             isset($seen['float']) => Type::Float,
             isset($seen['int']) => Type::Int,

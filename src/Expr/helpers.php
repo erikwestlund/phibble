@@ -122,3 +122,53 @@ function cummax(mixed $x): Call { return call_with('cummax', [$x]); }
 function cumall(mixed $x): Call { return call_with('cumall', [$x]); }
 function cumany(mixed $x): Call { return call_with('cumany', [$x]); }
 function consecutive_id(mixed ...$args): Call { return call_with('consecutive_id', $args); }
+
+// Patterns (stringr): a plain string is a regular expression
+function fixed(mixed $pattern): Call { return call_with('fixed', [$pattern]); }
+function regex(mixed $pattern, mixed ...$options): Call { return call_with('regex', [$pattern, ...$options]); }
+
+// stringr
+function str_count(mixed $x, mixed $pattern): Call { return call_with('str_count', [$x, $pattern]); }
+function str_extract(mixed $x, mixed $pattern): Call { return call_with('str_extract', [$x, $pattern]); }
+function str_extract_all(mixed $x, mixed $pattern): Call { return call_with('str_extract_all', [$x, $pattern]); }
+function str_split(mixed $x, mixed $pattern): Call { return call_with('str_split', [$x, $pattern]); }
+function str_split_i(mixed $x, mixed $pattern, mixed $i): Call { return call_with('str_split_i', [$x, $pattern, $i]); }
+function str_pad(mixed $x, mixed $width, mixed ...$options): Call { return call_with('str_pad', [$x, $width, ...$options]); }
+function str_trunc(mixed $x, mixed $width, mixed ...$options): Call { return call_with('str_trunc', [$x, $width, ...$options]); }
+function str_to_title(mixed $x): Call { return call_with('str_to_title', [$x]); }
+function str_to_upper(mixed $x): Call { return call_with('str_to_upper', [$x]); }
+function str_to_lower(mixed $x): Call { return call_with('str_to_lower', [$x]); }
+function str_squish(mixed $x): Call { return call_with('str_squish', [$x]); }
+
+// lubridate
+function ymd(mixed $x, mixed ...$options): Call { return call_with('ymd', [$x, ...$options]); }
+function dmy(mixed $x, mixed ...$options): Call { return call_with('dmy', [$x, ...$options]); }
+function mdy(mixed $x, mixed ...$options): Call { return call_with('mdy', [$x, ...$options]); }
+function ymd_hms(mixed $x, mixed ...$options): Call { return call_with('ymd_hms', [$x, ...$options]); }
+function dmy_hms(mixed $x, mixed ...$options): Call { return call_with('dmy_hms', [$x, ...$options]); }
+function mdy_hms(mixed $x, mixed ...$options): Call { return call_with('mdy_hms', [$x, ...$options]); }
+function parse_date_time(mixed $x, mixed $orders, mixed ...$options): Call { return call_with('parse_date_time', [$x, \is_array($orders) ? new Lit($orders) : $orders, ...$options]); }
+function year(mixed $x): Call { return call_with('year', [$x]); }
+function month(mixed $x): Call { return call_with('month', [$x]); }
+function day(mixed $x): Call { return call_with('day', [$x]); }
+function wday(mixed $x, mixed ...$options): Call { return call_with('wday', [$x, ...$options]); }
+function yday(mixed $x): Call { return call_with('yday', [$x]); }
+function quarter(mixed $x): Call { return call_with('quarter', [$x]); }
+function hour(mixed $x): Call { return call_with('hour', [$x]); }
+function minute(mixed $x): Call { return call_with('minute', [$x]); }
+function second(mixed $x): Call { return call_with('second', [$x]); }
+function floor_date(mixed $x, mixed $unit, mixed ...$options): Call { return call_with('floor_date', [$x, $unit, ...$options]); }
+function ceiling_date(mixed $x, mixed $unit, mixed ...$options): Call { return call_with('ceiling_date', [$x, $unit, ...$options]); }
+function round_date(mixed $x, mixed $unit, mixed ...$options): Call { return call_with('round_date', [$x, $unit, ...$options]); }
+function seconds(mixed $n): Call { return call_with('seconds', [$n]); }
+function minutes(mixed $n): Call { return call_with('minutes', [$n]); }
+function hours(mixed $n): Call { return call_with('hours', [$n]); }
+function days(mixed $n): Call { return call_with('days', [$n]); }
+function weeks(mixed $n): Call { return call_with('weeks', [$n]); }
+function months(mixed $n): Call { return call_with('months', [$n]); }
+function years(mixed $n): Call { return call_with('years', [$n]); }
+function difftime(mixed $x, mixed $y, mixed ...$options): Call { return call_with('difftime', [$x, $y, ...$options]); }
+function with_tz(mixed $x, mixed $tz): Call { return call_with('with_tz', [$x, $tz]); }
+function force_tz(mixed $x, mixed $tz): Call { return call_with('force_tz', [$x, $tz]); }
+function today(mixed ...$options): Call { return call_with('today', $options); }
+function now(mixed ...$options): Call { return call_with('now', $options); }

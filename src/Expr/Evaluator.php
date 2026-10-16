@@ -172,20 +172,52 @@ final class Evaluator
                 if ($s === null || $pattern === null) {
                     return null;
                 }
-                $found = match ($fn) {
-                    'str_detect' => str_contains(self::str($s), (string) $pattern),
-                    'str_starts' => str_starts_with(self::str($s), (string) $pattern),
-                    'str_ends' => str_ends_with(self::str($s), (string) $pattern),
-                };
+                $found = Strings::detect(self::str($s), Pattern::of($pattern), match ($fn) {
+                    'str_starts' => 'start',
+                    'str_ends' => 'end',
+                    default => '',
+                });
 
                 return $negate ? ! $found : $found;
             }, ...[...$args, $this->option($call, 'negate', false)]),
-            'str_replace' => $this->map(fn ($s, $p, $r) => $s === null || $p === null || $r === null
+            'str_replace', 'str_replace_all' => $this->map(fn ($s, $p, $r) => $s === null || $p === null
                 ? null
-                : self::replaceFirst(self::str($s), (string) $p, (string) $r), ...$args),
-            'str_replace_all' => $this->map(fn ($s, $p, $r) => $s === null || $p === null || $r === null
-                ? null
-                : str_replace((string) $p, (string) $r, self::str($s)), ...$args),
+                : Strings::replace(self::str($s), Pattern::of($p), $r === null ? null : (string) $r, $fn === 'str_replace_all'), ...$args),
+            'fixed' => $this->map(fn ($p) => $p === null ? null : new Pattern((string) $p, true), ...$args),
+            'regex' => $this->map(fn ($p, $ic) => $p === null ? null : new Pattern((string) $p, false, (bool) $ic),
+                ...[...$args, $this->option($call, 'ignore_case', false)]),
+            'str_count' => $this->map(fn ($s, $p) => $s === null || $p === null ? null : Strings::count(self::str($s), Pattern::of($p)), ...$args),
+            'str_extract' => $this->map(fn ($s, $p) => $s === null || $p === null ? null : Strings::extract(self::str($s), Pattern::of($p)), ...$args),
+            'str_extract_all' => $this->map(fn ($s, $p) => $s === null || $p === null ? [null] : Strings::extractAll(self::str($s), Pattern::of($p)), ...$args),
+            'str_split' => $this->map(fn ($s, $p) => $s === null || $p === null ? [null] : Strings::split(self::str($s), Pattern::of($p)), ...$args),
+            'str_split_i' => $this->map(fn ($s, $p, $i) => $s === null || $p === null || $i === null ? null : Strings::splitPiece(self::str($s), Pattern::of($p), (int) $i), ...$args),
+            'str_pad' => $this->map(fn ($s, $w, $side, $pad) => $s === null || $w === null ? null : Strings::pad(self::str($s), (int) $w, (string) $side, (string) $pad),
+                ...[...$args, $this->option($call, 'side', 'left'), $this->option($call, 'pad', ' ')]),
+            'str_trunc' => $this->map(fn ($s, $w, $side, $e) => $s === null || $w === null ? null : Strings::truncate(self::str($s), (int) $w, (string) $side, (string) $e),
+                ...[...$args, $this->option($call, 'side', 'right'), $this->option($call, 'ellipsis', '...')]),
+            'str_to_title' => $this->map(fn ($s) => $s === null ? null : Strings::title(self::str($s)), ...$args),
+            'str_to_upper' => $this->map(fn ($s) => $s === null ? null : mb_strtoupper(self::str($s)), ...$args),
+            'str_to_lower' => $this->map(fn ($s) => $s === null ? null : mb_strtolower(self::str($s)), ...$args),
+            'str_squish' => $this->map(fn ($s) => $s === null ? null : Strings::squish(self::str($s)), ...$args),
+            'ymd', 'dmy', 'mdy' => $this->map(fn ($s, $tz) => Temporal::parseDate($s === null ? null : self::str($s), $fn, $tz),
+                ...[...$args, $this->option($call, 'tz', null)]),
+            'ymd_hms', 'dmy_hms', 'mdy_hms' => $this->map(fn ($s, $tz) => Temporal::parseDateTime($s === null ? null : self::str($s), substr($fn, 0, 3), $tz),
+                ...[...$args, $this->option($call, 'tz', null)]),
+            'parse_date_time' => $this->map(fn ($s, $orders, $tz) => Temporal::parseOrders($s === null ? null : self::str($s), (array) $orders, $tz),
+                ...[...$args, $this->option($call, 'tz', null)]),
+            'year', 'month', 'day', 'yday', 'quarter', 'hour', 'minute', 'second' => $this->map(fn ($x) => Temporal::part($x, $fn), ...$args),
+            'wday' => $this->map(fn ($x, $ws) => Temporal::part($x, 'wday', (int) $ws), ...[...$args, $this->option($call, 'week_start', 7)]),
+            'floor_date', 'ceiling_date', 'round_date' => $this->map(
+                fn ($x, $unit, $ws) => Temporal::round($x, (string) $unit, substr($fn, 0, strpos($fn, '_')), (int) $ws),
+                ...[...$args, $this->option($call, 'week_start', 7)],
+            ),
+            'seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years' => $this->map(fn ($n) => $n === null ? null : new Period($n, $fn), ...$args),
+            'difftime' => $this->map(fn ($x, $y, $units) => $x === null || $y === null ? null : Temporal::difference($x, $y, (string) $units),
+                ...[...$args, $this->option($call, 'units', 'days')]),
+            'with_tz' => $this->map(fn ($x, $tz) => Temporal::withTz($x, (string) $tz), ...$args),
+            'force_tz' => $this->map(fn ($x, $tz) => Temporal::forceTz($x, (string) $tz), ...$args),
+            'today' => new Scalar(Temporal::today($this->value($call, 'tz', null))),
+            'now' => new Scalar(Temporal::now($this->value($call, 'tz', null))),
             'paste0' => $this->map(fn (...$parts) => implode('', array_map(self::pasteable(...), $parts)), ...$args),
             'paste' => $this->map(fn (...$parts) => implode((string) array_pop($parts), array_map(self::pasteable(...), $parts)),
                 ...[...$args, $this->option($call, 'sep', ' ')]),
@@ -667,10 +699,24 @@ final class Evaluator
         return $v === null ? 'NA' : self::str($v);
     }
 
-    private static function arith(string $op, mixed $a, mixed $b): int|float|null
+    private static function arith(string $op, mixed $a, mixed $b): mixed
     {
         if ($a === null || $b === null) {
             return null;
+        }
+        // Dates and periods: date + days(1), date - date (days), datetime - datetime (seconds).
+        if ($a instanceof Period || $b instanceof Period) {
+            return match (true) {
+                $op === '+' && $a instanceof DateTimeInterface => Temporal::plus($a, $b),
+                $op === '+' && $b instanceof DateTimeInterface => Temporal::plus($b, $a),
+                $op === '-' && $a instanceof DateTimeInterface && $b instanceof Period => Temporal::plus($a, $b->negate()),
+                $op === '*' && $a instanceof Period && ! $b instanceof Period => new Period($a->amount * self::num($b), $a->unit),
+                $op === '*' && $b instanceof Period && ! $a instanceof Period => new Period($b->amount * self::num($a), $b->unit),
+                default => throw new InvalidArgumentException("Unsupported period arithmetic: {$op}."),
+            };
+        }
+        if ($op === '-' && $a instanceof DateTimeInterface && $b instanceof DateTimeInterface) {
+            return Temporal::difference($a, $b, $a instanceof \Phibble\CalendarDate && $b instanceof \Phibble\CalendarDate ? 'days' : 'secs');
         }
         $a = self::num($a);
         $b = self::num($b);

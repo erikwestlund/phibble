@@ -166,14 +166,16 @@ final class Compiler
             'str_length' => $this->dialect->length($a(0)),
             'str_trim' => $this->trim($call),
             'str_sub' => $this->substring($call),
-            'str_detect' => $this->negate($call, Fragment::format('({} > 0)', [$this->dialect->position($a(0), $a(1))])),
-            'str_starts' => $this->negate($call, Fragment::format('(SUBSTR({}, 1, {}) = {})', [$a(0), $this->dialect->length($a(1)), $a(1)])),
-            'str_ends' => $this->negate($call, Fragment::format('({} >= {} AND SUBSTR({}, {} - {} + 1) = {})', [
-                $this->dialect->length($a(0)), $this->dialect->length($a(1)),
-                $a(0), $this->dialect->length($a(0)), $this->dialect->length($a(1)), $a(1),
+            'str_detect' => $this->negate($call, Fragment::format('({} > 0)', [$this->dialect->position($a(0), $this->literalPattern($call->args[1]))])),
+            'str_starts' => $this->negate($call, Fragment::format('(SUBSTR({}, 1, {}) = {})', [
+                $a(0), $this->dialect->length($this->literalPattern($call->args[1])), $this->literalPattern($call->args[1]),
             ])),
-            'str_replace' => $this->replaceFirst($a(0), $a(1), $a(2)),
-            'str_replace_all' => Fragment::format('REPLACE({}, {}, {})', [$a(0), $a(1), $a(2)]),
+            'str_ends' => $this->negate($call, Fragment::format('({} >= {} AND SUBSTR({}, {} - {} + 1) = {})', [
+                $this->dialect->length($a(0)), $this->dialect->length($this->literalPattern($call->args[1])),
+                $a(0), $this->dialect->length($a(0)), $this->dialect->length($this->literalPattern($call->args[1])), $this->literalPattern($call->args[1]),
+            ])),
+            'str_replace' => $this->replaceFirst($a(0), $this->literalPattern($call->args[1]), $this->replacement($call->args[2])),
+            'str_replace_all' => Fragment::format('REPLACE({}, {}, {})', [$a(0), $this->literalPattern($call->args[1]), $this->replacement($call->args[2])]),
             'paste0' => $this->paste($call->args, null),
             'paste' => $this->paste($call->args, $call->option('sep') ?? new Lit(' ')),
         };
@@ -480,6 +482,30 @@ final class Compiler
             return Fragment::format("SUBSTR({}, {$s}, ".($e - $s + 1).')', [$x]);
         }
         throw new Untranslatable('str_sub() with negative or crossing positions is not translated.');
+    }
+
+    /**
+     * A pattern SQL can match exactly: fixed('...'), or a plain string with
+     * no regular-expression metacharacters (then regex and literal agree).
+     */
+    private function literalPattern(Expr $pattern): Fragment
+    {
+        if ($pattern instanceof Call && $pattern->fn === 'fixed' && $pattern->args[0] instanceof Lit && is_string($pattern->args[0]->value)) {
+            return $this->compile($pattern->args[0]);
+        }
+        if ($pattern instanceof Lit && is_string($pattern->value) && strpbrk($pattern->value, '.^$*+?()[]{}|\\') === false) {
+            return $this->compile($pattern);
+        }
+        throw new Untranslatable('Regular-expression patterns are evaluated in memory; use fixed() for literal matching in SQL.');
+    }
+
+    /** A replacement without group references (\1), which SQL REPLACE can't expand. */
+    private function replacement(Expr $replacement): Fragment
+    {
+        if ($replacement instanceof Lit && is_string($replacement->value) && ! str_contains($replacement->value, '\\')) {
+            return $this->compile($replacement);
+        }
+        throw new Untranslatable('Replacements with group references or non-literal values are evaluated in memory.');
     }
 
     /** str_replace(): the first occurrence only, with fixed patterns. */
