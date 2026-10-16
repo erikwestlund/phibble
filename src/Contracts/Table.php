@@ -136,6 +136,15 @@ interface Table extends \Countable, \IteratorAggregate
     public function eachGroup(): iterable;
 
     /**
+     * Each group's key and 0-based row indexes, in the same order as
+     * eachGroup(). Empty groups (drop: false) have no rows; a rowwise
+     * table has one group per row.
+     *
+     * @return list<array{key: array<string, mixed>, rows: list<int>}>
+     */
+    public function groupRows(): array;
+
+    /**
      * One row per group: the group keys, then one column per entry. Each
      * entry is a closure given the group's table, or an Expr that must
      * evaluate to one value (usually an aggregate).

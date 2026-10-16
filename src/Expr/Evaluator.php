@@ -37,9 +37,28 @@ final class Evaluator
     /** @var array<string, list<mixed>> */
     private array $cache = [];
 
-    public function __construct(private readonly Table $table)
+    /** @var \Closure(string): list<mixed> */
+    private \Closure $column;
+
+    public function __construct(Table $table)
     {
         $this->n = $table->nrow();
+        $this->column = $table->column(...);
+    }
+
+    /**
+     * Evaluate over rows supplied column by column, e.g. a group's slice of
+     * a larger table, without building a table for it.
+     *
+     * @param \Closure(string): list<mixed> $column Values of a column, by name.
+     */
+    public static function over(\Closure $column, int $rows): self
+    {
+        $evaluator = (new \ReflectionClass(self::class))->newInstanceWithoutConstructor();
+        $evaluator->n = $rows;
+        $evaluator->column = $column;
+
+        return $evaluator;
     }
 
     /** Evaluate to one value per row; scalars are repeated. */
@@ -70,7 +89,7 @@ final class Evaluator
     public function eval(Expr $expr): array|Scalar
     {
         return match (true) {
-            $expr instanceof Col => $this->cache[$expr->name] ??= $this->table->column($expr->name),
+            $expr instanceof Col => $this->cache[$expr->name] ??= ($this->column)($expr->name),
             $expr instanceof Lit => new Scalar($expr->value),
             $expr instanceof Call => $this->call($expr),
             $expr instanceof Desc => throw new InvalidArgumentException('desc() is only allowed in arrange(), ranking functions and order_by.'),
@@ -92,9 +111,9 @@ final class Evaluator
         $args = array_map(fn (Expr $a) => $this->eval($a), $call->args);
 
         return match ($fn) {
-            '+', '-', '*', '/', '%%', '^' => $this->map(fn ($a, $b) => self::arith($fn, $a, $b), ...$args),
+            '+', '-', '*', '/', '%%', '^' => $this->numericBinary($fn, ...$args) ?? $this->map(fn ($a, $b) => self::arith($fn, $a, $b), ...$args),
             'neg' => $this->map(fn ($a) => $a === null ? null : -self::num($a), ...$args),
-            '==', '!=', '<', '<=', '>', '>=' => $this->map(fn ($a, $b) => self::compare($fn, $a, $b), ...$args),
+            '==', '!=', '<', '<=', '>', '>=' => $this->numericBinary($fn, ...$args) ?? $this->map(fn ($a, $b) => self::compare($fn, $a, $b), ...$args),
             '&' => $this->map(fn ($a, $b) => match (true) {
                 $a === false || $b === false => false,
                 $a === null || $b === null => null,
@@ -224,7 +243,7 @@ final class Evaluator
             'sum' => array_all($present, fn ($v) => is_int($v) || is_bool($v))
                 ? array_sum(array_map(intval(...), $present))
                 : array_sum(array_map(self::num(...), $present)),
-            'mean' => $present === [] ? NAN : array_sum(array_map(self::num(...), $present)) / count($present),
+            'mean' => $present === [] ? NAN : (float) array_sum(array_map(self::num(...), $present)) / count($present),
             'median' => $present === [] ? null : self::quantile(array_map(self::num(...), $present), 0.5),
             'min', 'max' => $present === [] ? ($fn === 'min' ? INF : -INF) : self::extreme($fn, $present),
             'sd', 'var' => self::variance(array_map(self::num(...), $present), $fn === 'sd'),
@@ -350,6 +369,9 @@ final class Evaluator
     private function rank(Call $call): array
     {
         $fn = $call->fn;
+        if ($call->args === [] && $fn === 'row_number') {
+            return $this->n === 0 ? [] : range(1, $this->n);
+        }
         if ($call->args === []) {
             $values = range(0, max(0, $this->n - 1));
             $desc = false;
@@ -476,8 +498,84 @@ final class Evaluator
             return new Scalar($fn(...array_map(fn (Scalar $s) => $s->value, $args)));
         }
         $out = [];
+        // One and two arguments are the common cases; avoid building an
+        // argument list per element for them.
+        if (count($args) === 1) {
+            foreach ($args[0] as $a) {
+                $out[] = $fn($a);
+            }
+
+            return $out;
+        }
+        if (count($args) === 2) {
+            [$a, $b] = $args;
+            if ($a instanceof Scalar) {
+                $av = $a->value;
+                foreach ($b as $bv) {
+                    $out[] = $fn($av, $bv);
+                }
+            } elseif ($b instanceof Scalar) {
+                $bv = $b->value;
+                foreach ($a as $av) {
+                    $out[] = $fn($av, $bv);
+                }
+            } else {
+                foreach ($a as $i => $av) {
+                    $out[] = $fn($av, $b[$i]);
+                }
+            }
+
+            return $out;
+        }
         for ($i = 0; $i < $this->n; $i++) {
             $out[] = $fn(...array_map(fn ($a) => $a instanceof Scalar ? $a->value : $a[$i], $args));
+        }
+
+        return $out;
+    }
+
+    /**
+     * Arithmetic and comparison on numbers without a call per element.
+     * Returns null (so the general path runs) when a value is not an int
+     * or float, or for operators with special cases.
+     *
+     * @return list<mixed>|null
+     */
+    private function numericBinary(string $op, array|Scalar $a, array|Scalar $b): ?array
+    {
+        if (! in_array($op, ['+', '-', '*', '<', '<=', '>', '>=', '==', '!='], true) || (! is_array($a) && ! is_array($b))) {
+            return null;
+        }
+        $as = $a instanceof Scalar;
+        $bs = $b instanceof Scalar;
+        $av = $as ? $a->value : null;
+        $bv = $bs ? $b->value : null;
+        if (($as && ! (is_int($av) || is_float($av))) || ($bs && ! (is_int($bv) || is_float($bv)))) {
+            return null;
+        }
+        $out = [];
+        for ($i = 0; $i < $this->n; $i++) {
+            $x = $as ? $av : $a[$i];
+            $y = $bs ? $bv : $b[$i];
+            if ($x === null || $y === null) {
+                $out[] = null;
+
+                continue;
+            }
+            if (! (is_int($x) || is_float($x)) || ! (is_int($y) || is_float($y))) {
+                return null;
+            }
+            $out[] = match ($op) {
+                '+' => $x + $y,
+                '-' => $x - $y,
+                '*' => $x * $y,
+                '<' => $x < $y,
+                '<=' => $x <= $y,
+                '>' => $x > $y,
+                '>=' => $x >= $y,
+                '==' => $x == $y,
+                '!=' => $x != $y,
+            };
         }
 
         return $out;

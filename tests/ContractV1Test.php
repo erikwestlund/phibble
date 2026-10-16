@@ -305,3 +305,15 @@ it('carries drop: false through row verbs and resets it on regrouping', function
         ->and($grouped->ungroup()->dropsEmptyGroups())->toBeTrue()
         ->and(dropFrame()->groupBy(['f'])->ngroups())->toBe(2);
 });
+
+it('exposes group rows in group order', function () {
+    $groups = dropFrame()->groupBy(['f'], drop: false)->groupRows();
+
+    expect($groups)->toBe([
+        ['key' => ['f' => 'a'], 'rows' => [0, 1]],
+        ['key' => ['f' => 'b'], 'rows' => []],
+        ['key' => ['f' => 'c'], 'rows' => [2]],
+    ])
+        ->and(dropFrame()->groupRows())->toBe([['key' => [], 'rows' => [0, 1, 2]]])
+        ->and(count(dropFrame()->rowwise()->groupRows()))->toBe(3);
+});

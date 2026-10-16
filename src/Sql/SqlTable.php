@@ -364,6 +364,11 @@ final readonly class SqlTable implements Table
         return $this->collect()->eachGroup();
     }
 
+    public function groupRows(): array
+    {
+        return $this->collect()->groupRows();
+    }
+
     public function summarise(array $aggregates, ?string $groups = null): Table
     {
         if (array_any($aggregates, fn ($a) => ! $a instanceof Expr)) {

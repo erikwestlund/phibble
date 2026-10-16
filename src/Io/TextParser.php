@@ -164,6 +164,10 @@ final readonly class TextParser
 
     private function parseInt(string $v, bool $grouping): ?int
     {
+        // Fast path: plain digits that fit in 64 bits.
+        if (strlen($v) < 19 && (ctype_digit($v) || ($v[0] === '-' && strlen($v) > 1 && ctype_digit(substr($v, 1))))) {
+            return (int) $v;
+        }
         if ($grouping) {
             $v = str_replace($this->grouping, '', $v);
         }
@@ -179,6 +183,11 @@ final readonly class TextParser
 
     private function parseDouble(string $v, bool $grouping): ?float
     {
+        // Fast path: an ordinary decimal number (is_numeric also allows
+        // leading whitespace and hex-free exponents, which readr accepts).
+        if ($this->decimal === '.' && is_numeric($v) && $v[0] !== ' ' && $v[0] !== "\t" && $v[0] !== "\n") {
+            return (float) $v;
+        }
         if (preg_match('/^([+-]?)(inf|nan)$/i', $v, $m)) {
             return strtolower($m[2]) === 'nan' ? NAN : ($m[1] === '-' ? -INF : INF);
         }
@@ -218,6 +227,20 @@ final readonly class TextParser
     /** ISO 8601 datetimes, converted to UTC. Values without an offset are UTC. */
     public static function parseDateTime(string $v): ?DateTimeImmutable
     {
+        static $utc = null;
+        $utc ??= new DateTimeZone('UTC');
+        // Fast path: "YYYY-MM-DD HH:MM:SS" (or with T), already UTC.
+        if (strlen($v) === 19 && ($v[10] === ' ' || $v[10] === 'T') && $v[4] === '-' && $v[7] === '-' && $v[13] === ':' && $v[16] === ':'
+            && ctype_digit(substr($v, 0, 4).substr($v, 5, 2).substr($v, 8, 2).substr($v, 11, 2).substr($v, 14, 2).substr($v, 17, 2))) {
+            $year = (int) substr($v, 0, 4);
+            $month = (int) substr($v, 5, 2);
+            $day = (int) substr($v, 8, 2);
+            if (! checkdate($month, $day, $year) || (int) substr($v, 11, 2) > 23 || (int) substr($v, 14, 2) > 59 || (int) substr($v, 17, 2) > 59) {
+                return null;
+            }
+
+            return DateTimeImmutable::createFromFormat('!Y-m-d?H:i:s', $v, $utc) ?: null;
+        }
         if (! preg_match(self::DATETIME, $v, $m) || ! checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
             return null;
         }

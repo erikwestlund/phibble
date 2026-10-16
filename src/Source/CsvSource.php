@@ -242,10 +242,32 @@ final readonly class CsvSource implements Source
     private function fastRecords(int $line): Generator
     {
         $o = $this->options;
-        while (($record = fgetcsv($this->handle, null, $o->delimiter, $o->quote, '')) !== false) {
+        $text = stream_get_contents($this->handle);
+        // Without quotes or carriage returns, every line is a record and every
+        // delimiter separates fields, so plain splitting gives fgetcsv's result.
+        if (! str_contains($text, $o->quote) && ! str_contains($text, "\r")) {
+            $lines = explode("\n", $text);
+            unset($text);
+            if (end($lines) === '') {
+                array_pop($lines);
+            }
+            foreach ($lines as $content) {
+                $line++;
+                yield $line => ($content === '' ? null : explode($o->delimiter, $content));
+            }
+
+            return;
+        }
+
+        $memory = fopen('php://temp', 'r+');
+        fwrite($memory, $text);
+        unset($text);
+        rewind($memory);
+        while (($record = fgetcsv($memory, null, $o->delimiter, $o->quote, '')) !== false) {
             $line++;
             yield $line => ($record === [null] ? null : $record);
         }
+        fclose($memory);
     }
 
     /**

@@ -8,6 +8,7 @@ use PDO;
 use Phibble\Contracts\Table;
 use Phibble\Frame;
 use Phibble\Sql\SqlTable;
+use Phibble\Type;
 
 /** Loads each CSV into one in-memory SQLite database and returns SqlTables. */
 final class SqliteBackend implements Backend
@@ -29,7 +30,14 @@ final class SqliteBackend implements Backend
         $frame = Frame::fromCsv($path);
         $table = basename($path, '.csv');
         $columns = $frame->columns();
-        $this->pdo->exec("CREATE TABLE \"{$table}\" (".implode(', ', array_map(fn ($c) => "\"{$c}\"", $columns)).')');
+        // Typed columns: untyped ones store bound values as TEXT, and SQLite
+        // orders all TEXT above all numbers.
+        $sqlType = fn (string $c) => match ($frame->type($c)) {
+            Type::Int, Type::Bool => 'INTEGER',
+            Type::Float => 'REAL',
+            default => 'TEXT',
+        };
+        $this->pdo->exec("CREATE TABLE \"{$table}\" (".implode(', ', array_map(fn ($c) => "\"{$c}\" {$sqlType($c)}", $columns)).')');
         $insert = $this->pdo->prepare("INSERT INTO \"{$table}\" VALUES (".implode(', ', array_fill(0, count($columns), '?')).')');
         $this->pdo->beginTransaction();
         foreach ($frame->toRows() as $row) {

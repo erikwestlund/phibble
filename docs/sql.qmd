@@ -69,6 +69,11 @@ match `Frame` in either case. The fallbacks are:
 
 {{< include examples/_sql-fallback.md >}}
 
+SQLite compares by storage class, and it orders all text above all numbers.
+A column declared without a type stores bound values as text, so
+`col('x')->gt(0)` is true for every row of such a column. Declare column types
+(`INTEGER`, `REAL`, `TEXT`) when creating SQLite tables that phibble will query.
+
 ## Window functions
 
 Grouped `mutate()` and `filter()` compile aggregates and window functions to

@@ -16,9 +16,12 @@ use Phibble\Column\FactorColumn;
 use Phibble\Column\Infer;
 use Phibble\Contracts\Table;
 use Phibble\Exception\ColumnNotFound;
+use Phibble\Expr\Call;
+use Phibble\Expr\Col;
 use Phibble\Expr\Desc;
 use Phibble\Expr\Evaluator;
 use Phibble\Expr\Expr;
+use Phibble\Expr\Lit;
 use Phibble\Format\Glimpse;
 use Phibble\Format\Printer;
 use Phibble\Io\Collections;
@@ -775,9 +778,8 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
     {
         $keep = [];
         foreach ($this->groupIndex() as [$_, $indices]) {
-            $group = $this->subset($indices);
             if ($predicate instanceof Expr) {
-                foreach ((new Evaluator($group))->vector($predicate) as $j => $flag) {
+                foreach ($this->evaluator($indices)->vector($predicate) as $j => $flag) {
                     if ($flag === true) {
                         $keep[] = $indices[$j];
                     }
@@ -785,6 +787,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
 
                 continue;
             }
+            $group = $this->subset($indices);
             foreach ($group->toRows() as $j => $row) {
                 if ($predicate(new Row($row), $group)) {
                     $keep[] = $indices[$j];
@@ -909,8 +912,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             if ($key instanceof Expr) {
                 // Expression keys are computed over the whole table; arrange ignores groups.
                 $desc = $key instanceof Desc;
-                $values = (new Evaluator($this->subset($this->rows === 0 ? [] : range(0, $this->rows - 1))))
-                    ->vector($desc ? $key->expr : $key);
+                $values = (new Evaluator($this))->vector($desc ? $key->expr : $key);
                 $sorts[] = [$values, array_all($values, fn ($v) => $v === null || is_string($v)), $desc];
 
                 continue;
@@ -923,19 +925,70 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             $sorts[] = [...$this->sortable($name), $direction === 'desc'];
         }
 
-        $order = $this->rows === 0 ? [] : range(0, $this->rows - 1);
-        usort($order, function (int $a, int $b) use ($sorts): int {
-            foreach ($sorts as [$values, $isString, $desc]) {
-                $cmp = self::compare($values[$a], $values[$b], $isString, $desc);
-                if ($cmp !== 0) {
-                    return $cmp;
+        return $this->take(self::sortOrder($sorts, $this->rows));
+    }
+
+    /**
+     * Row order for sort keys, stable, NA last in both directions. Uses
+     * array_multisort when every key is all-numeric or all-text, and a
+     * comparison sort otherwise.
+     *
+     * @param list<array{0: list<mixed>, 1: bool, 2: bool}> $sorts [values, isString, descending]
+     * @return list<int>
+     */
+    private static function sortOrder(array $sorts, int $rows): array
+    {
+        $order = $rows === 0 ? [] : range(0, $rows - 1);
+        $args = [];
+        foreach ($sorts as [$values, $isString, $desc]) {
+            $missing = [];
+            $keys = [];
+            $numeric = ! $isString;
+            foreach ($values as $v) {
+                if ($v === null) {
+                    $missing[] = 1;
+                    $keys[] = $numeric ? 0 : '';
+
+                    continue;
                 }
+                $missing[] = 0;
+                if ($v instanceof DateTimeInterface) {
+                    $v = (float) $v->format('U.u');
+                } elseif (is_bool($v)) {
+                    $v = (int) $v;
+                }
+                if ($numeric ? ! (is_int($v) || is_float($v)) : ! is_string($v)) {
+                    $args = null;
+
+                    break 2;
+                }
+                $keys[] = $v;
             }
+            array_push($args, $missing, SORT_ASC, SORT_NUMERIC, $keys, $desc ? SORT_DESC : SORT_ASC, $numeric ? SORT_NUMERIC : SORT_STRING);
+        }
 
-            return $a <=> $b;
-        });
+        if ($args === null) {
+            usort($order, function (int $a, int $b) use ($sorts): int {
+                foreach ($sorts as [$values, $isString, $desc]) {
+                    $cmp = self::compare($values[$a], $values[$b], $isString, $desc);
+                    if ($cmp !== 0) {
+                        return $cmp;
+                    }
+                }
 
-        return $this->take($order);
+                return $a <=> $b;
+            });
+
+            return $order;
+        }
+        if ($rows === 0) {
+            return [];
+        }
+        // The row number as the last key keeps the sort stable.
+        array_push($args, $order, SORT_ASC, SORT_NUMERIC);
+        array_multisort(...$args);
+
+        return $args[count($args) - 3];
     }
 
     public function groupBy(array $names, bool $drop = true): static
@@ -985,6 +1038,11 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         }
     }
 
+    public function groupRows(): array
+    {
+        return array_map(fn (array $g) => ['key' => $g[0], 'rows' => $g[1]], $this->groupIndex());
+    }
+
     /** Number of groups (1 for an ungrouped table, nrow for a rowwise one). */
     public function ngroups(): int
     {
@@ -1008,11 +1066,20 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         }
 
         $results = array_fill_keys(array_keys($aggregates), []);
-        foreach ($index as [$_, $indices]) {
-            $group = $this->subset($indices);
+        // Simple aggregates of one column run as one pass over the groups.
+        foreach ($aggregates as $name => $aggregate) {
+            if ($aggregate instanceof Expr && ($values = $this->aggregateKernel($aggregate, $index)) !== null) {
+                $results[$name] = $values;
+                unset($aggregates[$name]);
+            }
+        }
+        $needsTable = array_any($aggregates, fn ($a) => ! $a instanceof Expr);
+        foreach ($aggregates === [] ? [] : $index as [$_, $indices]) {
+            $group = $needsTable ? $this->subset($indices) : null;
+            $evaluator = null;
             foreach ($aggregates as $name => $aggregate) {
                 $value = $aggregate instanceof Expr
-                    ? (new Evaluator($group))->scalar($aggregate, (string) $name)
+                    ? ($evaluator ??= $this->evaluator($indices))->scalar($aggregate, (string) $name)
                     : $aggregate($group);
                 if (is_array($value)) {
                     throw new \LengthException("summarise() '{$name}' must return a single value, not an array. Use reframe() for several rows per group.");
@@ -1551,6 +1618,16 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
      */
     private function groupIndex(): array
     {
+        // Frames are immutable, so each frame's index is computed once.
+        static $cache = null;
+        $cache ??= new \WeakMap();
+
+        return $cache[$this] ??= $this->buildGroupIndex();
+    }
+
+    /** @return list<array{0: array<string, mixed>, 1: list<int>}> */
+    private function buildGroupIndex(): array
+    {
         $all = $this->rows === 0 ? [] : range(0, $this->rows - 1);
         if ($this->rowwise) {
             return array_map(fn (int $i) => [array_map(fn (string $g) => $this->data[$g]->get($i), array_combine($this->groups, $this->groups)), [$i]], $all);
@@ -1562,15 +1639,33 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             return $this->expandGroups($this->groups, $all, []);
         }
 
-        $keys = array_map(fn (string $g) => $this->data[$g]->values(), array_combine($this->groups, $this->groups));
-        $index = [];
-        for ($i = 0; $i < $this->rows; $i++) {
-            $key = array_map(fn (array $values) => $values[$i], $keys);
-            $hash = self::hashKey($key);
-            $index[$hash] ??= [$key, []];
-            $index[$hash][1][] = $i;
+        // Bucket rows by an encoded key: one hashable value per row.
+        $encoded = array_map(fn (string $g) => $this->encodeKeys($g), $this->groups);
+        $rowsByKey = [];
+        if (count($encoded) === 1) {
+            foreach ($encoded[0] as $i => $key) {
+                $rowsByKey[$key][] = $i;
+            }
+        } else {
+            for ($i = 0; $i < $this->rows; $i++) {
+                $key = '';
+                foreach ($encoded as $column) {
+                    $key .= $column[$i]."\x1F";
+                }
+                $rowsByKey[$key][] = $i;
+            }
         }
-        $index = array_values($index);
+
+        $values = array_map(fn (string $g) => $this->data[$g]->values(), $this->groups);
+        $index = [];
+        foreach ($rowsByKey as $rows) {
+            $first = $rows[0];
+            $key = [];
+            foreach ($this->groups as $k => $g) {
+                $key[$g] = $values[$k][$first];
+            }
+            $index[] = [$key, $rows];
+        }
 
         $sorts = array_map(fn (string $g) => $this->sortable($g), $this->groups);
         usort($index, function (array $a, array $b) use ($sorts): int {
@@ -1587,6 +1682,28 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         return $index;
     }
 
+    /**
+     * One hashable value per row for grouping: factor codes, ints and
+     * strings as they are, floats and dates as text, NA as a sentinel.
+     *
+     * @return list<int|string>
+     */
+    private function encodeKeys(string $name): array
+    {
+        $column = $this->data[$name];
+        $na = "\0NA";
+        if ($column instanceof FactorColumn) {
+            return array_map(fn (?int $c) => $c ?? $na, $column->codes());
+        }
+
+        return match ($column->type()) {
+            Type::Int, Type::String => array_map(fn ($v) => $v ?? $na, $column->values()),
+            Type::Bool => array_map(fn (?bool $v) => $v === null ? $na : (int) $v, $column->values()),
+            Type::Float => array_map(fn (?float $v) => $v === null ? $na : 'f'.($v == 0.0 ? '0' : (string) $v), $column->values()),
+            Type::Date, Type::DateTime => array_map(fn ($v) => $v === null ? $na : 'd'.$v->format('U.u'), $column->values()),
+            default => array_map(fn ($v) => self::hashKey([$v]), $column->values()),
+        };
+    }
     /**
      * Groups for groupBy(..., drop: false), as dplyr builds them: a factor
      * key takes every level (plus NA if present), a non-factor key its
@@ -1715,6 +1832,104 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
      *
      * @param list<int> $indices
      */
+    /**
+     * An evaluator over the given rows that slices only the columns an
+     * expression reads. All rows in order means the whole columns.
+     *
+     * @param list<int> $indices
+     */
+    private function evaluator(array $indices): Evaluator
+    {
+        $whole = count($indices) === $this->rows;
+
+        return Evaluator::over(function (string $name) use ($indices, $whole): array {
+            $values = $this->wholeColumn($name);
+            if ($whole) {
+                return $values;
+            }
+            $slice = [];
+            foreach ($indices as $i) {
+                $slice[] = $values[$i];
+            }
+
+            return $slice;
+        }, count($indices));
+    }
+
+    /** A column's values, computed once per frame (factor labels are built on demand). */
+    private function wholeColumn(string $name): array
+    {
+        static $cache = null;
+        $cache ??= new \WeakMap();
+        $columns = $cache[$this] ?? [];
+        if (! array_key_exists($name, $columns)) {
+            $columns[$name] = $this->storage($name)->values();
+            $cache[$this] = $columns;
+        }
+
+        return $columns[$name];
+    }
+
+    /**
+     * n(), sum(), mean(), min() and max() of a numeric column, per group,
+     * in one pass with the evaluator's semantics. Null when the expression
+     * is anything else.
+     *
+     * @param list<array{0: array<string, mixed>, 1: list<int>}> $index
+     * @return list<mixed>|null
+     */
+    private function aggregateKernel(Expr $expr, array $index): ?array
+    {
+        if (! $expr instanceof Call || ! in_array($expr->fn, ['n', 'sum', 'mean', 'min', 'max'], true)) {
+            return null;
+        }
+        if ($expr->fn === 'n') {
+            return array_map(fn (array $g) => count($g[1]), $index);
+        }
+        $arg = $expr->args[0];
+        $naRm = $expr->option('na_rm');
+        if (! $arg instanceof Col || ($naRm !== null && ! ($naRm instanceof Lit && is_bool($naRm->value)))
+            || ! isset($this->data[$arg->name]) || ! in_array($this->data[$arg->name]->type(), [Type::Int, Type::Float], true)) {
+            return null;
+        }
+        $naRm = $naRm?->value === true;
+        $values = $this->data[$arg->name]->values();
+        $isInt = $this->data[$arg->name]->type() === Type::Int;
+
+        $out = [];
+        foreach ($index as [$_, $rows]) {
+            $acc = null;
+            $count = 0;
+            $na = false;
+            foreach ($rows as $i) {
+                $v = $values[$i];
+                if ($v === null) {
+                    $na = true;
+                    if (! $naRm) {
+                        break;
+                    }
+
+                    continue;
+                }
+                $count++;
+                $acc = match ($expr->fn) {
+                    'sum', 'mean' => ($acc ?? 0) + $v,
+                    'min' => $acc === null || $v < $acc ? $v : $acc,
+                    'max' => $acc === null || $v > $acc ? $v : $acc,
+                };
+            }
+            $out[] = match (true) {
+                $na && ! $naRm => null,
+                $expr->fn === 'sum' => $acc ?? ($isInt ? 0 : 0.0),
+                $expr->fn === 'mean' => $count === 0 ? NAN : (float) $acc / $count,
+                $expr->fn === 'min' => $acc ?? INF,
+                $expr->fn === 'max' => $acc ?? -INF,
+            };
+        }
+
+        return $out;
+    }
+
     private function subset(array $indices): self
     {
         return new self(array_map(fn (Column $c) => $c->take($indices), $this->data), count($indices));
@@ -1727,9 +1942,13 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             return $definition;
         }
         if ($definition instanceof Expr) {
+            $index = $this->groupIndex();
+            if (count($index) === 1 && count($index[0][1]) === $this->rows) {
+                return $this->evaluator($index[0][1])->vector($definition);
+            }
             $values = array_fill(0, $this->rows, null);
-            foreach ($this->groupIndex() as [$_, $indices]) {
-                foreach ((new Evaluator($this->subset($indices)))->vector($definition) as $j => $value) {
+            foreach ($index as [$_, $indices]) {
+                foreach ($this->evaluator($indices)->vector($definition) as $j => $value) {
                     $values[$indices[$j]] = $value;
                 }
             }

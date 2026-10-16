@@ -78,3 +78,11 @@ it('validates calls against the registry', function () {
         ->and(fn () => Phibble\Expr\call('abs', desc(col('x'))))->toThrow(InvalidArgumentException::class, 'desc() is only allowed')
         ->and(fn () => exprFrame()->groupBy(['g'])->summarise(['out' => col('x')]))->toThrow(LengthException::class, 'must be size 1');
 });
+
+it('returns doubles from mean() of integers, as R does', function () {
+    $frame = Frame::fromColumns(['g' => ['a', 'a', 'b'], 'i' => [2, 4, 3]]);
+
+    expect($frame->groupBy(['g'])->summarise(['m' => mean(col('i'))])->column('m'))->toBe([3.0, 3.0])
+        ->and($frame->groupBy(['g'])->summarise(['m' => mean(col('i'))])->type('m'))->toBe(Phibble\Type::Float)
+        ->and($frame->summarise(['m' => Phibble\Expr\call('mean', col('i'))])->column('m'))->toBe([3.0]);
+});
