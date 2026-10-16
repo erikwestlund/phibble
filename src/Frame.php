@@ -566,14 +566,107 @@ final readonly class Frame implements Table, Stringable
     }
 
     /**
-     * Turn a column into a factor. Without levels, they are the sorted
-     * unique values. Values not in $levels become NA.
+     * Turn a column into a factor, as R's factor(). Without levels, they are
+     * the sorted unique values. Values not in $levels become NA.
      *
-     * @param list<string>|null $levels
+     * @param list<string|int|float>|null $levels
      */
-    public function asFactor(string $name, ?array $levels = null): self
+    public function asFactor(string $name, ?array $levels = null, bool $ordered = false): self
     {
-        return $this->withColumn($name, FactorColumn::fromValues($this->column($name), $levels));
+        return $this->withColumn($name, FactorColumn::fromValues($this->column($name), $levels, $ordered));
+    }
+
+    /** @param list<string|int|float>|null $levels */
+    public function asOrdered(string $name, ?array $levels = null): self
+    {
+        return $this->asFactor($name, $levels ?? ($this->storage($name) instanceof FactorColumn ? $this->levels($name) : null), true);
+    }
+
+    public function isOrdered(string $name): bool
+    {
+        $column = $this->storage($name);
+
+        return $column instanceof FactorColumn && $column->isOrdered();
+    }
+
+    /** fct_relevel(): move levels to the front, or after a 0-based position (-1 for the end). */
+    public function fctRelevel(string $name, array $levels, int $after = 0): self
+    {
+        return $this->withColumn($name, $this->factor($name)->relevel($levels, $after));
+    }
+
+    /** factor(x, levels = ...): set the full level order. Unlisted values become NA. */
+    public function fctLevels(string $name, array $levels): self
+    {
+        return $this->withColumn($name, $this->factor($name)->withLevels($levels));
+    }
+
+    /** fct_rev() */
+    public function fctRev(string $name): self
+    {
+        return $this->withColumn($name, $this->factor($name)->reverse());
+    }
+
+    /** fct_inorder() */
+    public function fctInorder(string $name): self
+    {
+        return $this->withColumn($name, $this->factor($name)->inOrder());
+    }
+
+    /** fct_infreq() */
+    public function fctInfreq(string $name): self
+    {
+        return $this->withColumn($name, $this->factor($name)->inFrequency());
+    }
+
+    /**
+     * fct_reorder(): order levels by a summary (default median) of another column.
+     *
+     * @param Closure(list<mixed>): mixed|null $summary
+     */
+    public function fctReorder(string $name, string $by, ?Closure $summary = null, bool $descending = false): self
+    {
+        return $this->withColumn($name, $this->factor($name)->reorder($this->column($by), $summary, $descending));
+    }
+
+    /** fct_recode(): rename levels, new => old. */
+    public function fctRecode(string $name, array $map): self
+    {
+        return $this->withColumn($name, $this->factor($name)->recode($map));
+    }
+
+    /** fct_collapse(): merge levels, new => list of old. */
+    public function fctCollapse(string $name, array $groups): self
+    {
+        return $this->withColumn($name, $this->factor($name)->collapse($groups));
+    }
+
+    /**
+     * fct_drop() / droplevels(): remove unused levels. With no name, every
+     * factor column.
+     *
+     * @param list<string>|null $only
+     */
+    public function fctDrop(?string $name = null, ?array $only = null): self
+    {
+        $names = $name === null
+            ? array_keys(array_filter($this->data, fn (Column $c) => $c instanceof FactorColumn))
+            : [$name];
+        $frame = $this;
+        foreach ($names as $n) {
+            $frame = $frame->withColumn((string) $n, $frame->factor((string) $n)->dropUnused($only));
+        }
+
+        return $frame;
+    }
+
+    private function factor(string $name): FactorColumn
+    {
+        $column = $this->storage($name);
+
+        return $column instanceof FactorColumn
+            ? $column
+            : FactorColumn::fromValues($column->values());
     }
 
     /**
@@ -724,7 +817,12 @@ final readonly class Frame implements Table, Stringable
     private static function hashKey(array $values): string
     {
         return serialize(array_map(
-            fn ($v) => $v instanceof DateTimeInterface ? 'date:'.$v->format('Y-m-d\TH:i:s.uP') : $v,
+            fn ($v) => match (true) {
+                $v instanceof DateTimeInterface => 'date:'.$v->format('Y-m-d\TH:i:s.uP'),
+                $v instanceof Table => 'table:'.serialize($v->toColumns()),
+                is_object($v) => 'object:'.spl_object_id($v),
+                default => $v,
+            },
             array_values($values),
         ));
     }

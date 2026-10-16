@@ -34,7 +34,7 @@ final readonly class ArrayColumn implements Column
     {
         $values = [];
         foreach ($indices as $i) {
-            $values[] = $this->values[$i];
+            $values[] = $i === null ? null : $this->values[$i];
         }
 
         return new self($this->type, $values);

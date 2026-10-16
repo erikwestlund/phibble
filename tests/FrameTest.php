@@ -48,7 +48,7 @@ it('infers types from PHP values', function () {
 
     expect($frame->types())->toBe([
         'f' => Type::Float, 'i' => Type::Int, 'b' => Type::Bool,
-        's' => Type::String, 'd' => Type::Date, 'na' => Type::Bool,
+        's' => Type::String, 'd' => Type::DateTime, 'na' => Type::Bool,
     ])
         ->and($frame->column('f'))->toBe([1.0, 2.5, null])
         ->and($frame->column('d')[0])->toBeInstanceOf(DateTimeImmutable::class);
@@ -62,9 +62,12 @@ it('accepts explicit types', function () {
         ->and($frame->levels('g'))->toBe(['a', 'b']);
 });
 
-it('rejects values it cannot cast', function () {
-    Frame::fromColumns(['x' => ['abc']], types: ['x' => 'int']);
-})->throws(InvalidArgumentException::class, "Cannot cast 'abc' to int in column 'x'.");
+it('turns values it cannot cast into NA with a warning, as R does', function () {
+    [$frame, $warnings] = quietly(fn () => Frame::fromColumns(['x' => ['abc', '2']], types: ['x' => 'int']));
+
+    expect($frame->column('x'))->toBe([null, 2])
+        ->and($warnings)->toBe(["NAs introduced by coercion to int in column 'x' (1 value)."]);
+});
 
 it('throws ColumnNotFound for unknown columns', function () {
     penguins()->column('beak');

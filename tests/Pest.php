@@ -14,3 +14,21 @@ function penguins(): Frame
         ['species' => 'Gentoo', 'island' => 'Biscoe', 'mass' => 5400.0, 'year' => 2008],
     ]);
 }
+
+/** Run $fn with warnings collected instead of thrown. */
+function quietly(Closure $fn): array
+{
+    $warnings = [];
+    set_error_handler(function (int $level, string $message) use (&$warnings) {
+        $warnings[] = $message;
+
+        return true;
+    });
+    try {
+        $result = $fn();
+    } finally {
+        restore_error_handler();
+    }
+
+    return [$result, $warnings];
+}

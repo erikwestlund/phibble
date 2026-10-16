@@ -14,6 +14,8 @@ enum Type: string
     case String = 'string';
     case Factor = 'factor';
     case Date = 'date';
+    case DateTime = 'datetime';
+    case List = 'list';
 
     public static function parse(self|string $type): self
     {
@@ -35,6 +37,8 @@ enum Type: string
             self::String => 'chr',
             self::Factor => 'fct',
             self::Date => 'date',
+            self::DateTime => 'dttm',
+            self::List => 'list',
         };
     }
 

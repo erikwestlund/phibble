@@ -15,7 +15,7 @@ it('reads CSV and infers types from text', function () {
 
     expect($frame->types())->toBe([
         'id' => Type::Int, 'score' => Type::Float, 'ok' => Type::Bool,
-        'day' => Type::Date, 'name' => Type::String, 'stamp' => Type::Date,
+        'day' => Type::Date, 'name' => Type::String, 'stamp' => Type::DateTime,
     ])
         ->and($frame->column('score'))->toBe([2.5, null, 1000.0])
         ->and($frame->column('ok'))->toBe([true, false, null])

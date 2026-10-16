@@ -22,6 +22,6 @@ interface Column extends Countable
 
     public function get(int $index): mixed;
 
-    /** @param list<int> $indices Rows to keep, in this order. */
+    /** @param list<int|null> $indices Rows to keep, in this order; null gives an NA row. */
     public function take(array $indices): static;
 }
