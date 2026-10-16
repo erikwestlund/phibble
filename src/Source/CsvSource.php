@@ -9,6 +9,7 @@ use InvalidArgumentException;
 use Phibble\Frame;
 use Phibble\Io\ColTypes;
 use Phibble\Io\CsvOptions;
+use Phibble\Io\NativeCsv;
 use Phibble\Io\TextParser;
 use Phibble\NameRepair;
 use RuntimeException;
@@ -26,6 +27,7 @@ final readonly class CsvSource implements Source
         private mixed $handle,
         private CsvOptions $options,
         private bool $close,
+        private ?string $path = null,
     ) {}
 
     /** Read a file; ".gz" files are decompressed. */
@@ -37,7 +39,7 @@ final readonly class CsvSource implements Source
         $target = str_ends_with(strtolower($path), '.gz') ? 'compress.zlib://'.$path : $path;
         $handle = fopen($target, 'r') ?: throw new RuntimeException("Cannot open CSV file '{$path}'.");
 
-        return new self($handle, $options, true);
+        return new self($handle, $options, true, $path);
     }
 
     public static function string(string $csv, CsvOptions $options = new CsvOptions()): self
@@ -62,6 +64,13 @@ final readonly class CsvSource implements Source
     public function read(): Frame
     {
         $o = $this->options;
+        if ($this->path !== null && NativeCsv::available() && NativeCsv::supports($this->path, $o)) {
+            $this->finish();
+            [$frame, $problems] = NativeCsv::read($this->path, $o);
+            self::warn($problems);
+
+            return $frame;
+        }
         $records = $this->records();
         $problems = [];
 
@@ -184,13 +193,19 @@ final readonly class CsvSource implements Source
             $data = $selected;
         }
 
+        self::warn($problems);
+
+        return Frame::fromColumns($data);
+    }
+
+    /** @param list<string> $problems */
+    private static function warn(array $problems): void
+    {
         if ($problems !== []) {
             $shown = array_slice($problems, 0, 5);
             $more = count($problems) > 5 ? ' (and '.(count($problems) - 5).' more)' : '';
             trigger_error('One or more parsing issues: '.implode('; ', $shown).$more.'.', E_USER_WARNING);
         }
-
-        return Frame::fromColumns($data);
     }
 
     /**

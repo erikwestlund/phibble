@@ -8,6 +8,7 @@ use Phibble\NameRepair;
 use Phibble\Type;
 
 require_once __DIR__.'/Support/IlluminateCollection.php';
+require_once __DIR__.'/Support/NativeCsvEmulator.php';
 
 const IO_FIXTURES = __DIR__.'/fixtures/io';
 
@@ -36,9 +37,35 @@ function asExpected(mixed $v, Type $type): mixed
 // Reading, checked against readr 2.x (tests/r/io.R writes the expectations)
 // ---------------------------------------------------------------------
 
-it('reads CSV like readr', function (array $case) {
+/*
+ * The readr cases run against each CSV reader: the PHP reader, the native
+ * reader path with a PHP emulation of stats_read_csv(), and the php-stats
+ * extension's stats_read_csv() when it is loaded.
+ */
+dataset('csv readers', [
+    'php' => ['php'],
+    'native (emulated)' => ['emulated'],
+    'native (php-stats)' => ['extension'],
+]);
+
+function withCsvReader(string $reader, Closure $fn): mixed
+{
+    if ($reader === 'extension' && ! function_exists('stats_read_csv')) {
+        test()->markTestSkipped('stats_read_csv() is not available (php-stats extension not loaded).');
+    }
+    Phibble\Io\NativeCsv::enable($reader !== 'php');
+    Phibble\Io\NativeCsv::using($reader === 'emulated' ? emulatedStatsReadCsv(...) : null);
+    try {
+        return $fn();
+    } finally {
+        Phibble\Io\NativeCsv::enable(true);
+        Phibble\Io\NativeCsv::using(null);
+    }
+}
+
+it('reads CSV like readr', function (array $case, string $reader) {
     $expected = json_decode((string) file_get_contents(IO_FIXTURES."/expected/{$case['name']}.json"), true);
-    [$frame, $warnings] = quietly(fn () => Frame::fromCsv(IO_FIXTURES.'/'.$case['file'], ...$case['php']));
+    [$frame, $warnings] = withCsvReader($reader, fn () => quietly(fn () => Frame::fromCsv(IO_FIXTURES.'/'.$case['file'], ...$case['php'])));
 
     expect($frame->columns())->toBe($expected['names'])
         ->and(count($warnings) > 0)->toBe($expected['problems'] > 0);
@@ -74,7 +101,7 @@ it('reads CSV like readr', function (array $case) {
             expect($frame->levels($name))->toBe($expected['levels'][$name]);
         }
     }
-})->with(readrCases());
+})->with(readrCases())->with('csv readers');
 
 it('writes CSV like readr', function () {
     $expected = json_decode((string) file_get_contents(IO_FIXTURES.'/expected/write.json'), true);
@@ -325,4 +352,31 @@ it('returns a Laravel collection of rows', function () {
 
     expect($collection)->toBeInstanceOf(Illuminate\Support\Collection::class)
         ->and($collection->all())->toBe([['a' => 1], ['a' => 2]]);
+});
+
+it('uses the native reader only when available, supported and not disabled', function () {
+    $calls = 0;
+    Phibble\Io\NativeCsv::using(function (string $path, array $options) use (&$calls) {
+        $calls++;
+
+        return emulatedStatsReadCsv($path, $options);
+    });
+    try {
+        Frame::fromCsv(IO_FIXTURES.'/guess.csv');
+        $native = $calls;
+
+        putenv('PHIBBLE_NATIVE_CSV=0');
+        Frame::fromCsv(IO_FIXTURES.'/guess.csv');
+        putenv('PHIBBLE_NATIVE_CSV');
+
+        Frame::fromCsv(IO_FIXTURES.'/guess.csv', delimiter: '::');
+    } catch (Throwable) {
+        // A two-byte delimiter may not parse this file; only the routing matters here.
+    } finally {
+        putenv('PHIBBLE_NATIVE_CSV');
+        Phibble\Io\NativeCsv::using(null);
+    }
+
+    expect($native)->toBe(2) // a header probe and the read
+        ->and($calls)->toBe(2);
 });
