@@ -8,6 +8,7 @@ use Closure;
 use Generator;
 use InvalidArgumentException;
 use PDO;
+use Phibble\Column\Infer;
 use Phibble\Contracts\Table;
 use Phibble\Exception\ColumnNotFound;
 use Phibble\Expr\Call;
@@ -197,10 +198,22 @@ final readonly class SqlTable implements Table
     public function collect(): Frame
     {
         $statement = $this->run($this->render());
-        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
-        $frame = $rows === []
-            ? Frame::fromColumns(array_fill_keys($this->columns, []), $this->hints)
-            : Frame::fromRows($rows, $this->hints, parseStrings: true);
+        // Build columns straight from positional rows; each column is then
+        // typed in one pass (text from the driver is parsed, as readr would).
+        $columns = array_fill(0, count($this->columns), []);
+        while (($row = $statement->fetch(PDO::FETCH_NUM)) !== false) {
+            foreach ($row as $i => $value) {
+                $columns[$i][] = $value;
+            }
+        }
+        $data = [];
+        foreach ($this->columns as $i => $name) {
+            $data[$name] = $columns[$i] === []
+                ? Infer::column([], $this->hints[$name] ?? null, $name)
+                : Infer::fromDatabase($columns[$i], $this->hints[$name] ?? null, $name);
+            $columns[$i] = null;
+        }
+        $frame = Frame::fromColumns($data);
 
         return $this->groups === [] ? $frame : $frame->groupBy($this->groups);
     }
