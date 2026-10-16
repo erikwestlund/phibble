@@ -155,9 +155,11 @@ final class Join
         foreach ($xNames as $name) {
             $isKey = in_array($name, $xKeyNames, true);
             $column = $x->storage($name)->take($xRows);
-            if ($isKey && ! $keep && in_array(null, $xRows, true)) {
+            if ($isKey && ! $keep) {
+                // A merged key takes the common type of both keys (vctrs), filled
+                // from y where the row came from y only.
                 $right = $yKeyNames[array_search($name, $xKeyNames, true)];
-                $column = self::coalesce($column, $y->storage($right)->take($yRows), $xRows, $name);
+                $column = self::keyColumn($x->storage($name), $y->storage($right), $column, $y->storage($right)->take($yRows), $xRows, $name);
             }
             $outName = ($keep || ! $isKey) && in_array($name, $yOut, true) ? $name.$suffix[0] : $name;
             $columns[$outName] = $column;
@@ -173,34 +175,52 @@ final class Join
         $out = Frame::fromColumns($columns);
         $groups = array_values(array_filter($x->groups(), fn (string $g) => isset($columns[$g])));
 
-        return $groups === [] ? $out : $out->groupBy($groups);
+        return $groups === [] ? $out : $out->groupBy($groups, $x->dropsEmptyGroups());
     }
 
     /**
-     * Fill x's key column from y's key where the row came from y only.
+     * The merged key column: x's key values, filled from y's where the row
+     * came from y only, in the common type of both keys as vctrs gives it:
+     * factor and text give text, int and double give double, factors with
+     * different levels give the union of levels.
      *
      * @param list<?int> $xRows
      */
-    private static function coalesce(Column $left, Column $right, array $xRows, string $name): Column
+    private static function keyColumn(Column $xKey, Column $yKey, Column $left, Column $right, array $xRows, string $name): Column
     {
         $values = $left->values();
-        $fill = $right->values();
-        foreach ($xRows as $k => $i) {
-            if ($i === null) {
-                $values[$k] = $fill[$k];
+        if (in_array(null, $xRows, true)) {
+            $fill = $right->values();
+            foreach ($xRows as $k => $i) {
+                if ($i === null) {
+                    $values[$k] = $fill[$k];
+                }
             }
         }
 
-        if ($left instanceof FactorColumn) {
-            $levels = $left->levels();
-            $extra = $right instanceof FactorColumn ? $right->levels() : array_map(strval(...), array_filter($fill, fn ($v) => $v !== null));
+        [$a, $b] = [$xKey->type(), $yKey->type()];
+        if ($xKey instanceof FactorColumn && $yKey instanceof FactorColumn) {
+            $same = $xKey->levels() === $yKey->levels();
+            $levels = array_values(array_unique([...$xKey->levels(), ...$yKey->levels()]));
 
-            return FactorColumn::fromValues($values, array_values(array_unique([...$levels, ...$extra])), $left->isOrdered());
+            return FactorColumn::fromValues($values, $levels, $same && $xKey->isOrdered() && $yKey->isOrdered());
+        }
+        if ($a === Type::Factor || $b === Type::Factor) {
+            return in_array(Type::String, [$a, $b], true)
+                ? Infer::column(array_map(fn ($v) => $v === null ? null : (string) $v, $values), Type::String, $name)
+                : ($a === Type::Factor && ! in_array(null, $xRows, true) ? $left : Infer::column($values, null, $name));
+        }
+        $numeric = [Type::Bool, Type::Int, Type::Float];
+        if (in_array($a, $numeric, true) && in_array($b, $numeric, true)) {
+            $type = in_array(Type::Float, [$a, $b], true) ? Type::Float : (in_array(Type::Int, [$a, $b], true) ? Type::Int : Type::Bool);
+
+            return Infer::column($values, $type, $name);
+        }
+        if ($a === $b) {
+            return in_array(null, $xRows, true) ? Infer::column($values, $a, $name) : $left;
         }
 
-        return $left->type() === $right->type() || $right->type() === Type::Bool && array_all($fill, fn ($v) => $v === null)
-            ? Infer::column($values, $left->type(), $name)
-            : Infer::column($values, null, $name);
+        return Infer::column($values, null, $name);
     }
 
     /**
@@ -342,7 +362,8 @@ final class Join
                 }
                 $parts[] = self::normalise($value);
             }
-            $keys[] = $parts === null ? null : implode("\x1F", $parts);
+            // Length-prefixed parts, so different keys can't concatenate alike.
+            $keys[] = $parts === null ? null : implode('', array_map(fn (string $p) => strlen($p).':'.$p, $parts));
         }
 
         return $keys;
@@ -355,9 +376,10 @@ final class Join
             $value === null => 'NA',
             is_bool($value) => $value ? 'b:1' : 'b:0',
             is_int($value) => 'n:'.$value,
+            // Whole floats match ints (1 == 1.0); others compare exactly, by their bits.
             is_float($value) => is_finite($value) && floor($value) === $value && abs($value) < 2 ** 53
                 ? 'n:'.(int) $value
-                : 'n:'.Infer::formatFloat($value),
+                : 'f:'.bin2hex(pack('E', is_nan($value) ? NAN : $value)),
             $value instanceof DateTimeInterface => 'd:'.$value->format('U.u'),
             is_string($value) => 's:'.$value,
             default => 'o:'.serialize($value),

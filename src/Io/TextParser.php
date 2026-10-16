@@ -157,7 +157,7 @@ final readonly class TextParser
                 if (checkdate($m, $d, $y) && $h <= 23 && $i <= 59 && $s <= 59 && ($type === Type::DateTime || $len === 10)) {
                     $tick = $type === Type::Date
                         ? TemporalColumn::days($y, $m, $d)
-                        : gmmktime($h, $i, $s, $m, $d, $y) * 1_000_000;
+                        : (TemporalColumn::days($y, $m, $d) * 86400 + $h * 3600 + $i * 60 + $s) * 1_000_000;
                 }
             }
             if ($tick === null) {
@@ -215,6 +215,9 @@ final readonly class TextParser
     private function parseInt(string $v, bool $grouping): ?int
     {
         // Fast path: plain digits that fit in 64 bits.
+        if ($v === '') {
+            return null;
+        }
         if (strlen($v) < 19 && (ctype_digit($v) || ($v[0] === '-' && strlen($v) > 1 && ctype_digit(substr($v, 1))))) {
             return (int) $v;
         }

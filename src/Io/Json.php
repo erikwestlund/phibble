@@ -26,12 +26,15 @@ final class Json
     public static function read(string $json, array $types = [], ?string $orient = null): Frame
     {
         $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        // Decoded again with objects kept: {"0": [1]} and [{"0": 1}] are objects
+        // with numeric keys, which an associative decode turns into lists.
+        $raw = json_decode($json, false, 512, JSON_THROW_ON_ERROR);
         if (! is_array($data)) {
             throw new InvalidArgumentException('JSON must be a list of records or an object of columns.');
         }
 
         $orient ??= match (true) {
-            $data === [] || array_is_list($data) => 'records',
+            is_array($raw) => 'records',
             array_all($data, fn ($v) => is_array($v) && array_is_list($v)) => 'columns',
             default => throw new InvalidArgumentException(
                 'JSON must be a list of records or an object whose values are all arrays (columns).'
@@ -39,7 +42,7 @@ final class Json
         };
 
         return match ($orient) {
-            'records' => self::records($data, $types),
+            'records' => self::records($data, is_array($raw) ? $raw : [], $types),
             'columns' => Frame::fromColumns($data, $types),
             default => throw new InvalidArgumentException("orient must be 'records' or 'columns', got '{$orient}'."),
         };
@@ -96,12 +99,13 @@ final class Json
 
     /**
      * @param list<mixed> $records
+     * @param list<mixed> $raw The same records decoded with objects kept.
      * @param array<string, Type|string> $types
      */
-    private static function records(array $records, array $types): Frame
+    private static function records(array $records, array $raw, array $types): Frame
     {
         foreach ($records as $i => $record) {
-            if (! is_array($record) || ($record !== [] && array_is_list($record))) {
+            if (! is_array($record) || ! ($raw[$i] ?? null) instanceof \stdClass) {
                 throw new InvalidArgumentException("JSON record {$i} is not an object.");
             }
         }
