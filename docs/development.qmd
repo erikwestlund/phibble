@@ -13,11 +13,11 @@ composer install
 php vendor/bin/pest
 ```
 
-The tests that fit models need the php-stats extension and are skipped
+The tests that fit models need the phit extension and are skipped
 without it. To run them, load the extension:
 
 ```bash
-php -d extension=/path/to/libphp_stats.dylib vendor/bin/pest
+php -d extension=/path/to/libphit.dylib vendor/bin/pest
 ```
 
 ## Comparing with R

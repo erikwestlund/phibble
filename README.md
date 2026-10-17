@@ -4,7 +4,7 @@ phibble is a port of R's tibble to PHP, with readr-style input and output.
 A `DataFrame` holds typed columns, treats `null` as NA, and returns a new frame
 from every operation. It is the shared table type for
 [phplyr](https://github.com/erikwestlund/phplyr),
-[php-stats](https://github.com/erikwestlund/php-stats), phpolars, and
+[phit](https://github.com/erikwestlund/phit), phpolars, and
 cmdstanphp.
 
 Documentation: <https://erikwestlund.github.io/phibble/>
@@ -50,7 +50,7 @@ echo $penguins
   forcats functions), date, datetime, and list-columns. Casts follow R's
   `as.*()` rules.
 - **Input and output:** CSV with readr's options and type guessing (and the
-  php-stats extension's native reader when it is loaded), JSON, PDO queries,
+  phit extension's native reader when it is loaded), JSON, PDO queries,
   Laravel and Doctrine query builders, and Laravel collections.
 - **Verbs:** `select`, `filter`, `mutate`, `arrange`, `groupBy`, `summarise`,
   `distinct`, joins (including `join_by` comparisons and rolling joins),

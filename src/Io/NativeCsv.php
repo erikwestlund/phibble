@@ -14,7 +14,7 @@ use Phibble\NameRepair;
 use Phibble\Type;
 
 /**
- * Reads CSV files with the php-stats extension's stats_read_csv() when it
+ * Reads CSV files with the phit extension's Phit\read_csv() when it
  * is loaded, which parses and types columns natively. Name repair,
  * col_select, factor and number types, and the problems warning stay in
  * PHP, so results match the PHP reader.
@@ -37,7 +37,7 @@ final class NativeCsv
     }
 
     /**
-     * Use another implementation of stats_read_csv(), or null for the
+     * Use another implementation of Phit\read_csv(), or null for the
      * extension's.
      *
      * @param (Closure(string, array): array)|null $reader
@@ -51,7 +51,7 @@ final class NativeCsv
     {
         return self::$enabled
             && getenv('PHIBBLE_NATIVE_CSV') !== '0'
-            && (self::$reader !== null || function_exists('stats_read_csv'));
+            && (self::$reader !== null || function_exists('Phit\\read_csv'));
     }
 
     /** Whether these options can be handed to the native reader. */
@@ -158,7 +158,7 @@ final class NativeCsv
             'string' => new ArrayColumn(Type::String, $values),
             'date' => new TemporalColumn(Type::Date, $values),
             'datetime' => new TemporalColumn(Type::DateTime, $values),
-            default => throw new InvalidArgumentException("stats_read_csv() returned unknown column type '{$type}'."),
+            default => throw new InvalidArgumentException("Phit\\read_csv() returned unknown column type '{$type}'."),
         };
     }
 
@@ -187,7 +187,7 @@ final class NativeCsv
     /** @return array{names: list<string>, columns: list<array{type: string, values: list<mixed>, failed: int}|null>, problems: list<string>} */
     private static function call(string $path, array $options): array
     {
-        $reader = self::$reader ?? fn (string $path, array $options): array => \stats_read_csv($path, $options);
+        $reader = self::$reader ?? fn (string $path, array $options): array => \Phit\read_csv($path, $options);
 
         return $reader($path, $options);
     }

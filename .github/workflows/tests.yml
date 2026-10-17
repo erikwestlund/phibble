@@ -58,7 +58,7 @@ jobs:
 
       - run: composer install --no-interaction --no-progress
 
-      # Without the php-stats extension, the model and native-CSV tests are skipped.
+      # Without the phit extension, the model and native-CSV tests are skipped.
       - run: vendor/bin/pest
 
   polars:

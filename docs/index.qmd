@@ -14,7 +14,7 @@ in PHP. The other packages read and return phibble tables:
 
 - **[phplyr](https://github.com/erikwestlund/phplyr)** ports dplyr and tidyr as
   pipe-able functions.
-- **[php-stats](https://github.com/erikwestlund/php-stats)** is a native
+- **[phit](https://github.com/erikwestlund/phit)** is a native
   extension for statistical models and descriptive statistics. It reads model
   data with `DataFrame::toModelData()`.
 - **phpolars** is an optional Polars-backed table.

@@ -7,7 +7,7 @@ use Phibble\DataFrame;
 use Phibble\Io\NativeCsv;
 
 /**
- * A PHP stand-in for the php-stats extension's stats_read_csv(), following
+ * A PHP stand-in for the phit extension's Phit\read_csv(), following
  * its contract (see src/Io/NativeCsv.php), built on phibble's PHP reader.
  * It lets the native code path be tested without the extension.
  */

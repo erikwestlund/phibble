@@ -16,6 +16,7 @@
     "suggest": {
         "ext-pdo_sqlite": "Used by the test suite for the PDO source",
         "illuminate/database": "Laravel integration: Collection::toDataFrame() and query builder ->phibble() / ->toDataFrame() macros (auto-discovered)",
+        "ext-phit": "Native CSV reading (Phit\\read_csv) and model fitting, from erikwestlund/phit",
         "ext-php_polars": "The Polars backend (Phibble\\Polars\\PolarsTable), from erikwestlund/phpolars"
     },
     "autoload": {

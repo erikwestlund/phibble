@@ -107,7 +107,7 @@ loads the Vega libraries once per page:
 @phizScripts
 ```
 
-phiz also has helpers that plot php-stats model results, such as
+phiz also has helpers that plot phit model results, such as
 `coefplot($fit)` and `effect_plot($fit, $data, 'x', by: 'g')`. Its
 documentation covers them.
 
@@ -120,5 +120,5 @@ A collected frame can be returned from a controller or passed to a view:
 - `$frame->toJson()` gives the same rows as a JSON string, or the columns with
   `toJson('columns')`.
 - `$frame->toCollection()` returns a Laravel collection of rows.
-- `$frame->toModelData()` gives the columns in the form php-stats' model
+- `$frame->toModelData()` gives the columns in the form phit's model
   functions accept.

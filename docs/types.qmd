@@ -105,7 +105,7 @@ combination of the remaining columns. `unnest()` expands it again.
 
 ## Model data
 
-`toModelData()` returns columns in the form the php-stats model functions read.
+`toModelData()` returns columns in the form phit's model functions read.
 Numbers, bools, and strings are plain lists. Dates and datetimes become days
 and seconds since the epoch. A factor becomes an array with its levels, its
 0-based codes, and whether it is ordered, so a model keeps the frame's level

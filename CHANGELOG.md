@@ -5,6 +5,20 @@ All notable changes to phibble are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0, minor versions may
 change the public API.
 
+## [0.3.1] - Unreleased
+
+### Changed
+
+- php-stats is now phit. The native CSV reader calls `Phit\read_csv()` from
+  the phit extension (`ext-phit`), and the docs link to
+  [phit](https://github.com/erikwestlund/phit). `stats_read_csv()` from the
+  php-stats extension is no longer used.
+
+### Fixed
+
+- The docs call the visualization library phiz again. 0.3.0 renamed it to
+  phit by mistake.
+
 ## [0.3.0] - 2026-10-17
 
 ### Changed
@@ -105,6 +119,7 @@ and cmdstanphp.
   query builders and `->phibble()` for lazy SQL tables. Global scopes such as
   soft deletes apply.
 
+[0.3.1]: https://github.com/erikwestlund/phibble/releases/tag/v0.3.1
 [0.3.0]: https://github.com/erikwestlund/phibble/releases/tag/v0.3.0
 [0.2.0]: https://github.com/erikwestlund/phibble/releases/tag/v0.2.0
 [0.1.0]: https://github.com/erikwestlund/phibble/releases/tag/v0.1.0

@@ -1730,7 +1730,7 @@ final readonly class DataFrame implements Table, ArrayAccess, Stringable
     // ---------------------------------------------------------------
 
     /**
-     * Rows of numeric columns as floats, the shape stats_* functions take
+     * Rows of numeric columns as floats, the shape phit's fit_* functions take
      * for x. Bool columns become 0.0/1.0; NA stays null.
      *
      * @param list<string> $names
@@ -1758,7 +1758,7 @@ final readonly class DataFrame implements Table, ArrayAccess, Stringable
     }
 
     /**
-     * A numeric column as floats, the shape stats_* functions take for y.
+     * A numeric column as floats, the shape phit's fit_* functions take for y.
      *
      * @return list<float|null>
      */
@@ -1768,7 +1768,7 @@ final readonly class DataFrame implements Table, ArrayAccess, Stringable
     }
 
     /**
-     * Columns for model fitting (stats_lm, stats_glm, stats_model_matrix):
+     * Columns for model fitting (Phit\fit_lm, Phit\fit_glm, Phit\model_matrix):
      *
      * - float, int: list<float|int|null>
      * - bool: list<bool|null> (a two-level contrast, as in R)

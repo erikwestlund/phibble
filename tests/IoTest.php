@@ -39,19 +39,19 @@ function asExpected(mixed $v, Type $type): mixed
 
 /*
  * The readr cases run against each CSV reader: the PHP reader, the native
- * reader path with a PHP emulation of stats_read_csv(), and the php-stats
- * extension's stats_read_csv() when it is loaded.
+ * reader path with a PHP emulation of Phit\read_csv(), and the phit
+ * extension's Phit\read_csv() when it is loaded.
  */
 dataset('csv readers', [
     'php' => ['php'],
     'native (emulated)' => ['emulated'],
-    'native (php-stats)' => ['extension'],
+    'native (phit)' => ['extension'],
 ]);
 
 function withCsvReader(string $reader, Closure $fn): mixed
 {
-    if ($reader === 'extension' && ! function_exists('stats_read_csv')) {
-        test()->markTestSkipped('stats_read_csv() is not available (php-stats extension not loaded).');
+    if ($reader === 'extension' && ! function_exists('Phit\\read_csv')) {
+        test()->markTestSkipped('Phit\read_csv() is not available (phit extension not loaded).');
     }
     Phibble\Io\NativeCsv::enable($reader !== 'php');
     Phibble\Io\NativeCsv::using($reader === 'emulated' ? emulatedStatsReadCsv(...) : null);

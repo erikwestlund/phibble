@@ -15,16 +15,16 @@ it('refuses non-numeric matrix columns', function () {
     penguins()->toMatrix(['species']);
 })->throws(InvalidArgumentException::class, "Column 'species' is string");
 
-it('feeds stats_ols', function () {
+it('feeds Phit\fit_ols', function () {
     $frame = DataFrame::fromColumns(['x' => [1, 2, 3, 4, 5], 'y' => [3.0, 5.0, 7.0, 9.0, 11.0]]);
 
-    $fit = stats_ols($frame->toMatrix(['x']), $frame->toVector('y'));
+    $fit = Phit\fit_ols($frame->toMatrix(['x']), $frame->toVector('y'));
 
     expect($fit['coefficients'][0])->toEqualWithDelta(1.0, 1e-9)
         ->and($fit['coefficients'][1])->toEqualWithDelta(2.0, 1e-9);
-})->skip(! function_exists('stats_ols'), 'php_stats extension not loaded');
+})->skip(! function_exists('Phit\\fit_ols'), 'phit extension not loaded');
 
-it('passes NA through to stats_ols, which drops the row and warns once', function () {
+it('passes NA through to Phit\fit_ols, which drops the row and warns once', function () {
     $frame = DataFrame::fromColumns([
         'x' => [1, 2, 3, 4, 5, null],
         'y' => [3.0, 5.0, 7.0, 9.0, 11.0, 2.0],
@@ -37,7 +37,7 @@ it('passes NA through to stats_ols, which drops the row and warns once', functio
         return true;
     }, E_WARNING);
     try {
-        $fit = stats_ols($frame->toMatrix(['x']), $frame->toVector('y'));
+        $fit = Phit\fit_ols($frame->toMatrix(['x']), $frame->toVector('y'));
     } finally {
         restore_error_handler();
     }
@@ -46,4 +46,4 @@ it('passes NA through to stats_ols, which drops the row and warns once', functio
         ->and($warnings[0])->toContain('dropped 1 of 6')
         ->and($fit['n_dropped'])->toBe(1)
         ->and($fit['coefficients'][1])->toEqualWithDelta(2.0, 1e-9);
-})->skip(! function_exists('stats_ols'), 'php_stats extension not loaded');
+})->skip(! function_exists('Phit\\fit_ols'), 'phit extension not loaded');
