@@ -5,7 +5,7 @@ All notable changes to phibble are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0, minor versions may
 change the public API.
 
-## [0.3.0] - Unreleased
+## [0.3.0] - 2026-10-17
 
 ### Changed
 
