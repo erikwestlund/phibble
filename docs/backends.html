@@ -331,7 +331,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="the-polars-backend" class="level2">
 <h2 class="anchored" data-anchor-id="the-polars-backend">The Polars backend</h2>
-<p>The Polars backend needs the php_polars extension from <a href="https://github.com/erikwestlund/phpolars">phpolars</a>. phibble does not require it: <code>composer.json</code> lists it as a suggestion, and the class is only loaded when used. Expressions, joins (including <code>join_by</code> comparisons and rolling joins), pivots, and the lubridate and stringr functions run natively in Polars. Steps it cannot run, such as PHP closures and <code>str_to_title()</code>, run in <code>DataFrame</code>. <code>PolarsTable::$fallbacks</code> counts those steps.</p>
+<p>The Polars backend needs the php_polars extension from <a href="https://github.com/phpstats/phpolars">phpolars</a>. phibble does not require it: <code>composer.json</code> lists it as a suggestion, and the class is only loaded when used. Expressions, joins (including <code>join_by</code> comparisons and rolling joins), pivots, and the lubridate and stringr functions run natively in Polars. Steps it cannot run, such as PHP closures and <code>str_to_title()</code>, run in <code>DataFrame</code>. <code>PolarsTable::$fallbacks</code> counts those steps.</p>
 <p>Two kinds of list-column stay in <code>DataFrame</code>. Polars stores named arrays as structs, which have every key in every row, so <code>fromTable()</code> throws when a list-column holds named arrays with different keys. A list-column of <code>DataFrame</code>s cannot be stored in Polars either.</p>
 <p>The Polars test suite runs phibble’s dplyr, tidyr, lubridate, and stringr reference cases on <code>PolarsTable</code> and skips when the extension is not loaded.</p>
 
@@ -412,7 +412,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     }
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp("https:\/\/erikwestlund\.github\.io\/phibble\/");
+        var filterRegex = new RegExp("https:\/\/phpstats\.github\.io\/phibble\/");
       var isInternal = (href) => {
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }

@@ -7,9 +7,9 @@ project:
     - data/*.csv
 
 website:
-  site-url: "https://erikwestlund.github.io/phibble/"
+  site-url: "https://phpstats.github.io/phibble/"
   title: "phibble"
-  repo-url: "https://github.com/erikwestlund/phibble"
+  repo-url: "https://github.com/phpstats/phibble"
   sidebar:
     style: docked
     search: true

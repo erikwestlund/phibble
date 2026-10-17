@@ -8,7 +8,7 @@
  *                  [--data=dir] [--runs=3] [workload ...]
  *
  * Another package can benchmark its own backend: implement
- * Phibble\Bench\Backend, then run vendor/erikwestlund/phibble/bin/bench with
+ * Phibble\Bench\Backend, then run vendor/phpstats/phibble/bin/bench with
  * --bootstrap pointing at a file that loads it (or its vendor/autoload.php)
  * and --backend set to the class name.
  *
@@ -18,7 +18,7 @@
 
 declare(strict_types=1);
 
-// Works from a phibble checkout and from vendor/erikwestlund/phibble.
+// Works from a phibble checkout and from vendor/phpstats/phibble.
 foreach ([dirname(__DIR__).'/vendor/autoload.php', dirname(__DIR__, 3).'/autoload.php'] as $autoload) {
     if (is_file($autoload)) {
         require $autoload;

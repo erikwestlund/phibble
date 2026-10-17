@@ -565,7 +565,7 @@ Column 'z' not found. Available columns: x, y.</code></pre>
 </section>
 <section id="method-chains-and-the-pipe-operator" class="level2">
 <h2 class="anchored" data-anchor-id="method-chains-and-the-pipe-operator">Method chains and the pipe operator</h2>
-<p>Every verb returns a new table, so verbs chain as methods on any PHP version phibble supports. PHP 8.5’s <code>|&gt;</code> passes a value to a callable, and arrow functions let the same pipeline use it. <a href="https://github.com/erikwestlund/phplyr">phplyr</a> provides verbs that return such callables, so a phplyr pipeline needs no arrow functions.</p>
+<p>Every verb returns a new table, so verbs chain as methods on any PHP version phibble supports. PHP 8.5’s <code>|&gt;</code> passes a value to a callable, and arrow functions let the same pipeline use it. <a href="https://github.com/phpstats/phplyr">phplyr</a> provides verbs that return such callables, so a phplyr pipeline needs no arrow functions.</p>
 <div class="tabset-margin-container"></div><div class="panel-tabset" data-group="syntax">
 <ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">Method chain (PHP 8.3+)</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href="">Pipe (PHP 8.5)</a></li></ul>
 <div class="tab-content" data-group="syntax">
@@ -675,7 +675,7 @@ Column 'z' not found. Available columns: x, y.</code></pre>
     }
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp("https:\/\/erikwestlund\.github\.io\/phibble\/");
+        var filterRegex = new RegExp("https:\/\/phpstats\.github\.io\/phibble\/");
       var isInternal = (href) => {
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }

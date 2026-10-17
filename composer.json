@@ -1,5 +1,5 @@
 {
-    "name": "erikwestlund/phibble",
+    "name": "phpstats/phibble",
     "description": "A typed, immutable in-memory data frame for PHP.",
     "type": "library",
     "license": "MIT",
@@ -16,8 +16,8 @@
     "suggest": {
         "ext-pdo_sqlite": "Used by the test suite for the PDO source",
         "illuminate/database": "Laravel integration: Collection::toDataFrame() and query builder ->phibble() / ->toDataFrame() macros (auto-discovered)",
-        "ext-phit": "Native CSV reading (Phit\\read_csv) and model fitting, from erikwestlund/phit",
-        "ext-php_polars": "The Polars backend (Phibble\\Polars\\PolarsTable), from erikwestlund/phpolars"
+        "ext-phit": "Native CSV reading (Phit\\read_csv) and model fitting, from phpstats/phit",
+        "ext-php_polars": "The Polars backend (Phibble\\Polars\\PolarsTable), from phpstats/phpolars"
     },
     "autoload": {
         "psr-4": {
@@ -52,7 +52,7 @@
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://github.com/erikwestlund/phiz"
+            "url": "https://github.com/phpstats/phiz"
         }
     ]
 }

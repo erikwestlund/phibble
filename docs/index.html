@@ -299,8 +299,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 8 Gentoo    &lt;NA&gt;       4 4588.    216</code></pre>
 <p>phibble is the shared table type of a small family of packages for statistics in PHP. The other packages read and return phibble tables:</p>
 <ul>
-<li><strong><a href="https://github.com/erikwestlund/phplyr">phplyr</a></strong> ports dplyr and tidyr as pipe-able functions.</li>
-<li><strong><a href="https://github.com/erikwestlund/phit">phit</a></strong> is a native extension for statistical models and descriptive statistics. It reads model data with <code>DataFrame::toModelData()</code>.</li>
+<li><strong><a href="https://github.com/phpstats/phplyr">phplyr</a></strong> ports dplyr and tidyr as pipe-able functions.</li>
+<li><strong><a href="https://github.com/phpstats/phit">phit</a></strong> is a native extension for statistical models and descriptive statistics. It reads model data with <code>DataFrame::toModelData()</code>.</li>
 <li><strong>phpolars</strong> is an optional Polars-backed table.</li>
 <li><strong>cmdstanphp</strong> runs Stan models and will accept phibble frames.</li>
 </ul>
@@ -308,7 +308,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="install" class="level2">
 <h2 class="anchored" data-anchor-id="install">Install</h2>
 <p>phibble needs PHP 8.3 or later. PHP 8.5 adds the <code>|&gt;</code> pipe operator, which phibble and phplyr pipelines can use.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">composer</span> require erikwestlund/phibble</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">composer</span> require phpstats/phibble</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>phibble has no required dependencies beyond PHP’s PDO extension. It works with Laravel and Doctrine query builders without depending on either.</p>
 </section>
 <section id="where-to-go-next" class="level2">
@@ -400,7 +400,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     }
       var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
       var mailtoRegex = new RegExp(/^mailto:/);
-        var filterRegex = new RegExp("https:\/\/erikwestlund\.github\.io\/phibble\/");
+        var filterRegex = new RegExp("https:\/\/phpstats\.github\.io\/phibble\/");
       var isInternal = (href) => {
           return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
       }

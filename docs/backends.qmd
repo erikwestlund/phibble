@@ -44,7 +44,7 @@ $summary($fast)->collect();   // runs in Polars
 ## The Polars backend
 
 The Polars backend needs the php_polars extension from
-[phpolars](https://github.com/erikwestlund/phpolars). phibble does not require
+[phpolars](https://github.com/phpstats/phpolars). phibble does not require
 it: `composer.json` lists it as a suggestion, and the class is only loaded when
 used. Expressions, joins (including `join_by` comparisons and rolling joins),
 pivots, and the lubridate and stringr functions run natively in Polars. Steps

@@ -63,7 +63,7 @@ function tbl(\PDO $pdo, string $from, array $bindings = []): Sql\SqlTable
 function polars(mixed $data): Polars\PolarsTable
 {
     if (! extension_loaded('php_polars')) {
-        throw new \RuntimeException('polars() needs the php_polars extension (erikwestlund/phpolars).');
+        throw new \RuntimeException('polars() needs the php_polars extension (phpstats/phpolars).');
     }
 
     return Polars\PolarsTable::fromTable($data instanceof Contracts\Table ? $data : DataFrame::asTibble($data));

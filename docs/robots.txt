@@ -1,1 +1,1 @@
-Sitemap: https://erikwestlund.github.io/phibble/sitemap.xml
+Sitemap: https://phpstats.github.io/phibble/sitemap.xml

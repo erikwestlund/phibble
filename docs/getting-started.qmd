@@ -145,7 +145,7 @@ Methods never change the frame they are called on:
 
 Every verb returns a new table, so verbs chain as methods on any PHP version
 phibble supports. PHP 8.5's `|>` passes a value to a callable, and arrow
-functions let the same pipeline use it. [phplyr](https://github.com/erikwestlund/phplyr)
+functions let the same pipeline use it. [phplyr](https://github.com/phpstats/phplyr)
 provides verbs that return such callables, so a phplyr pipeline needs no arrow
 functions.
 

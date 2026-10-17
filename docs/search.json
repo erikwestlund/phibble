@@ -168,7 +168,7 @@
     "href": "index.html#install",
     "title": "phibble",
     "section": "Install",
-    "text": "Install\nphibble needs PHP 8.3 or later. PHP 8.5 adds the |&gt; pipe operator, which phibble and phplyr pipelines can use.\ncomposer require erikwestlund/phibble\nphibble has no required dependencies beyond PHP’s PDO extension. It works with Laravel and Doctrine query builders without depending on either.",
+    "text": "Install\nphibble needs PHP 8.3 or later. PHP 8.5 adds the |&gt; pipe operator, which phibble and phplyr pipelines can use.\ncomposer require phpstats/phibble\nphibble has no required dependencies beyond PHP’s PDO extension. It works with Laravel and Doctrine query builders without depending on either.",
     "crumbs": [
       "phibble"
     ]

@@ -3,16 +3,16 @@
 phibble is a port of R's tibble to PHP, with readr-style input and output.
 A `DataFrame` holds typed columns, treats `null` as NA, and returns a new frame
 from every operation. It is the shared table type for
-[phplyr](https://github.com/erikwestlund/phplyr),
-[phit](https://github.com/erikwestlund/phit), phpolars, and
+[phplyr](https://github.com/phpstats/phplyr),
+[phit](https://github.com/phpstats/phit), phpolars, and
 cmdstanphp.
 
-Documentation: <https://erikwestlund.github.io/phibble/>
+Documentation: <https://phpstats.github.io/phibble/>
 
 ## Install
 
 ```bash
-composer require erikwestlund/phibble
+composer require phpstats/phibble
 ```
 
 phibble needs PHP 8.3 or later and the PDO extension. On PHP 8.5, pipelines
@@ -73,5 +73,5 @@ composer install
 vendor/bin/pest
 ```
 
-See the [development guide](https://erikwestlund.github.io/phibble/development.html)
+See the [development guide](https://phpstats.github.io/phibble/development.html)
 for the R comparison scripts, database tests, and documentation build.

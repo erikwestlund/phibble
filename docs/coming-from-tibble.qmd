@@ -61,7 +61,7 @@ Factor functions are methods that take the column name first.
 ## dplyr and tidyr basics
 
 phibble's methods cover the verbs that other backends need to implement
-natively. [phplyr](https://github.com/erikwestlund/phplyr) provides the full
+natively. [phplyr](https://github.com/phpstats/phplyr) provides the full
 dplyr and tidyr interface as pipe-able functions.
 
 | R | phibble |

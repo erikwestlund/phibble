@@ -52,7 +52,7 @@ memory. The [SQL tables](sql.qmd) page lists these cases.
 
 ## With phplyr
 
-[phplyr](https://github.com/erikwestlund/phplyr) provides dplyr's verbs as a
+[phplyr](https://github.com/phpstats/phplyr) provides dplyr's verbs as a
 method chain on any PHP version and as functions for PHP 8.5's pipe operator.
 Its verbs call the same table methods, so a phplyr pipeline on `phibble()` also
 runs in the database:
@@ -86,7 +86,7 @@ $summary = Penguin::query()->phibble()
 
 ## Charts with phiz
 
-[phiz](https://erikwestlund.github.io/phiz/) is a grammar of graphics in the
+[phiz](https://phpstats.github.io/phiz/) is a grammar of graphics in the
 style of ggplot2 that produces Vega-Lite specifications. `Plot::of()` accepts
 a phibble DataFrame directly. A query can select the needed columns in the
 database, collect them, and plot them:

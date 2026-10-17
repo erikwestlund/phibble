@@ -12,9 +12,9 @@ changes in place: every operation returns a new frame.
 phibble is the shared table type of a small family of packages for statistics
 in PHP. The other packages read and return phibble tables:
 
-- **[phplyr](https://github.com/erikwestlund/phplyr)** ports dplyr and tidyr as
+- **[phplyr](https://github.com/phpstats/phplyr)** ports dplyr and tidyr as
   pipe-able functions.
-- **[phit](https://github.com/erikwestlund/phit)** is a native
+- **[phit](https://github.com/phpstats/phit)** is a native
   extension for statistical models and descriptive statistics. It reads model
   data with `DataFrame::toModelData()`.
 - **phpolars** is an optional Polars-backed table.
@@ -30,7 +30,7 @@ phibble needs PHP 8.3 or later. PHP 8.5 adds the `|>` pipe operator, which
 phibble and phplyr pipelines can use.
 
 ```bash
-composer require erikwestlund/phibble
+composer require phpstats/phibble
 ```
 
 phibble has no required dependencies beyond PHP's PDO extension. It works with

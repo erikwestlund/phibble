@@ -79,7 +79,7 @@ jobs:
 
       - name: Install php_polars
         run: |
-          gh release download "$PHPOLARS_VERSION" -R erikwestlund/phpolars --pattern 'php_polars-*-x86_64-nts-bookworm.*'
+          gh release download "$PHPOLARS_VERSION" -R phpstats/phpolars --pattern 'php_polars-*-x86_64-nts-bookworm.*'
           sha256sum -c php_polars-*.sha256
           tar -xzf php_polars-*.tar.gz
           sudo cp php_polars-*/php_polars.so "$(php-config --extension-dir)/"

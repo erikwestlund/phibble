@@ -1,47 +1,47 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://erikwestlund.github.io/phibble/types.html</loc>
+    <loc>https://phpstats.github.io/phibble/types.html</loc>
     <lastmod>2026-10-17T20:26:32.914Z</lastmod>
   </url>
   <url>
-    <loc>https://erikwestlund.github.io/phibble/laravel.html</loc>
-    <lastmod>2026-10-17T20:26:32.914Z</lastmod>
+    <loc>https://phpstats.github.io/phibble/laravel.html</loc>
+    <lastmod>2026-10-17T20:37:36.830Z</lastmod>
   </url>
   <url>
-    <loc>https://erikwestlund.github.io/phibble/index.html</loc>
+    <loc>https://phpstats.github.io/phibble/index.html</loc>
+    <lastmod>2026-10-17T20:37:36.829Z</lastmod>
+  </url>
+  <url>
+    <loc>https://phpstats.github.io/phibble/expr.html</loc>
     <lastmod>2026-10-17T20:26:32.913Z</lastmod>
   </url>
   <url>
-    <loc>https://erikwestlund.github.io/phibble/expr.html</loc>
-    <lastmod>2026-10-17T20:26:32.913Z</lastmod>
-  </url>
-  <url>
-    <loc>https://erikwestlund.github.io/phibble/contract.html</loc>
+    <loc>https://phpstats.github.io/phibble/contract.html</loc>
     <lastmod>2026-10-17T20:26:32.912Z</lastmod>
   </url>
   <url>
-    <loc>https://erikwestlund.github.io/phibble/backends.html</loc>
-    <lastmod>2026-10-17T20:26:32.911Z</lastmod>
+    <loc>https://phpstats.github.io/phibble/backends.html</loc>
+    <lastmod>2026-10-17T20:37:36.829Z</lastmod>
   </url>
   <url>
-    <loc>https://erikwestlund.github.io/phibble/coming-from-tibble.html</loc>
+    <loc>https://phpstats.github.io/phibble/coming-from-tibble.html</loc>
+    <lastmod>2026-10-17T20:37:36.829Z</lastmod>
+  </url>
+  <url>
+    <loc>https://phpstats.github.io/phibble/development.html</loc>
     <lastmod>2026-10-17T20:26:32.912Z</lastmod>
   </url>
   <url>
-    <loc>https://erikwestlund.github.io/phibble/development.html</loc>
-    <lastmod>2026-10-17T20:26:32.912Z</lastmod>
+    <loc>https://phpstats.github.io/phibble/getting-started.html</loc>
+    <lastmod>2026-10-17T20:37:36.829Z</lastmod>
   </url>
   <url>
-    <loc>https://erikwestlund.github.io/phibble/getting-started.html</loc>
+    <loc>https://phpstats.github.io/phibble/io.html</loc>
     <lastmod>2026-10-17T20:26:32.913Z</lastmod>
   </url>
   <url>
-    <loc>https://erikwestlund.github.io/phibble/io.html</loc>
-    <lastmod>2026-10-17T20:26:32.913Z</lastmod>
-  </url>
-  <url>
-    <loc>https://erikwestlund.github.io/phibble/sql.html</loc>
+    <loc>https://phpstats.github.io/phibble/sql.html</loc>
     <lastmod>2026-10-17T20:26:32.914Z</lastmod>
   </url>
 </urlset>
