@@ -14,7 +14,7 @@ change the public API.
   `array_any()` and `array_all()` before PHP 8.4.
 - On PHP 8.3, `SqlTable` reads PostgreSQL float columns as floats, including
   `Infinity` and `NaN`, as PHP 8.4's driver does.
-- The docs show pipelines as method chains (PHP 8.3+) and with `|>` (PHP 8.5).
+- The docs show pipelines as method chains (PHP 8.3+) and with `|>` (PHP 8.5), including phplyr's `phplyr($t)->...->get()` chain.
 
 ## [0.2.0] - 2026-10-17
 

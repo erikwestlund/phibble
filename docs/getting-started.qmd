@@ -149,12 +149,14 @@ functions let the same pipeline use it. [phplyr](https://github.com/erikwestlund
 provides verbs that return such callables, so a phplyr pipeline needs no arrow
 functions.
 
-::: {.panel-tabset}
+::: {.panel-tabset group="syntax"}
 ## Method chain (PHP 8.3+)
 
-{{< include examples/_chain.md >}}
+{{< include examples/_chain-code.md >}}
 
 ## Pipe (PHP 8.5)
 
-{{< include examples/_pipe.md >}}
+{{< include examples/_pipe-code.md >}}
 :::
+
+{{< include examples/_chain-output.md >}}
