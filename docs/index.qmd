@@ -1,6 +1,6 @@
 ---
 title: "phibble"
-subtitle: "A typed data frame for PHP 8.5"
+subtitle: "A typed data frame for PHP"
 ---
 
 phibble is a port of R's tibble to PHP, with the readr-style input and output a
@@ -26,7 +26,8 @@ query, so the verbs compile to SQL and run in the database.
 
 ## Install
 
-phibble needs PHP 8.5, which adds the `|>` pipe operator.
+phibble needs PHP 8.3 or later. PHP 8.5 adds the `|>` pipe operator, which
+phibble and phplyr pipelines can use.
 
 ```bash
 composer require erikwestlund/phibble

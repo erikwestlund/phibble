@@ -251,7 +251,19 @@ final readonly class SqlTable implements Table
             }
         }
         $data = [];
+        // Before PHP 8.4, pdo_pgsql returns float4/float8 as text, so "2" would
+        // parse as an integer and "Infinity" not at all. PHP 8.4 returns floats.
+        $pgFloats = PHP_VERSION_ID < 80400 && $this->dialect->name() === 'PostgreSQL';
         foreach ($this->columns as $i => $name) {
+            if ($pgFloats && in_array($statement->getColumnMeta($i)['native_type'] ?? '', ['float4', 'float8'], true)) {
+                $columns[$i] = array_map(fn ($v) => match ($v) {
+                    null => null,
+                    'Infinity' => INF,
+                    '-Infinity' => -INF,
+                    'NaN' => NAN,
+                    default => (float) $v,
+                }, $columns[$i]);
+            }
             $data[$name] = $columns[$i] === []
                 ? Infer::column([], $this->hints[$name] ?? null, $name)
                 : Infer::fromDatabase($columns[$i], $this->hints[$name] ?? null, $name);

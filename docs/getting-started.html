@@ -253,7 +253,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#groups" id="toc-groups" class="nav-link" data-scroll-target="#groups">Groups</a></li>
   <li><a href="#distinct-rows-and-joins" id="toc-distinct-rows-and-joins" class="nav-link" data-scroll-target="#distinct-rows-and-joins">Distinct rows and joins</a></li>
   <li><a href="#immutability" id="toc-immutability" class="nav-link" data-scroll-target="#immutability">Immutability</a></li>
-  <li><a href="#the-pipe-operator" id="toc-the-pipe-operator" class="nav-link" data-scroll-target="#the-pipe-operator">The pipe operator</a></li>
+  <li><a href="#method-chains-and-the-pipe-operator" id="toc-method-chains-and-the-pipe-operator" class="nav-link" data-scroll-target="#method-chains-and-the-pipe-operator">Method chains and the pipe operator</a></li>
   </ul>
 </nav>
     </div>
@@ -563,15 +563,19 @@ Column 'z' not found. Available columns: x, y.</code></pre>
 <span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="fu">json_encode</span>(<span class="va">$frame</span>-&gt;x)<span class="ot">,</span> <span class="st">' '</span><span class="ot">,</span> <span class="fu">json_encode</span>(<span class="va">$doubled</span>-&gt;x)<span class="ot">,</span> <span class="st">"</span><span class="sc">\n</span><span class="st">"</span><span class="ot">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <pre class="text output"><code>[1,2,3] [2,4,6]</code></pre>
 </section>
-<section id="the-pipe-operator" class="level2">
-<h2 class="anchored" data-anchor-id="the-pipe-operator">The pipe operator</h2>
-<p>PHP 8.5’s <code>|&gt;</code> passes a value to a callable. Arrow functions let a pipeline of frame methods read from top to bottom. <a href="https://github.com/erikwestlund/phplyr">phplyr</a> provides verbs that return such callables, so a phplyr pipeline needs no arrow functions.</p>
+<section id="method-chains-and-the-pipe-operator" class="level2">
+<h2 class="anchored" data-anchor-id="method-chains-and-the-pipe-operator">Method chains and the pipe operator</h2>
+<p>Every verb returns a new table, so verbs chain as methods on any PHP version phibble supports. PHP 8.5’s <code>|&gt;</code> passes a value to a callable, and arrow functions let the same pipeline use it. <a href="https://github.com/erikwestlund/phplyr">phplyr</a> provides verbs that return such callables, so a phplyr pipeline needs no arrow functions.</p>
+<div class="tabset-margin-container"></div><div class="panel-tabset">
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">Method chain (PHP 8.3+)</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href="">Pipe (PHP 8.5)</a></li></ul>
+<div class="tab-content">
+<div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> DataFrame::fromCsv(<span class="st">'penguins.csv'</span>)<span class="ot">;</span></span>
 <span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="va">$counts</span> <span class="op">=</span> <span class="va">$penguins</span></span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> (<span class="kw">fn</span> (DataFrame <span class="va">$f</span>) =&gt; <span class="va">$f</span>-&gt;groupBy([<span class="st">'island'</span>]))</span>
-<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> (<span class="kw">fn</span> (DataFrame <span class="va">$f</span>) =&gt; <span class="va">$f</span>-&gt;summarise([<span class="st">'n'</span> =&gt; n()]))</span>
-<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> (<span class="kw">fn</span> (DataFrame <span class="va">$f</span>) =&gt; <span class="va">$f</span>-&gt;arrange([desc(col(<span class="st">'n'</span>))]))<span class="ot">;</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    -&gt;groupBy([<span class="st">'island'</span>])</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    -&gt;summarise([<span class="st">'n'</span> =&gt; n()])</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>    -&gt;arrange([desc(col(<span class="st">'n'</span>))])<span class="ot">;</span></span>
 <span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$counts</span><span class="ot">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <pre class="text output"><code># A tibble: 3 × 2
@@ -580,6 +584,25 @@ Column 'z' not found. Available columns: x, y.</code></pre>
 1 Biscoe      168
 2 Dream       124
 3 Torgersen    52</code></pre>
+</div>
+<div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> DataFrame::fromCsv(<span class="st">'penguins.csv'</span>)<span class="ot">;</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="va">$counts</span> <span class="op">=</span> <span class="va">$penguins</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> (<span class="kw">fn</span> (DataFrame <span class="va">$f</span>) =&gt; <span class="va">$f</span>-&gt;groupBy([<span class="st">'island'</span>]))</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> (<span class="kw">fn</span> (DataFrame <span class="va">$f</span>) =&gt; <span class="va">$f</span>-&gt;summarise([<span class="st">'n'</span> =&gt; n()]))</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">|&gt;</span> (<span class="kw">fn</span> (DataFrame <span class="va">$f</span>) =&gt; <span class="va">$f</span>-&gt;arrange([desc(col(<span class="st">'n'</span>))]))<span class="ot">;</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$counts</span><span class="ot">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<pre class="text output"><code># A tibble: 3 × 2
+  island        n
+  &lt;chr&gt;     &lt;int&gt;
+1 Biscoe      168
+2 Dream       124
+3 Torgersen    52</code></pre>
+</div>
+</div>
+</div>
 
 
 </section>

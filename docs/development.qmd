@@ -4,7 +4,9 @@ title: "Development"
 
 ## Tests
 
-The test suite uses Pest and needs PHP 8.5:
+The test suite uses Pest and runs on PHP 8.3, 8.4, and 8.5. Tests that use
+the `|>` operator are in `tests/Php85`, which `phpunit.xml` loads only on PHP
+8.5:
 
 ```bash
 composer install

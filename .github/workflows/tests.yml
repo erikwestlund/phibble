@@ -9,6 +9,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4', '8.5']
+    name: test (PHP ${{ matrix.php }})
 
     # The SQL tests run against SQLite always, and against these servers
     # through the PHIBBLE_TEST_* DSNs below.
@@ -43,9 +48,13 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.5'
+          php-version: ${{ matrix.php }}
           extensions: pdo_sqlite, pdo_pgsql, pdo_mysql, mbstring
           coverage: none
+
+      # phit, used only to render a docs chart, requires PHP 8.5.
+      - if: matrix.php != '8.5'
+        run: composer remove --dev erikwestlund/phiz --no-update --no-interaction
 
       - run: composer install --no-interaction --no-progress
 

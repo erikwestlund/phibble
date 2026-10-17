@@ -1,6 +1,6 @@
 # phibble
 
-phibble is a port of R's tibble to PHP 8.5, with readr-style input and output.
+phibble is a port of R's tibble to PHP, with readr-style input and output.
 A `DataFrame` holds typed columns, treats `null` as NA, and returns a new frame
 from every operation. It is the shared table type for
 [phplyr](https://github.com/erikwestlund/phplyr),
@@ -15,7 +15,8 @@ Documentation: <https://erikwestlund.github.io/phibble/>
 composer require erikwestlund/phibble
 ```
 
-phibble needs PHP 8.5 and its PDO extension.
+phibble needs PHP 8.3 or later and the PDO extension. On PHP 8.5, pipelines
+can also use the `|>` operator.
 
 ## Example
 

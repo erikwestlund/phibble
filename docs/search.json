@@ -168,7 +168,7 @@
     "href": "index.html#install",
     "title": "phibble",
     "section": "Install",
-    "text": "Install\nphibble needs PHP 8.5, which adds the |&gt; pipe operator.\ncomposer require erikwestlund/phibble\nphibble has no required dependencies beyond PHP’s PDO extension. It works with Laravel and Doctrine query builders without depending on either.",
+    "text": "Install\nphibble needs PHP 8.3 or later. PHP 8.5 adds the |&gt; pipe operator, which phibble and phplyr pipelines can use.\ncomposer require erikwestlund/phibble\nphibble has no required dependencies beyond PHP’s PDO extension. It works with Laravel and Doctrine query builders without depending on either.",
     "crumbs": [
       "phibble"
     ]
@@ -402,7 +402,7 @@
     "href": "development.html",
     "title": "Development",
     "section": "",
-    "text": "The test suite uses Pest and needs PHP 8.5:\ncomposer install\nphp vendor/bin/pest\nThe tests that fit models need the php-stats extension and are skipped without it. To run them, load the extension:\nphp -d extension=/path/to/libphp_stats.dylib vendor/bin/pest",
+    "text": "The test suite uses Pest and runs on PHP 8.3, 8.4, and 8.5. Tests that use the |&gt; operator are in tests/Php85, which phpunit.xml loads only on PHP 8.5:\ncomposer install\nphp vendor/bin/pest\nThe tests that fit models need the php-stats extension and are skipped without it. To run them, load the extension:\nphp -d extension=/path/to/libphp_stats.dylib vendor/bin/pest",
     "crumbs": [
       "Development"
     ]
@@ -412,7 +412,7 @@
     "href": "development.html#tests",
     "title": "Development",
     "section": "",
-    "text": "The test suite uses Pest and needs PHP 8.5:\ncomposer install\nphp vendor/bin/pest\nThe tests that fit models need the php-stats extension and are skipped without it. To run them, load the extension:\nphp -d extension=/path/to/libphp_stats.dylib vendor/bin/pest",
+    "text": "The test suite uses Pest and runs on PHP 8.3, 8.4, and 8.5. Tests that use the |&gt; operator are in tests/Php85, which phpunit.xml loads only on PHP 8.5:\ncomposer install\nphp vendor/bin/pest\nThe tests that fit models need the php-stats extension and are skipped without it. To run them, load the extension:\nphp -d extension=/path/to/libphp_stats.dylib vendor/bin/pest",
     "crumbs": [
       "Development"
     ]
@@ -548,11 +548,11 @@
     ]
   },
   {
-    "objectID": "getting-started.html#the-pipe-operator",
-    "href": "getting-started.html#the-pipe-operator",
+    "objectID": "getting-started.html#method-chains-and-the-pipe-operator",
+    "href": "getting-started.html#method-chains-and-the-pipe-operator",
     "title": "Getting started",
-    "section": "The pipe operator",
-    "text": "The pipe operator\nPHP 8.5’s |&gt; passes a value to a callable. Arrow functions let a pipeline of frame methods read from top to bottom. phplyr provides verbs that return such callables, so a phplyr pipeline needs no arrow functions.\n$penguins = DataFrame::fromCsv('penguins.csv');\n\n$counts = $penguins\n    |&gt; (fn (DataFrame $f) =&gt; $f-&gt;groupBy(['island']))\n    |&gt; (fn (DataFrame $f) =&gt; $f-&gt;summarise(['n' =&gt; n()]))\n    |&gt; (fn (DataFrame $f) =&gt; $f-&gt;arrange([desc(col('n'))]));\n\necho $counts;\n# A tibble: 3 × 2\n  island        n\n  &lt;chr&gt;     &lt;int&gt;\n1 Biscoe      168\n2 Dream       124\n3 Torgersen    52",
+    "section": "Method chains and the pipe operator",
+    "text": "Method chains and the pipe operator\nEvery verb returns a new table, so verbs chain as methods on any PHP version phibble supports. PHP 8.5’s |&gt; passes a value to a callable, and arrow functions let the same pipeline use it. phplyr provides verbs that return such callables, so a phplyr pipeline needs no arrow functions.\n\nMethod chain (PHP 8.3+)Pipe (PHP 8.5)\n\n\n$penguins = DataFrame::fromCsv('penguins.csv');\n\n$counts = $penguins\n    -&gt;groupBy(['island'])\n    -&gt;summarise(['n' =&gt; n()])\n    -&gt;arrange([desc(col('n'))]);\n\necho $counts;\n# A tibble: 3 × 2\n  island        n\n  &lt;chr&gt;     &lt;int&gt;\n1 Biscoe      168\n2 Dream       124\n3 Torgersen    52\n\n\n$penguins = DataFrame::fromCsv('penguins.csv');\n\n$counts = $penguins\n    |&gt; (fn (DataFrame $f) =&gt; $f-&gt;groupBy(['island']))\n    |&gt; (fn (DataFrame $f) =&gt; $f-&gt;summarise(['n' =&gt; n()]))\n    |&gt; (fn (DataFrame $f) =&gt; $f-&gt;arrange([desc(col('n'))]));\n\necho $counts;\n# A tibble: 3 × 2\n  island        n\n  &lt;chr&gt;     &lt;int&gt;\n1 Biscoe      168\n2 Dream       124\n3 Torgersen    52",
     "crumbs": [
       "Getting started"
     ]

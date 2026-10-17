@@ -7,6 +7,10 @@
     <testsuites>
         <testsuite name="Phibble">
             <directory>tests</directory>
+            <exclude>tests/Php85</exclude>
+        </testsuite>
+        <testsuite name="PHP 8.5">
+            <directory phpVersion="8.5.0" phpVersionOperator=">=">tests/Php85</directory>
         </testsuite>
     </testsuites>
     <source>

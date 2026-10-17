@@ -5,6 +5,17 @@ All notable changes to phibble are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0, minor versions may
 change the public API.
 
+## [0.3.0] - Unreleased
+
+### Changed
+
+- phibble now supports PHP 8.3 and 8.4 as well as 8.5. CI runs on all three
+  against PostgreSQL 17 and MySQL 8. `symfony/polyfill-php84` provides
+  `array_any()` and `array_all()` before PHP 8.4.
+- On PHP 8.3, `SqlTable` reads PostgreSQL float columns as floats, including
+  `Infinity` and `NaN`, as PHP 8.4's driver does.
+- The docs show pipelines as method chains (PHP 8.3+) and with `|>` (PHP 8.5).
+
 ## [0.2.0] - 2026-10-17
 
 ### Changed
@@ -94,5 +105,6 @@ and cmdstanphp.
   query builders and `->phibble()` for lazy SQL tables. Global scopes such as
   soft deletes apply.
 
+[0.3.0]: https://github.com/erikwestlund/phibble/releases/tag/v0.3.0
 [0.2.0]: https://github.com/erikwestlund/phibble/releases/tag/v0.2.0
 [0.1.0]: https://github.com/erikwestlund/phibble/releases/tag/v0.1.0

@@ -146,7 +146,7 @@ final readonly class DataFrame implements Table, ArrayAccess, Stringable
      */
     public static function fromPdo(PDO $pdo, string $sql, array $bindings = [], array $types = []): self
     {
-        return new PdoSource($pdo, $sql, $bindings, $types)->read();
+        return (new PdoSource($pdo, $sql, $bindings, $types))->read();
     }
 
     /**

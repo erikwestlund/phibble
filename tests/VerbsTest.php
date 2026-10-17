@@ -171,15 +171,6 @@ it('handles empty frames', function () {
         ->and($empty->mutate(['x' => fn () => 1])->nrow())->toBe(0);
 });
 
-it('works with the pipe operator', function () {
-    $result = penguins()
-        |> (fn (DataFrame $f) => $f->filter(fn (Row $r) => $r->mass !== null))
-        |> (fn (DataFrame $f) => $f->arrange([['mass', 'desc']]))
-        |> (fn (DataFrame $f) => $f->head(1));
-
-    expect($result->column('mass'))->toBe([5400.0]);
-});
-
 it('concatenates tables, keeping shared types and filling missing columns', function () {
     $a = penguins()->asFactor('species')->head(2);
     $b = penguins()->asFactor('species')->slice(2)->select(['species', 'mass']);

@@ -312,7 +312,7 @@ final readonly class TextParser
         $text = sprintf('%s-%s-%sT%02d:%02d:%02d%s%s', $m[1], $m[2], $m[3], $hour, $minute, $second, $fraction, $offset);
 
         try {
-            return new DateTimeImmutable($text)->setTimezone(new DateTimeZone('UTC'));
+            return (new DateTimeImmutable($text))->setTimezone(new DateTimeZone('UTC'));
         } catch (Exception) {
             return null;
         }

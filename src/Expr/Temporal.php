@@ -45,7 +45,7 @@ final class Temporal
         }
         [$y, $m, $d] = $parts;
         if ($tz === null) {
-            return new CalendarDate('@0')->setTimezone(self::zone('UTC'))->setDate($y, $m, $d);
+            return (new CalendarDate('@0'))->setTimezone(self::zone('UTC'))->setDate($y, $m, $d);
         }
 
         return self::local($y, $m, $d, 0, 0, 0, 0, $tz);
@@ -274,7 +274,7 @@ final class Temporal
     {
         $now = Clock::now()->setTimezone(self::zone($tz ?? 'UTC'));
 
-        return new CalendarDate('@0')->setTimezone(self::zone('UTC'))
+        return (new CalendarDate('@0'))->setTimezone(self::zone('UTC'))
             ->setDate((int) $now->format('Y'), (int) $now->format('n'), (int) $now->format('j'));
     }
 
@@ -349,7 +349,7 @@ final class Temporal
     /** A local time in a zone; NA when the zone skips it. */
     private static function local(int $y, int $m, int $d, int $h, int $i, int $s, int $micro, string $tz): ?DateTimeImmutable
     {
-        $out = new DateTimeImmutable('@0')->setTimezone(self::zone($tz))->setDate($y, $m, $d)->setTime($h, $i, $s, $micro);
+        $out = (new DateTimeImmutable('@0'))->setTimezone(self::zone($tz))->setDate($y, $m, $d)->setTime($h, $i, $s, $micro);
 
         return (int) $out->format('G') === $h ? $out : null;
     }

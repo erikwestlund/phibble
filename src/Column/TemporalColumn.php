@@ -128,8 +128,8 @@ final readonly class TemporalColumn implements Column
         $key = $this->type->value.':'.$this->timezone;
 
         return $prototypes[$key] ??= $this->type === Type::Date
-            ? new CalendarDate('@0')->setTimezone(new DateTimeZone('UTC'))
-            : new DateTimeImmutable('@0')->setTimezone(new DateTimeZone($this->timezone));
+            ? (new CalendarDate('@0'))->setTimezone(new DateTimeZone('UTC'))
+            : (new DateTimeImmutable('@0'))->setTimezone(new DateTimeZone($this->timezone));
     }
 
     private function object(DateTimeImmutable $prototype, int $t): DateTimeImmutable
@@ -145,6 +145,11 @@ final readonly class TemporalColumn implements Column
         }
         $object = $prototype->setTimestamp($seconds);
 
-        return $micro === 0 ? $object : $object->setMicrosecond($micro);
+        if ($micro === 0) {
+            return $object;
+        }
+
+        // setMicrosecond() is PHP 8.4; the modifier stays within the second.
+        return PHP_VERSION_ID >= 80400 ? $object->setMicrosecond($micro) : $object->modify("+{$micro} usec");
     }
 }

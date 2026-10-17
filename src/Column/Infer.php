@@ -66,7 +66,7 @@ final class Infer
             return new ArrayColumn(Type::String, $values);
         }
         $trimmed = array_map(fn (?string $v) => $v === null ? null : trim($v), $values);
-        [$column, $failed] = new TextParser()->parse($trimmed, $type, ['grouping' => true]);
+        [$column, $failed] = (new TextParser())->parse($trimmed, $type, ['grouping' => true]);
         if ($failed > 0) {
             trigger_error(
                 "NAs introduced by parsing column '{$name}' as {$type->value} ({$failed} value".($failed === 1 ? '' : 's').').',
@@ -85,7 +85,7 @@ final class Infer
      */
     public static function guess(array $values): Type
     {
-        return new TextParser()->guess(array_map(fn (?string $v) => $v === null ? null : trim($v), $values));
+        return (new TextParser())->guess(array_map(fn (?string $v) => $v === null ? null : trim($v), $values));
     }
 
     /**
@@ -326,7 +326,11 @@ final class Infer
             $micro = 0;
         }
 
-        return new DateTimeImmutable('@'.$seconds)->setTimezone(new DateTimeZone('UTC'))->setMicrosecond($micro);
+        // "@-1.5" parses on PHP 8.3, where setMicrosecond() does not exist.
+        $total = $seconds * 1_000_000 + $micro;
+        $abs = abs($total);
+
+        return (new DateTimeImmutable(sprintf('@%s%d.%06d', $total < 0 ? '-' : '', intdiv($abs, 1_000_000), $abs % 1_000_000)))->setTimezone(new DateTimeZone('UTC'));
     }
 
     private static function isNumber(string $v): bool

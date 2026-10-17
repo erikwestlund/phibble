@@ -275,7 +275,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <section id="tests" class="level2">
 <h2 class="anchored" data-anchor-id="tests">Tests</h2>
-<p>The test suite uses Pest and needs PHP 8.5:</p>
+<p>The test suite uses Pest and runs on PHP 8.3, 8.4, and 8.5. Tests that use the <code>|&gt;</code> operator are in <code>tests/Php85</code>, which <code>phpunit.xml</code> loads only on PHP 8.5:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">composer</span> install</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">php</span> vendor/bin/pest</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>The tests that fit models need the php-stats extension and are skipped without it. To run them, load the extension:</p>

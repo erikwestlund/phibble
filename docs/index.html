@@ -255,7 +255,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
 <h1 class="title">phibble</h1>
-<p class="subtitle lead">A typed data frame for PHP 8.5</p>
+<p class="subtitle lead">A typed data frame for PHP</p>
 </div>
 
 
@@ -307,7 +307,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>The packages talk to each other through the <code>Table</code> contract. <code>DataFrame</code> is the in-memory implementation. <code>SqlTable</code> implements the same contract over a SQL query, so the verbs compile to SQL and run in the database.</p>
 <section id="install" class="level2">
 <h2 class="anchored" data-anchor-id="install">Install</h2>
-<p>phibble needs PHP 8.5, which adds the <code>|&gt;</code> pipe operator.</p>
+<p>phibble needs PHP 8.3 or later. PHP 8.5 adds the <code>|&gt;</code> pipe operator, which phibble and phplyr pipelines can use.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">composer</span> require erikwestlund/phibble</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>phibble has no required dependencies beyond PHP’s PDO extension. It works with Laravel and Doctrine query builders without depending on either.</p>
 </section>
