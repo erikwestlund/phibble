@@ -53,7 +53,7 @@
     "repositories": [
         {
             "type": "vcs",
-            "url": "https://github.com/erikwestlund/phiz"
+            "url": "https://github.com/erikwestlund/phit"
         }
     ]
 }

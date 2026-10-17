@@ -10,7 +10,7 @@
  *
  * Code above a line "// ---" and below a line "// ===" runs but is left out
  * of the page. Output after
- * a line "<!--phiz-->" is HTML, such as a phiz chart, and is included as is.
+ * a line "<!--phiz-->" is HTML, such as a phit chart, and is included as is.
  *
  * Usage: bin/docs-examples [name ...]
  * Environment: PHP (the PHP 8.5 binary, default: this one).
