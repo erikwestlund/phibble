@@ -247,7 +247,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#from-a-collection-or-query-to-a-dataframe" id="toc-from-a-collection-or-query-to-a-dataframe" class="nav-link active" data-scroll-target="#from-a-collection-or-query-to-a-dataframe">From a collection or query to a DataFrame</a></li>
   <li><a href="#queries-that-stay-in-the-database" id="toc-queries-that-stay-in-the-database" class="nav-link" data-scroll-target="#queries-that-stay-in-the-database">Queries that stay in the database</a></li>
   <li><a href="#with-phplyr" id="toc-with-phplyr" class="nav-link" data-scroll-target="#with-phplyr">With phplyr</a></li>
-  <li><a href="#charts-with-phit" id="toc-charts-with-phit" class="nav-link" data-scroll-target="#charts-with-phit">Charts with phit</a></li>
+  <li><a href="#charts-with-phiz" id="toc-charts-with-phiz" class="nav-link" data-scroll-target="#charts-with-phiz">Charts with phiz</a></li>
   <li><a href="#using-the-result" id="toc-using-the-result" class="nav-link" data-scroll-target="#using-the-result">Using the result</a></li>
   </ul>
 </nav>
@@ -372,9 +372,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 </section>
-<section id="charts-with-phit" class="level2">
-<h2 class="anchored" data-anchor-id="charts-with-phit">Charts with phit</h2>
-<p><a href="https://erikwestlund.github.io/phit/">phit</a> is a grammar of graphics in the style of ggplot2 that produces Vega-Lite specifications. <code>Plot::of()</code> accepts a phibble DataFrame directly. A query can select the needed columns in the database, collect them, and plot them:</p>
+<section id="charts-with-phiz" class="level2">
+<h2 class="anchored" data-anchor-id="charts-with-phiz">Charts with phiz</h2>
+<p><a href="https://erikwestlund.github.io/phiz/">phiz</a> is a grammar of graphics in the style of ggplot2 that produces Vega-Lite specifications. <code>Plot::of()</code> accepts a phibble DataFrame directly. A query can select the needed columns in the database, collect them, and plot them:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> Phiz\Plot<span class="ot">;</span></span>
 <span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> Penguin::query()</span>
@@ -613,11 +613,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
   window.addEventListener('load', function () { if (pending) start(); });
 })();</script>
-<p>In a Laravel view, phit’s Blade component renders a plot, and <code>@phizScripts</code> loads the Vega libraries once per page:</p>
+<p>In a Laravel view, phiz’s Blade component renders a plot, and <code>@phizScripts</code> loads the Vega libraries once per page:</p>
 <pre class="blade"><code>&lt;x-phiz :plot="$plot" /&gt;
 
 @phizScripts</code></pre>
-<p>phit also has helpers that plot php-stats model results, such as <code>coefplot($fit)</code> and <code>effect_plot($fit, $data, 'x', by: 'g')</code>. Its documentation covers them.</p>
+<p>phiz also has helpers that plot php-stats model results, such as <code>coefplot($fit)</code> and <code>effect_plot($fit, $data, 'x', by: 'g')</code>. Its documentation covers them.</p>
 </section>
 <section id="using-the-result" class="level2">
 <h2 class="anchored" data-anchor-id="using-the-result">Using the result</h2>

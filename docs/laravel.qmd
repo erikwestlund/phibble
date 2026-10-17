@@ -84,9 +84,9 @@ $summary = Penguin::query()->phibble()
 ```
 :::
 
-## Charts with phit
+## Charts with phiz
 
-[phit](https://erikwestlund.github.io/phit/) is a grammar of graphics in the
+[phiz](https://erikwestlund.github.io/phiz/) is a grammar of graphics in the
 style of ggplot2 that produces Vega-Lite specifications. `Plot::of()` accepts
 a phibble DataFrame directly. A query can select the needed columns in the
 database, collect them, and plot them:
@@ -98,7 +98,7 @@ only the summary rows reach PHP:
 
 {{< include examples/_laravel-chart-summary.md >}}
 
-In a Laravel view, phit's Blade component renders a plot, and `@phizScripts`
+In a Laravel view, phiz's Blade component renders a plot, and `@phizScripts`
 loads the Vega libraries once per page:
 
 ```blade
@@ -107,7 +107,7 @@ loads the Vega libraries once per page:
 @phizScripts
 ```
 
-phit also has helpers that plot php-stats model results, such as
+phiz also has helpers that plot php-stats model results, such as
 `coefplot($fit)` and `effect_plot($fit, $data, 'x', by: 'g')`. Its
 documentation covers them.
 

@@ -52,7 +52,7 @@ jobs:
           extensions: pdo_sqlite, pdo_pgsql, pdo_mysql, mbstring
           coverage: none
 
-      # phit, used only to render a docs chart, requires PHP 8.5.
+      # phiz, used only to render a docs chart, requires PHP 8.5.
       - if: matrix.php != '8.5'
         run: composer remove --dev erikwestlund/phiz --no-update --no-interaction
 
