@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Phibble\Exception\ColumnNotFound;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 use function Phibble\as_tibble;
@@ -12,7 +12,7 @@ use function Phibble\tibble;
 use function Phibble\tribble;
 
 it('builds tibbles with recycling and computed columns', function () {
-    $frame = tibble(x: [1, 2, 3], y: 'a', z: fn (Frame $t) => array_map(fn ($x) => $x * 2, $t['x']));
+    $frame = tibble(x: [1, 2, 3], y: 'a', z: fn (DataFrame $t) => array_map(fn ($x) => $x * 2, $t['x']));
 
     expect($frame->toColumns())->toBe(['x' => [1, 2, 3], 'y' => ['a', 'a', 'a'], 'z' => [2, 4, 6]])
         ->and(tibble(x: 1, y: 'a')->nrow())->toBe(1)
@@ -25,7 +25,7 @@ it('rejects incompatible sizes with tibble\'s message', function () {
 })->throws(InvalidArgumentException::class, "Tibble columns must have compatible sizes.\n• Size 3: Existing data.\n• Size 2: Column `y`.\nℹ Only values of size one are recycled.");
 
 it('splices unnamed tables', function () {
-    $frame = Frame::tibble(['x' => [1, 2], Frame::tibble(['a' => [3, 4], 'b' => [5, 6]])]);
+    $frame = DataFrame::tibble(['x' => [1, 2], DataFrame::tibble(['a' => [3, 4], 'b' => [5, 6]])]);
 
     expect($frame->columns())->toBe(['x', 'a', 'b']);
 });
@@ -53,7 +53,7 @@ it('converts many things with as_tibble', function () {
         ->and(as_tibble(['a' => [1, 2]])->column('a'))->toBe([1, 2])
         ->and(as_tibble($collection)->column('a'))->toBe([1, 2])
         ->and(as_tibble(new ArrayIterator([(object) ['a' => 5]]))->column('a'))->toBe([5])
-        ->and(as_tibble(penguins()))->toBeInstanceOf(Frame::class);
+        ->and(as_tibble(penguins()))->toBeInstanceOf(DataFrame::class);
 });
 
 it('adds rows like add_row', function () {
@@ -106,6 +106,6 @@ it('reads columns strictly by property and key', function () {
 });
 
 it('repairs names on request', function () {
-    expect(fn () => Frame::tribble(['a', 'a'], 1, 2))->toThrow(InvalidArgumentException::class)
+    expect(fn () => DataFrame::tribble(['a', 'a'], 1, 2))->toThrow(InvalidArgumentException::class)
         ->and(as_tibble([['' => 1]], nameRepair: 'unique')->columns())->toBe(['...1']);
 });

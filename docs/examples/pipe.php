@@ -1,10 +1,10 @@
 <?php
 
-$penguins = Frame::fromCsv('penguins.csv');
+$penguins = DataFrame::fromCsv('penguins.csv');
 
 $counts = $penguins
-    |> (fn (Frame $f) => $f->groupBy(['island']))
-    |> (fn (Frame $f) => $f->summarise(['n' => n()]))
-    |> (fn (Frame $f) => $f->arrange([desc(col('n'))]));
+    |> (fn (DataFrame $f) => $f->groupBy(['island']))
+    |> (fn (DataFrame $f) => $f->summarise(['n' => n()]))
+    |> (fn (DataFrame $f) => $f->arrange([desc(col('n'))]));
 
 echo $counts;

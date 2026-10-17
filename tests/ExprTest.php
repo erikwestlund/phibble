@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Phibble\Expr\Call;
 use Phibble\Expr\Expr;
-use Phibble\Frame;
+use Phibble\DataFrame;
 
 use function Phibble\Expr\{all, any, as_string, between, case_when, coalesce, col, consecutive_id, cumall, cumany, cummax, cummean, cumsum, cume_dist, dense_rank, desc, first, if_else, iqr, is_na, lag, last, lead, lit, log, max, mean, median, min, min_rank, n, n_distinct, na_if, nth, ntile, paste, paste0, percent_rank, quantile, round, row_number, sd, str_detect, str_length, str_lower, str_replace, str_replace_all, str_sub, str_trim, sum, var_};
 
@@ -22,7 +22,7 @@ it('matches dplyr for mutate expressions', function (Closure $frame, Expr $expr)
         // Each value has its own digits in the R case; evaluate row by row.
         $values = [0.5, 1.5, 2.5, -0.5, 2.675, 0.125, 1234.5];
         $digits = [0, 0, 0, 0, 2, 2, -1];
-        $out = array_map(fn ($v, $d) => Frame::fromColumns(['v' => [$v]])->mutate(['out' => round(col('v'), digits: $d)])->column('out')[0], $values, $digits);
+        $out = array_map(fn ($v, $d) => DataFrame::fromColumns(['v' => [$v]])->mutate(['out' => round(col('v'), digits: $d)])->column('out')[0], $values, $digits);
     } else {
         $out = $frame()->mutate(['out' => $expr])->column('out');
     }
@@ -80,7 +80,7 @@ it('validates calls against the registry', function () {
 });
 
 it('returns doubles from mean() of integers, as R does', function () {
-    $frame = Frame::fromColumns(['g' => ['a', 'a', 'b'], 'i' => [2, 4, 3]]);
+    $frame = DataFrame::fromColumns(['g' => ['a', 'a', 'b'], 'i' => [2, 4, 3]]);
 
     expect($frame->groupBy(['g'])->summarise(['m' => mean(col('i'))])->column('m'))->toBe([3.0, 3.0])
         ->and($frame->groupBy(['g'])->summarise(['m' => mean(col('i'))])->type('m'))->toBe(Phibble\Type::Float)

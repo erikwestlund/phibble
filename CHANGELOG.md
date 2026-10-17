@@ -5,7 +5,12 @@ All notable changes to phibble are listed here. The format follows
 [Semantic Versioning](https://semver.org/). Before 1.0, minor versions may
 change the public API.
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-10-17
+
+### Changed
+
+- `Phibble\Frame` is now `Phibble\DataFrame`. The old name is removed. The
+  Laravel macros are now `->toDataFrame()` on collections and query builders.
 
 ### Added
 
@@ -13,8 +18,10 @@ change the public API.
   phpolars-phibble package. It implements the Table contract on Polars through
   the php_polars extension, which is suggested and not required. `polars()`
   creates one from any table.
-- A Backends documentation page: `Frame`, `SqlTable`, and `PolarsTable` as
+- A Backends documentation page: `DataFrame`, `SqlTable`, and `PolarsTable` as
   interchangeable implementations of `Phibble\Contracts\Table`.
+- `PolarsTable::fromTable()` throws for list-columns that Polars would store
+  differently, such as named arrays with different keys.
 
 ## [0.1.0] - 2026-10-16
 

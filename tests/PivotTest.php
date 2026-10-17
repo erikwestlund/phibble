@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 /*
@@ -36,7 +36,7 @@ dataset('pivot cases', fn () => array_map(fn ($c) => [$c], array_keys(pivotCases
 
 it('matches tidyr pivot specs', function (string $name) {
     $case = pivotCases()[$name];
-    $frame = Frame::fromRows($case['data']);
+    $frame = DataFrame::fromRows($case['data']);
     $args = $case['args'];
     if (isset($args['idColumns'])) {
         $args['idColumns'] = (array) $args['idColumns'];
@@ -56,17 +56,17 @@ it('matches tidyr pivot specs', function (string $name) {
 })->with('pivot cases');
 
 it('combines value types with vctrs rules', function () {
-    $out = Frame::fromColumns(['id' => [1], 'a' => [1], 'b' => [2.5]])
+    $out = DataFrame::fromColumns(['id' => [1], 'a' => [1], 'b' => [2.5]])
         ->pivotLongerSpec([['.name' => 'a', '.value' => 'v', 'k' => 'a'], ['.name' => 'b', '.value' => 'v', 'k' => 'b']]);
 
     expect($out->type('v'))->toBe(Type::Float)
-        ->and(fn () => Frame::fromColumns(['id' => [1], 'a' => [1], 'b' => ['x']])
+        ->and(fn () => DataFrame::fromColumns(['id' => [1], 'a' => [1], 'b' => ['x']])
             ->pivotLongerSpec([['.name' => 'a', '.value' => 'v', 'k' => 'a'], ['.name' => 'b', '.value' => 'v', 'k' => 'b']]))
         ->toThrow(InvalidArgumentException::class, "Can't combine `a` <int> and `b` <chr>.");
 });
 
 it('keeps factor value columns and list-columns from duplicates', function () {
-    $dupes = Frame::fromColumns(['id' => [1, 1, 2], 'key' => ['x', 'x', 'y'], 'val' => [1.0, 2.0, 3.0]]);
+    $dupes = DataFrame::fromColumns(['id' => [1, 1, 2], 'key' => ['x', 'x', 'y'], 'val' => [1.0, 2.0, 3.0]]);
     [$out] = quietly(fn () => $dupes->pivotWiderSpec([
         ['.name' => 'x', '.value' => 'val', 'key' => 'x'],
         ['.name' => 'y', '.value' => 'val', 'key' => 'y'],

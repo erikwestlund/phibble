@@ -7,24 +7,24 @@ of the `Phibble\Contracts\Table` interface, and three classes implement it:
 
 | Backend | Class | Runs | Use it for |
 | --- | --- | --- | --- |
-| In memory | `Phibble\Frame` | PHP arrays | Small and medium data, closures, anything |
+| In memory | `Phibble\DataFrame` | PHP arrays | Small and medium data, closures, anything |
 | SQL | `Phibble\Sql\SqlTable` | SQLite, PostgreSQL, or MySQL | Data that lives in a database |
 | Polars | `Phibble\Polars\PolarsTable` | Polars, through the php_polars extension | Large data in memory |
 
 Code written against `Table`, including phplyr's verbs, runs on any of them. A
 pipeline gives the same result on each backend, because a backend that cannot
 run a step exactly (a PHP closure, or a function with no exact translation)
-hands that step to `Frame` and continues. The [Table contract](contract.qmd)
+hands that step to `DataFrame` and continues. The [Table contract](contract.qmd)
 page states the rules each backend follows.
 
 ## Choosing and switching
 
 ```php
-use Phibble\Frame;
+use Phibble\DataFrame;
 use function Phibble\{tbl, polars};
 use function Phibble\Expr\{col, mean, n};
 
-$frame = Frame::fromCsv('sales.csv');          // in memory
+$frame = DataFrame::fromCsv('sales.csv');      // in memory
 $sql = tbl($pdo, 'sales');                     // in the database
 $fast = polars($frame);                        // in Polars
 
@@ -33,12 +33,12 @@ $summary = fn ($t) => $t
     ->groupBy(['store'])
     ->summarise(['n' => n(), 'avg' => mean(col('price'))]);
 
-$summary($frame);             // a Frame
+$summary($frame);             // a DataFrame
 $summary($sql)->collect();    // runs as one SQL query
 $summary($fast)->collect();   // runs in Polars
 ```
 
-`collect()` turns any table into a `Frame`. `PolarsTable::fromTable()` and
+`collect()` turns any table into a `DataFrame`. `PolarsTable::fromTable()` and
 `polars()` move a table into Polars; `tbl()` opens a database table or query.
 
 ## The Polars backend
@@ -48,8 +48,13 @@ The Polars backend needs the php_polars extension from
 it: `composer.json` lists it as a suggestion, and the class is only loaded when
 used. Expressions, joins (including `join_by` comparisons and rolling joins),
 pivots, and the lubridate and stringr functions run natively in Polars. Steps
-it cannot run, such as PHP closures and `str_to_title()`, run in `Frame`.
+it cannot run, such as PHP closures and `str_to_title()`, run in `DataFrame`.
 `PolarsTable::$fallbacks` counts those steps.
+
+Two kinds of list-column stay in `DataFrame`. Polars stores named arrays as
+structs, which have every key in every row, so `fromTable()` throws when a
+list-column holds named arrays with different keys. A list-column of
+`DataFrame`s cannot be stored in Polars either.
 
 The Polars test suite runs phibble's dplyr, tidyr, lubridate, and stringr
 reference cases on `PolarsTable` and skips when the extension is not loaded.

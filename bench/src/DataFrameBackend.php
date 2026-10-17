@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Phibble\Bench;
 
 use Phibble\Contracts\Table;
-use Phibble\Frame;
+use Phibble\DataFrame;
 
-final class FrameBackend implements Backend
+final class DataFrameBackend implements Backend
 {
     public function name(): string
     {
@@ -16,6 +16,6 @@ final class FrameBackend implements Backend
 
     public function load(string $path): Table
     {
-        return Frame::fromCsv($path);
+        return DataFrame::fromCsv($path);
     }
 }

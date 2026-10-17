@@ -6,18 +6,18 @@ namespace Phibble\Contracts;
 
 use Closure;
 use Phibble\Expr\Expr;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 /**
- * The table contract every backend implements: the in-memory Phibble\Frame,
+ * The table contract every backend implements: the in-memory Phibble\DataFrame,
  * a later Polars-backed table and a later lazy SQL table.
  *
  * Rules shared by every method:
  * - Tables are immutable. Every operation returns a new table. Verbs are
  *   declared to return Table: a backend may hand back a different
- *   implementation, e.g. a SQL table falls back to an in-memory Frame
- *   for closures it cannot translate. Frame returns static.
+ *   implementation, e.g. a SQL table falls back to an in-memory DataFrame
+ *   for closures it cannot translate. DataFrame returns static.
  * - NA is PHP null.
  * - Grouping is metadata. groupBy() records key columns; verbs that care
  *   about groups (filter, mutate, summarise) read it, the rest keep it.
@@ -251,6 +251,6 @@ interface Table extends \Countable, \IteratorAggregate
     /** @return array<string, list<mixed>> */
     public function toColumns(): array;
 
-    /** Materialise into an in-memory Frame. A Frame returns itself. */
-    public function collect(): Frame;
+    /** Materialise into an in-memory DataFrame. A DataFrame returns itself. */
+    public function collect(): DataFrame;
 }

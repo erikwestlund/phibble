@@ -4,7 +4,7 @@ title: "The Table contract"
 
 `Phibble\Contracts\Table` is the interface that every table backend
 implements. phplyr's verbs call its methods, so a pipeline runs unchanged on
-any backend. phibble ships two implementations: `Frame`, which holds data in
+any backend. phibble ships two implementations: `DataFrame`, which holds data in
 PHP arrays, and `SqlTable`, which compiles verbs to SQL. phpolars implements it
 over Polars.
 
@@ -16,8 +16,8 @@ implementation follows and the semantics of each method.
 - **Immutability.** Every method returns a new table and leaves the original
   unchanged.
 - **Return types.** Verbs are declared to return `Table`. A backend may return
-  a different implementation. `SqlTable` returns a `Frame` when it falls back to
-  memory for a closure. `Frame` declares `static`.
+  a different implementation. `SqlTable` returns a `DataFrame` when it falls back to
+  memory for a closure. `DataFrame` declares `static`.
 - **NA.** PHP `null` is NA in every column type.
 - **Grouping.** `groupBy()` records grouping columns as metadata. `filter()`,
   `mutate()`, `mutateGroups()`, `filterGroups()`, `summarise()`, and
@@ -49,7 +49,7 @@ implementation follows and the semantics of each method.
 | `column($name)` | One column as a list. Factors return their labels. |
 | `toRows()` | A list of associative arrays. |
 | `toColumns()` | An array of lists by column name. |
-| `collect()` | The rows as an in-memory `Frame`. A `Frame` returns itself. |
+| `collect()` | The rows as an in-memory `DataFrame`. A `DataFrame` returns itself. |
 
 ### Verbs
 
@@ -114,14 +114,14 @@ comparisons.
 
 ## Errors and allowed differences
 
-`Frame` follows R, and other backends match it. The following rules apply
+`DataFrame` follows R, and other backends match it. The following rules apply
 where R raises an error or where exact agreement is impractical.
 
 - `quantile()` and `iqr()` over values that include NA, without
   `na_rm: true`, throw an error, as R does. A backend must not return NA.
 - A summary entry that is not size 1 throws `LengthException`, and the message
   mentions `reframe()`.
-- Aggregates over zero rows may return NA. `Frame` returns R's values (`NaN`
+- Aggregates over zero rows may return NA. `DataFrame` returns R's values (`NaN`
   for `mean()`, `Inf` and `-Inf` for `min()` and `max()`). This case only arises
   for an ungrouped table with no rows.
 - `as_string()` on doubles with very large or very small magnitudes may
@@ -132,8 +132,8 @@ where R raises an error or where exact agreement is impractical.
 ## Testing a backend
 
 The simplest test of a backend is to run the same operations on the backend
-and on `Frame` and compare the results. `tests/SqlTest.php` does this for
+and on `DataFrame` and compare the results. `tests/SqlTest.php` does this for
 `SqlTable`. It loads the same data into a database, runs each operation both
 ways, and compares the collected rows. It also runs every case in
 `tests/fixtures/expr/expected.json`, the dplyr results that `tests/r/expr.R`
-produces, so each backend is checked against R as well as against `Frame`.
+produces, so each backend is checked against R as well as against `DataFrame`.

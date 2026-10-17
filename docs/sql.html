@@ -276,18 +276,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p><code>Phibble\Sql\SqlTable</code> is a table backed by a SQL query, like dbplyr’s <code>tbl()</code>. It implements the same <code>Table</code> contract as <code>Frame</code>. Verbs called with <a href="./expr.html">expressions</a> are compiled into SQL, and no query runs until the rows are needed. SQLite, PostgreSQL, and MySQL are supported.</p>
+<p><code>Phibble\Sql\SqlTable</code> is a table backed by a SQL query, like dbplyr’s <code>tbl()</code>. It implements the same <code>Table</code> contract as <code>DataFrame</code>. Verbs called with <a href="./expr.html">expressions</a> are compiled into SQL, and no query runs until the rows are needed. SQLite, PostgreSQL, and MySQL are supported.</p>
 <section id="opening-a-table" class="level2">
 <h2 class="anchored" data-anchor-id="opening-a-table">Opening a table</h2>
 <p><code>tbl($pdo, 'name')</code> opens a table or view. <code>tbl($pdo, 'SELECT ...', $bindings)</code> starts from a query with positional (<code>?</code>) or named (<code>:name</code>) bindings. The same tables can be opened with <code>SqlTable::table()</code> and <code>SqlTable::query()</code>. <code>SqlTable::fromQuery($builder)</code> starts from a Laravel or Doctrine query builder, and <code>SqlTable::fromSource($pdoSource)</code> from a <code>PdoSource</code>.</p>
-<p>phibble reads the column names when the table is opened. It runs the query itself when the rows are needed: <code>collect()</code> returns a <code>Frame</code>, and <code>toRows()</code>, <code>nrow()</code>, iteration, and printing also run it.</p>
+<p>phibble reads the column names when the table is opened. It runs the query itself when the rows are needed: <code>collect()</code> returns a <code>DataFrame</code>, and <code>toRows()</code>, <code>nrow()</code>, iteration, and printing also run it.</p>
 <p><code>showQuery()</code> returns the SQL with <code>?</code> placeholders, and <code>bindings()</code> returns their values in order.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Load penguins.csv into an in-memory SQLite database.</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="va">$pdo</span> <span class="op">=</span> <span class="kw">new</span> <span class="bu">PDO</span>(<span class="st">'sqlite::memory:'</span>)<span class="ot">;</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="va">$pdo</span>-&gt;<span class="fu">exec</span>(<span class="st">'CREATE TABLE penguins (species TEXT, island TEXT, bill_len REAL, bill_dep REAL,</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="st">    flipper_len INTEGER, body_mass INTEGER, sex TEXT, year INTEGER)'</span>)<span class="ot">;</span></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="va">$insert</span> <span class="op">=</span> <span class="va">$pdo</span>-&gt;prepare(<span class="st">'INSERT INTO penguins VALUES (?, ?, ?, ?, ?, ?, ?, ?)'</span>)<span class="ot">;</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="cf">foreach</span> (Frame::fromCsv(<span class="st">'penguins.csv'</span>)-&gt;toRows() <span class="kw">as</span> <span class="va">$row</span>) {</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="cf">foreach</span> (DataFrame::fromCsv(<span class="st">'penguins.csv'</span>)-&gt;toRows() <span class="kw">as</span> <span class="va">$row</span>) {</span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">$insert</span>-&gt;execute(<span class="fu">array_values</span>(<span class="va">$row</span>))<span class="ot">;</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
@@ -331,7 +331,7 @@ SELECT "species", "n", "mass" FROM (SELECT "species", "n", "mass", ROW_NUMBER() 
 </section>
 <section id="when-the-table-falls-back-to-memory" class="level2">
 <h2 class="anchored" data-anchor-id="when-the-table-falls-back-to-memory">When the table falls back to memory</h2>
-<p>Some arguments have no faithful SQL translation. A <code>SqlTable</code> then collects the rows and runs the verb in memory, and the verb returns a <code>Frame</code>. Results match <code>Frame</code> in either case. The fallbacks are:</p>
+<p>Some arguments have no faithful SQL translation. A <code>SqlTable</code> then collects the rows and runs the verb in memory, and the verb returns a <code>DataFrame</code>. Results match <code>DataFrame</code> in either case. The fallbacks are:</p>
 <ul>
 <li>any PHP closure,</li>
 <li><code>round()</code>, because SQL’s <code>ROUND</code> does not round half to even,</li>
@@ -366,8 +366,8 @@ SELECT "species", "n", "mass" FROM (SELECT "species", "n", "mass", ROW_NUMBER() 
 <span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$t</span>-&gt;mutate([<span class="st">'y'</span> =&gt; Phibble\Expr\<span class="fu">round</span>(col(<span class="st">'x'</span>))])<span class="ot">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <pre class="text output"><code>Phibble\Sql\SqlTable
-Phibble\Frame
-Phibble\Frame
+Phibble\DataFrame
+Phibble\DataFrame
 # A tibble: 2 × 3
      id     x     y
   &lt;int&gt; &lt;dbl&gt; &lt;dbl&gt;
@@ -377,10 +377,10 @@ Phibble\Frame
 </section>
 <section id="known-differences" class="level2">
 <h2 class="anchored" data-anchor-id="known-differences">Known differences</h2>
-<p>These cases can differ from <code>Frame</code>, because the database cannot represent R’s result:</p>
+<p>These cases can differ from <code>DataFrame</code>, because the database cannot represent R’s result:</p>
 <ul>
 <li>MySQL has no infinity or NaN. Results that are <code>Inf</code>, <code>-Inf</code>, or <code>NaN</code> in R, such as <code>x / 0</code>, <code>log(0)</code>, or <code>mean()</code> of no values, are NA in MySQL. SQLite stores infinities but has no NaN, so <code>NaN</code> is NA there.</li>
-<li>Integer arithmetic beyond 64 bits fails in the database, where <code>Frame</code> switches to a double.</li>
+<li>Integer arithmetic beyond 64 bits fails in the database, where <code>DataFrame</code> switches to a double.</li>
 <li>Joins do not warn about unexpected many-to-many matches.</li>
 <li>Column names starting with <code>__phibble_</code> are reserved for the hidden columns that keep row order and window results.</li>
 </ul>
@@ -422,7 +422,7 @@ UNION ALL SELECT 'b', 1, 7 UNION ALL SELECT 'b', 2, NULL) AS phibble_source) AS 
 </section>
 <section id="joins" class="level2">
 <h2 class="anchored" data-anchor-id="joins">Joins</h2>
-<p><code>join()</code> between two tables on the same PDO connection compiles to a SQL join. The output columns follow <code>Frame::join()</code>: x’s columns, then y’s other columns, with <code>.x</code> and <code>.y</code> suffixes on clashing names. NA keys match each other, as in dplyr, through <code>IS</code> in SQLite, <code>IS NOT DISTINCT FROM</code> in PostgreSQL, and <code>&lt;=&gt;</code> in MySQL. Pass <code>naMatches: false</code> for SQL’s usual equality. The order of rows from a SQL join is not defined, so call <code>arrange()</code> when it matters.</p>
+<p><code>join()</code> between two tables on the same PDO connection compiles to a SQL join. The output columns follow <code>DataFrame::join()</code>: x’s columns, then y’s other columns, with <code>.x</code> and <code>.y</code> suffixes on clashing names. NA keys match each other, as in dplyr, through <code>IS</code> in SQLite, <code>IS NOT DISTINCT FROM</code> in PostgreSQL, and <code>&lt;=&gt;</code> in MySQL. Pass <code>naMatches: false</code> for SQL’s usual equality. The order of rows from a SQL join is not defined, so call <code>arrange()</code> when it matters.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="va">$pdo</span> <span class="op">=</span> <span class="kw">new</span> <span class="bu">PDO</span>(<span class="st">'sqlite::memory:'</span>)<span class="ot">;</span></span>
 <span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="va">$visits</span> <span class="op">=</span> tbl(<span class="va">$pdo</span><span class="ot">,</span> <span class="st">"SELECT 1 AS clinic_id, 120 AS bp UNION ALL SELECT 2, 135 UNION ALL SELECT NULL, 128"</span>)<span class="ot">;</span></span>
 <span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="va">$clinics</span> <span class="op">=</span> tbl(<span class="va">$pdo</span><span class="ot">,</span> <span class="st">"SELECT 1 AS id, 'north' AS name UNION ALL SELECT NULL, 'unassigned'"</span>)<span class="ot">;</span></span>

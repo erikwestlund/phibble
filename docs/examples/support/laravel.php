@@ -6,7 +6,7 @@
 
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Eloquent\Model;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Laravel\PhibbleServiceProvider;
 
 $capsule = new Capsule();
@@ -27,7 +27,7 @@ Capsule::schema()->create('penguins', function ($table) {
 });
 $rows = array_map(
     fn (array $r) => array_map(fn ($v) => $v instanceof DateTimeInterface ? $v->format('Y-m-d') : $v, $r),
-    Frame::fromCsv('penguins.csv')->toRows(),
+    DataFrame::fromCsv('penguins.csv')->toRows(),
 );
 foreach (array_chunk($rows, 100) as $chunk) {
     Capsule::table('penguins')->insert($chunk);

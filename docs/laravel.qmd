@@ -5,8 +5,8 @@ title: "phibble for Laravel developers"
 phibble works with Laravel without configuration. Its service provider is
 registered by package discovery, and it adds two kinds of macro:
 
-- `->toFrame()` on collections and query builders runs the query and returns
-  an in-memory `Frame`.
+- `->toDataFrame()` on collections and query builders runs the query and returns
+  an in-memory `DataFrame`.
 - `->phibble()` on query builders, Eloquent builders, and relations returns a
   lazy `SqlTable` on the query's connection. Verbs given expressions compile
   to SQL, so grouping and summarising run in the database.
@@ -15,16 +15,16 @@ Laravel is not a dependency. The examples on this page use Eloquent with an
 in-memory SQLite database that holds the `penguins` data, through a model with a
 `measured()` scope that keeps rows with a body mass.
 
-## From a collection or query to a Frame
+## From a collection or query to a DataFrame
 
-`toFrame()` builds a frame from the rows of a collection or a query. Column
-types are inferred from the values, as for `Frame::fromRows()`.
+`toDataFrame()` builds a frame from the rows of a collection or a query. Column
+types are inferred from the values, as for `DataFrame::fromRows()`.
 
-{{< include examples/_laravel-to-frame.md >}}
+{{< include examples/_laravel-to-dataframe.md >}}
 
 A collection of models becomes rows of their attributes. Eloquent casts and
 accessors apply only when the models are loaded first, as in the example
-above; `Penguin::query()->toFrame()` reads the rows directly.
+above; `Penguin::query()->toDataFrame()` reads the rows directly.
 
 ## Queries that stay in the database
 
@@ -47,7 +47,7 @@ the group maximum compiles to a window function:
 
 Expressions that SQL cannot evaluate exactly as R does, and any PHP closure,
 make the table collect its rows and continue in memory. The result is then a
-`Frame`, and the values are the same as if the whole pipeline had run in
+`DataFrame`, and the values are the same as if the whole pipeline had run in
 memory. The [SQL tables](sql.qmd) page lists these cases.
 
 ## With phplyr

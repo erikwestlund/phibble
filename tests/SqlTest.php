@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Phibble\Expr\Expr;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Sql\SqlTable;
 use Phibble\Type;
 
@@ -46,7 +46,7 @@ it('matches dplyr for grouped mutate and summarise in SQL', function (Closure $c
     expect($failures)->toBe([]);
 })->with('connections');
 
-it('runs verbs lazily and matches Frame', function (Closure $connect) {
+it('runs verbs lazily and matches DataFrame', function (Closure $connect) {
     $pdo = $connect();
     $frame = exprFrame();
     $sql = sqlFrom($pdo, $frame);
@@ -64,10 +64,10 @@ it('runs verbs lazily and matches Frame', function (Closure $connect) {
         ->and($sql->groupBy(['g'])->filter(col('x')->gt(mean(col('x'), na_rm: true)))->arrange(['i'])->collect()->column('i'))->toBe([1, 4, 6]);
 })->with('connections');
 
-it('joins in SQL like Frame::join', function (Closure $connect) {
+it('joins in SQL like DataFrame::join', function (Closure $connect) {
     $pdo = $connect();
-    $x = Frame::fromColumns(['k' => [1, 2, null, 2], 'a' => ['x1', 'x2', 'x3', 'x4'], 'v' => [1, 2, 3, 4]]);
-    $y = Frame::fromColumns(['k' => [2, 3, null, 2], 'b' => ['y1', 'y2', 'y3', 'y4'], 'v' => [11, 12, 13, 14]]);
+    $x = DataFrame::fromColumns(['k' => [1, 2, null, 2], 'a' => ['x1', 'x2', 'x3', 'x4'], 'v' => [1, 2, 3, 4]]);
+    $y = DataFrame::fromColumns(['k' => [2, 3, null, 2], 'b' => ['y1', 'y2', 'y3', 'y4'], 'v' => [11, 12, 13, 14]]);
     $sx = sqlFrom($pdo, $x);
     $sy = sqlFrom($pdo, $y);
     $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
@@ -92,9 +92,9 @@ it('joins in SQL like Frame::join', function (Closure $connect) {
 it('falls back to memory for closures and untranslatable expressions', function () {
     $sql = sqlFrom(new PDO('sqlite::memory:'), exprFrame());
 
-    expect($sql->filter(fn ($r) => $r->i > 5))->toBeInstanceOf(Frame::class)
+    expect($sql->filter(fn ($r) => $r->i > 5))->toBeInstanceOf(DataFrame::class)
         ->and($sql->filter(fn ($r) => $r->i > 5)->column('i'))->toBe([6, 7])
-        ->and($sql->mutate(['r' => Phibble\Expr\round(col('x'))]))->toBeInstanceOf(Frame::class)
+        ->and($sql->mutate(['r' => Phibble\Expr\round(col('x'))]))->toBeInstanceOf(DataFrame::class)
         ->and($sql->summarise(['n' => fn ($t) => $t->nrow()])->column('n'))->toBe([7]);
 });
 
@@ -125,7 +125,7 @@ it('opens tables and queries with tbl()', function () {
         ->and((string) Phibble\tbl($pdo, 'SELECT 1 AS a'))->toStartWith("# Source: SQL [SQLite]\n# A tibble: 1 × 1");
 });
 
-it('uses every aggregate inside grouped mutate like Frame', function (Closure $connect) {
+it('uses every aggregate inside grouped mutate like DataFrame', function (Closure $connect) {
     $pdo = $connect();
     $failures = [];
     foreach (summariseCases() as [$case, $expr]) {
@@ -205,7 +205,7 @@ it('translates first, last, nth and str_replace to SQL', function (Closure $conn
 // order, also when a later entry falls back to memory.
 it('runs windows in source row order without arrange', function (Closure $connect) {
     $pdo = $connect();
-    $sales = Frame::fromColumns([
+    $sales = DataFrame::fromColumns([
         'id' => [1, 2, 3, 4, 5, 6, 7, 8],
         'store' => [16, 3, 16, 3, 16, 3, 16, 3],
         'day' => [4, 2, 1, 1, 3, 4, 2, 3],
@@ -279,8 +279,8 @@ it('keeps source order on stored tables with physical row ids', function (Closur
     foreach ([['a', 10], ['b', 20], ['a', 30]] as [$g, $w]) {
         $pdo->prepare("INSERT INTO lk_{$suffix} VALUES (?, ?)")->execute([$g, $w]);
     }
-    $frame = Frame::fromColumns(['g' => array_column($rows, 0), 'x' => array_column($rows, 1)]);
-    $lookup = Frame::fromColumns(['g' => ['a', 'b', 'a'], 'w' => [10, 20, 30]]);
+    $frame = DataFrame::fromColumns(['g' => array_column($rows, 0), 'x' => array_column($rows, 1)]);
+    $lookup = DataFrame::fromColumns(['g' => ['a', 'b', 'a'], 'w' => [10, 20, 30]]);
     $sql = SqlTable::table($pdo, "ev_{$suffix}");
     $sqlLookup = SqlTable::table($pdo, "lk_{$suffix}");
 
@@ -299,9 +299,9 @@ it('keeps source order on stored tables with physical row ids', function (Closur
 // locale collations and MySQL's default (case-insensitive) collation don't.
 it('compares, sorts, groups and joins text in byte order like R', function (Closure $connect) {
     $pdo = $connect();
-    $frame = Frame::fromColumns(['s' => ['b', 'B', 'a', 'A', '  pad', 'b'], 'v' => [1, 2, 3, 4, 5, 6]]);
+    $frame = DataFrame::fromColumns(['s' => ['b', 'B', 'a', 'A', '  pad', 'b'], 'v' => [1, 2, 3, 4, 5, 6]]);
     $sql = sqlFrom($pdo, $frame);
-    $other = Frame::fromColumns(['s' => ['a', 'B'], 'w' => [10, 20]]);
+    $other = DataFrame::fromColumns(['s' => ['a', 'B'], 'w' => [10, 20]]);
 
     expect($sql->arrange(['s', 'v'])->collect()->column('s'))->toBe($frame->arrange(['s', 'v'])->column('s'))
         ->and($sql->filter(col('s')->eq('a'))->collect()->column('v'))->toBe([3])

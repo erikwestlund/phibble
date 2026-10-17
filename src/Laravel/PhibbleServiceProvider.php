@@ -10,13 +10,13 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\LazyCollection;
 use Illuminate\Support\ServiceProvider;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Sql\SqlTable;
 
 /**
  * Laravel integration, registered by package discovery. It adds macros:
  *
- * - Collection::toFrame() and LazyCollection::toFrame(): an in-memory Frame.
+ * - Collection::toDataFrame() and LazyCollection::toDataFrame(): an in-memory DataFrame.
  * - Query, Eloquent and relation builders get phibble(): a lazy SqlTable on
  *   the builder's connection, so verbs run in the database:
  *
@@ -24,7 +24,7 @@ use Phibble\Sql\SqlTable;
  *           ->groupBy(['country'])
  *           ->summarise(['n' => n()]);
  *
- *   and toFrame(): run the query now and return a Frame.
+ *   and toDataFrame(): run the query now and return a DataFrame.
  *
  * Eloquent global scopes (soft deletes, tenancy) are applied. Attribute
  * casts and accessors are not, because rows come straight from SQL.
@@ -41,9 +41,9 @@ final class PhibbleServiceProvider extends ServiceProvider
     {
         foreach ([Collection::class, LazyCollection::class] as $class) {
             if (class_exists($class)) {
-                $class::macro('toFrame', function (array $types = []): Frame {
+                $class::macro('toDataFrame', function (array $types = []): DataFrame {
                     /** @var Collection $this */
-                    return Frame::fromCollection($this, $types);
+                    return DataFrame::fromCollection($this, $types);
                 });
             }
         }
@@ -55,8 +55,8 @@ final class PhibbleServiceProvider extends ServiceProvider
             $class::macro('phibble', function (): SqlTable {
                 return SqlTable::fromQuery($this);
             });
-            $class::macro('toFrame', function (array $types = []): Frame {
-                return Frame::fromQuery($this, types: $types);
+            $class::macro('toDataFrame', function (array $types = []): DataFrame {
+                return DataFrame::fromQuery($this, types: $types);
             });
         }
     }

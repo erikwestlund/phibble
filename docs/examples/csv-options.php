@@ -8,7 +8,7 @@ $text = <<<'CSV'
     3;94110;4,25;2024-05-04
     CSV;
 
-$frame = Frame::fromCsvString(
+$frame = DataFrame::fromCsvString(
     $text,
     types: ['zip' => 'c'],
     delimiter: ';',

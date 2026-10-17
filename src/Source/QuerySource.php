@@ -6,7 +6,7 @@ namespace Phibble\Source;
 
 use InvalidArgumentException;
 use PDO;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 /**
@@ -87,13 +87,13 @@ final class QuerySource
             /** @param array<string, Type|string> $types */
             public function __construct(private object $builder, private array $types) {}
 
-            public function read(): Frame
+            public function read(): DataFrame
             {
                 $result = method_exists($this->builder, 'executeQuery')
                     ? $this->builder->executeQuery()
                     : $this->builder->execute();
 
-                return Frame::fromRows($result->fetchAllAssociative(), $this->types, parseStrings: true);
+                return DataFrame::fromRows($result->fetchAllAssociative(), $this->types, parseStrings: true);
             }
         };
     }

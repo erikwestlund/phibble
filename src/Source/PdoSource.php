@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Phibble\Source;
 
 use PDO;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 /**
@@ -28,7 +28,7 @@ final readonly class PdoSource implements Source
         public array $types = [],
     ) {}
 
-    public function read(): Frame
+    public function read(): DataFrame
     {
         $statement = $this->pdo->prepare($this->sql);
         foreach ($this->bindings as $key => $value) {
@@ -50,10 +50,10 @@ final readonly class PdoSource implements Source
                 $columns[$meta === false ? "column{$i}" : $meta['name']] = [];
             }
 
-            return Frame::fromColumns($columns, $this->types);
+            return DataFrame::fromColumns($columns, $this->types);
         }
 
-        return Frame::fromRows($rows, $this->types, parseStrings: true);
+        return DataFrame::fromRows($rows, $this->types, parseStrings: true);
     }
 
     private static function bindable(mixed $value): mixed

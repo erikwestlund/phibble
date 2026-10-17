@@ -239,7 +239,7 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p>phibble follows tibble, readr, and forcats closely. Function names become camelCase methods on <code>Frame</code>, R’s named arguments become PHP named arguments, and <code>NULL</code>/<code>NA</code> become PHP <code>null</code>. The tables below map the R functions to their phibble equivalents.</p>
+<p>phibble follows tibble, readr, and forcats closely. Function names become camelCase methods on <code>DataFrame</code>, R’s named arguments become PHP named arguments, and <code>NULL</code>/<code>NA</code> become PHP <code>null</code>. The tables below map the R functions to their phibble equivalents.</p>
 <section id="tibble" class="level2">
 <h2 class="anchored" data-anchor-id="tibble">tibble</h2>
 <table class="caption-top table">
@@ -264,7 +264,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td><code>as_tibble(x)</code></td>
-<td><code>as_tibble($x)</code> or <code>Frame::asTibble($x)</code></td>
+<td><code>as_tibble($x)</code> or <code>DataFrame::asTibble($x)</code></td>
 </tr>
 <tr class="even">
 <td><code>add_row(df, x = 1, .before = 2)</code></td>
@@ -318,15 +318,15 @@ ul.task-list li input[type="checkbox"] {
 <tbody>
 <tr class="odd">
 <td><code>read_csv(file)</code></td>
-<td><code>Frame::fromCsv($file)</code></td>
+<td><code>DataFrame::fromCsv($file)</code></td>
 </tr>
 <tr class="even">
 <td><code>read_delim(file, delim = ";")</code></td>
-<td><code>Frame::fromCsv($file, delimiter: ';')</code></td>
+<td><code>DataFrame::fromCsv($file, delimiter: ';')</code></td>
 </tr>
 <tr class="odd">
 <td><code>read_csv(I("a,b\n1,2"))</code></td>
-<td><code>Frame::fromCsvString("a,b\n1,2")</code></td>
+<td><code>DataFrame::fromCsvString("a,b\n1,2")</code></td>
 </tr>
 <tr class="even">
 <td><code>col_types = "icd"</code></td>
@@ -454,7 +454,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td><code>bind_rows</code>, <code>bind_cols</code></td>
-<td><code>Frame::concat([...])</code>, <code>Frame::bindCols([...])</code></td>
+<td><code>DataFrame::concat([...])</code>, <code>DataFrame::bindCols([...])</code></td>
 </tr>
 <tr class="even">
 <td><code>nest(df, data = c(x, y))</code>, <code>unnest(df, data)</code></td>

@@ -257,7 +257,7 @@ final class Translator
         }
         $body = $fixed ? preg_quote($text) : $text;
         // Rust's regex engine has no lookaround, backreferences, atomic groups
-        // or possessive quantifiers; PCRE patterns using them run on a Frame.
+        // or possessive quantifiers; PCRE patterns using them run on a DataFrame.
         if (! $fixed && preg_match('/\(\?<?[=!]|\(\?>|\\[1-9]|\\[gkK]|[*+?}]\+/', $body)) {
             throw new Unsupported("The pattern '{$text}' needs PCRE features Polars lacks.");
         }
@@ -308,7 +308,7 @@ final class Translator
     {
         [$p, $literal] = $this->pattern($node);
         if ($p === '') {
-            throw new Unsupported('Splitting into characters runs on a Frame.');
+            throw new Unsupported('Splitting into characters runs on a DataFrame.');
         }
 
         return $s->str()->split($p, literal: $literal);
@@ -359,7 +359,7 @@ final class Translator
         $width = (int) $this->scalarArg($c->args[1]);
         $pad = (string) ($this->literal($c, 'pad') ?? ' ');
         if (mb_strlen($pad) !== 1) {
-            throw new Unsupported('str_pad() with a multi-character pad runs on a Frame.');
+            throw new Unsupported('str_pad() with a multi-character pad runs on a DataFrame.');
         }
 
         return match ($this->literal($c, 'side') ?? 'left') {
@@ -393,7 +393,7 @@ final class Translator
     private function parseDate(Call $c, Expr $text): Expr
     {
         if ($this->literal($c, 'tz') !== null) {
-            throw new Unsupported('Parsing a date into a time zone runs on a Frame.');
+            throw new Unsupported('Parsing a date into a time zone runs on a DataFrame.');
         }
         [$regex, $letters] = self::dateRegex($c->fn);
 
@@ -403,7 +403,7 @@ final class Translator
     private function parseDateTime(Call $c, Expr $text): Expr
     {
         if ($this->literal($c, 'tz') !== null) {
-            throw new Unsupported('Parsing a datetime into a time zone runs on a Frame.');
+            throw new Unsupported('Parsing a datetime into a time zone runs on a DataFrame.');
         }
         $order = substr($c->fn, 0, 3);
         [$date, $letters] = self::dateRegex($order);
@@ -437,7 +437,7 @@ final class Translator
     private function parseOrders(Call $c, Expr $text): Expr
     {
         if ($this->literal($c, 'tz') !== null) {
-            throw new Unsupported('Parsing a datetime into a time zone runs on a Frame.');
+            throw new Unsupported('Parsing a datetime into a time zone runs on a DataFrame.');
         }
         $orders = (array) $this->scalarArg($c->args[1]);
         $parsed = [];
@@ -501,10 +501,10 @@ final class Translator
         $isDate = $this->type($c->args[0]) === 'date';
         $weekStart = (int) ($this->literal($c, 'week_start') ?? 7);
         if ($n > 1 && ! (in_array($unit, ['second', 'minute'], true) && 60 % $n === 0) && ! ($unit === 'hour' && 24 % $n === 0)) {
-            throw new Unsupported("Rounding to {$n} {$unit}s runs on a Frame.");
+            throw new Unsupported("Rounding to {$n} {$unit}s runs on a DataFrame.");
         }
         if ($isDate && in_array($unit, ['second', 'minute', 'hour'], true)) {
-            throw new Unsupported('Rounding a date to a time of day runs on a Frame.');
+            throw new Unsupported('Rounding a date to a time of day runs on a DataFrame.');
         }
         $every = $n.['second' => 's', 'minute' => 'm', 'hour' => 'h', 'day' => 'd', 'week' => 'w', 'month' => 'mo', 'quarter' => 'q', 'year' => 'y'][$unit];
         if ($unit === 'week') {
@@ -577,7 +577,7 @@ final class Translator
         }
         if (in_array($e->fn, Period::UNITS, true)) {
             if (! $e->args[0] instanceof Lit || ! is_numeric($e->args[0]->value)) {
-                throw new Unsupported('Periods with computed lengths run on a Frame.');
+                throw new Unsupported('Periods with computed lengths run on a DataFrame.');
             }
 
             return [$e->args[0]->value + 0, $e->fn];
@@ -610,7 +610,7 @@ final class Translator
             return $x->dt()->offsetBy("{$days}d");
         }
         if ($isDate) {
-            throw new Unsupported('Adding a clock period to a date runs on a Frame.');
+            throw new Unsupported('Adding a clock period to a date runs on a DataFrame.');
         }
         $micros = (int) round($amount * ['hours' => 3_600_000_000, 'minutes' => 60_000_000, 'seconds' => 1_000_000][$unit]);
 

@@ -243,13 +243,13 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<p><code>Phibble\Contracts\Table</code> is the interface that every table backend implements. phplyr’s verbs call its methods, so a pipeline runs unchanged on any backend. phibble ships two implementations: <code>Frame</code>, which holds data in PHP arrays, and <code>SqlTable</code>, which compiles verbs to SQL. phpolars implements it over Polars.</p>
+<p><code>Phibble\Contracts\Table</code> is the interface that every table backend implements. phplyr’s verbs call its methods, so a pipeline runs unchanged on any backend. phibble ships two implementations: <code>DataFrame</code>, which holds data in PHP arrays, and <code>SqlTable</code>, which compiles verbs to SQL. phpolars implements it over Polars.</p>
 <p>This page is for authors of backends. It lists the rules that every implementation follows and the semantics of each method.</p>
 <section id="rules" class="level2">
 <h2 class="anchored" data-anchor-id="rules">Rules</h2>
 <ul>
 <li><strong>Immutability.</strong> Every method returns a new table and leaves the original unchanged.</li>
-<li><strong>Return types.</strong> Verbs are declared to return <code>Table</code>. A backend may return a different implementation. <code>SqlTable</code> returns a <code>Frame</code> when it falls back to memory for a closure. <code>Frame</code> declares <code>static</code>.</li>
+<li><strong>Return types.</strong> Verbs are declared to return <code>Table</code>. A backend may return a different implementation. <code>SqlTable</code> returns a <code>DataFrame</code> when it falls back to memory for a closure. <code>DataFrame</code> declares <code>static</code>.</li>
 <li><strong>NA.</strong> PHP <code>null</code> is NA in every column type.</li>
 <li><strong>Grouping.</strong> <code>groupBy()</code> records grouping columns as metadata. <code>filter()</code>, <code>mutate()</code>, <code>mutateGroups()</code>, <code>filterGroups()</code>, <code>summarise()</code>, and <code>eachGroup()</code> work per group. The other verbs keep the grouping.</li>
 <li><strong>Group order.</strong> Groups are visited in sorted key order, as in dplyr: ascending, factors by level order, NA last, and strings in byte order. <code>filter()</code>, <code>mutate()</code>, and <code>arrange()</code> keep the input row order.</li>
@@ -302,7 +302,7 @@ ul.task-list li input[type="checkbox"] {
 </tr>
 <tr class="odd">
 <td><code>collect()</code></td>
-<td>The rows as an in-memory <code>Frame</code>. A <code>Frame</code> returns itself.</td>
+<td>The rows as an in-memory <code>DataFrame</code>. A <code>DataFrame</code> returns itself.</td>
 </tr>
 </tbody>
 </table>
@@ -417,17 +417,17 @@ ul.task-list li input[type="checkbox"] {
 </section>
 <section id="errors-and-allowed-differences" class="level2">
 <h2 class="anchored" data-anchor-id="errors-and-allowed-differences">Errors and allowed differences</h2>
-<p><code>Frame</code> follows R, and other backends match it. The following rules apply where R raises an error or where exact agreement is impractical.</p>
+<p><code>DataFrame</code> follows R, and other backends match it. The following rules apply where R raises an error or where exact agreement is impractical.</p>
 <ul>
 <li><code>quantile()</code> and <code>iqr()</code> over values that include NA, without <code>na_rm: true</code>, throw an error, as R does. A backend must not return NA.</li>
 <li>A summary entry that is not size 1 throws <code>LengthException</code>, and the message mentions <code>reframe()</code>.</li>
-<li>Aggregates over zero rows may return NA. <code>Frame</code> returns R’s values (<code>NaN</code> for <code>mean()</code>, <code>Inf</code> and <code>-Inf</code> for <code>min()</code> and <code>max()</code>). This case only arises for an ungrouped table with no rows.</li>
+<li>Aggregates over zero rows may return NA. <code>DataFrame</code> returns R’s values (<code>NaN</code> for <code>mean()</code>, <code>Inf</code> and <code>-Inf</code> for <code>min()</code> and <code>max()</code>). This case only arises for an ungrouped table with no rows.</li>
 <li><code>as_string()</code> on doubles with very large or very small magnitudes may differ from R’s scientific notation. <code>Phibble\Column\Infer::formatFloat()</code> states R’s rule: 15 significant digits, in fixed or scientific notation, whichever is shorter.</li>
 </ul>
 </section>
 <section id="testing-a-backend" class="level2">
 <h2 class="anchored" data-anchor-id="testing-a-backend">Testing a backend</h2>
-<p>The simplest test of a backend is to run the same operations on the backend and on <code>Frame</code> and compare the results. <code>tests/SqlTest.php</code> does this for <code>SqlTable</code>. It loads the same data into a database, runs each operation both ways, and compares the collected rows. It also runs every case in <code>tests/fixtures/expr/expected.json</code>, the dplyr results that <code>tests/r/expr.R</code> produces, so each backend is checked against R as well as against <code>Frame</code>.</p>
+<p>The simplest test of a backend is to run the same operations on the backend and on <code>DataFrame</code> and compare the results. <code>tests/SqlTest.php</code> does this for <code>SqlTable</code>. It loads the same data into a database, runs each operation both ways, and compares the collected rows. It also runs every case in <code>tests/fixtures/expr/expected.json</code>, the dplyr results that <code>tests/r/expr.R</code> produces, so each backend is checked against R as well as against <code>DataFrame</code>.</p>
 
 
 </section>

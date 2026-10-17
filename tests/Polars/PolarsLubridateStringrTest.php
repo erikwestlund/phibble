@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Phibble\CalendarDate;
 use Phibble\Expr\Clock;
 use Phibble\Expr\Expr;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 use function Phibble\Expr\{ceiling_date, col, day, days, difftime, dmy, fixed, floor_date, force_tz, hour, hours, lit, mdy, minute, minutes, month, months, now, parse_date_time, quarter, regex, round_date, second, str_count, str_detect, str_ends, str_extract, str_extract_all, str_length, str_pad, str_replace, str_replace_all, str_split, str_split_i, str_squish, str_starts, str_to_title, str_to_upper, str_trunc, today, wday, weeks, with_tz, yday, year, years, ymd, ymd_hms};
@@ -22,9 +22,9 @@ function lsExpectedPt(string $case): array
     return $all[$case];
 }
 
-function lsFramePt(): Frame
+function lsFramePt(): DataFrame
 {
-    return Frame::fromCsvString(implode("\n", [
+    return DataFrame::fromCsvString(implode("\n", [
         'd,t,s',
         '2024-01-31,2024-01-31 23:59:59,Apple pie',
         '2024-02-29,2024-03-10 02:30:00,banana split',
@@ -47,9 +47,9 @@ function lsFormatPt(mixed $v): mixed
     };
 }
 
-function lsWithPt(array $values): Frame
+function lsWithPt(array $values): DataFrame
 {
-    return Frame::fromColumns(['v' => $values]);
+    return DataFrame::fromColumns(['v' => $values]);
 }
 
 dataset('lubridate and stringr on Polars', function () {
@@ -131,7 +131,7 @@ dataset('lubridate and stringr on Polars', function () {
 it('matches lubridate and stringr on Polars', function (Closure $frame, Expr $expr) {
     $case = $this->dataName();
     $case = substr($case, strpos($case, '"') + 1, -1);
-    // str_to_title needs ICU word breaks, so it runs on a Frame; the rest stay in Polars.
+    // str_to_title needs ICU word breaks, so it runs on a DataFrame; the rest stay in Polars.
     $run = fn () => pt($frame())->mutate(['out' => $expr]);
     $out = ($case === 'str_to_title' ? $run() : native($run))->column('out');
 
@@ -150,7 +150,7 @@ it('keeps dates as dates through Polars expressions', function () {
 it('reads the clock through today() and now() in Polars', function () {
     Clock::freeze(new DateTimeImmutable('2024-05-06 23:30:00', new DateTimeZone('UTC')));
     try {
-        $out = native(fn () => pt(Frame::fromColumns(['x' => [1]]))->mutate(['d' => today(), 'nz' => today(tz: 'Pacific/Auckland'), 'n' => now()]));
+        $out = native(fn () => pt(DataFrame::fromColumns(['x' => [1]]))->mutate(['d' => today(), 'nz' => today(tz: 'Pacific/Auckland'), 'n' => now()]));
         expect($out->column('d')[0]->format('Y-m-d'))->toBe('2024-05-06')
             ->and($out->column('nz')[0]->format('Y-m-d'))->toBe('2024-05-07')
             ->and($out->types()['d'])->toBe(Type::Date)

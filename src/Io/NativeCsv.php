@@ -9,7 +9,7 @@ use InvalidArgumentException;
 use Phibble\Column\ArrayColumn;
 use Phibble\Column\Column;
 use Phibble\Column\TemporalColumn;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\NameRepair;
 use Phibble\Type;
 
@@ -63,7 +63,7 @@ final class NativeCsv
     }
 
     /**
-     * @return array{0: Frame, 1: list<string>} The frame and its problems.
+     * @return array{0: DataFrame, 1: list<string>} The frame and its problems.
      */
     public static function read(string $path, CsvOptions $o): array
     {
@@ -145,7 +145,7 @@ final class NativeCsv
             $data = $selected;
         }
 
-        return [Frame::fromColumns($data), $problems];
+        return [DataFrame::fromColumns($data), $problems];
     }
 
     /** @param list<mixed> $values */

@@ -6,7 +6,7 @@ namespace Phibble\Polars;
 
 use InvalidArgumentException;
 use Phibble\Exception\ColumnNotFound;
-use Phpolars\DataFrame;
+use Phpolars\DataFrame as PolarsDataFrame;
 
 use function Phpolars\{all_horizontal, coalesce, col, concat, lit};
 
@@ -26,7 +26,7 @@ final class Joiner
     /**
      * @param list<string|array{0: string, 1: string}>|array<string, string> $by
      * @param array{0: string, 1: string} $suffix
-     * @return array{0: DataFrame, 1: array<string, array{levels: list<string>, ordered: bool}>}
+     * @return array{0: PolarsDataFrame, 1: array<string, array{levels: list<string>, ordered: bool}>}
      */
     public static function run(
         PolarsTable $x,
@@ -117,7 +117,7 @@ final class Joiner
      * @param list<array{0: string, 1: string}> $pairs
      * @param list<array{left: string, op: string, right: string, closest: bool}> $conditions
      */
-    private static function conditionMatches(DataFrame $X, DataFrame $Y, array $pairs, array $conditions, bool $naMatches): DataFrame
+    private static function conditionMatches(PolarsDataFrame $X, PolarsDataFrame $Y, array $pairs, array $conditions, bool $naMatches): PolarsDataFrame
     {
         $xs = $X->schema();
         $ys = $Y->schema();
@@ -196,7 +196,7 @@ final class Joiner
      *
      * @param list<array{0: string, 1: string}> $pairs
      */
-    private static function matches(DataFrame $X, DataFrame $Y, array $pairs, bool $naMatches): DataFrame
+    private static function matches(PolarsDataFrame $X, PolarsDataFrame $Y, array $pairs, bool $naMatches): PolarsDataFrame
     {
         $xs = $X->schema();
         $ys = $Y->schema();
@@ -237,9 +237,9 @@ final class Joiner
     /**
      * @param list<array{0: string, 1: string}> $pairs
      * @param array{0: string, 1: string} $suffix
-     * @return array{0: DataFrame, 1: array<string, array{levels: list<string>, ordered: bool}>}
+     * @return array{0: PolarsDataFrame, 1: array<string, array{levels: list<string>, ordered: bool}>}
      */
-    private static function assemble(PolarsTable $x, PolarsTable $y, DataFrame $X, DataFrame $Y, DataFrame $rows, array $pairs, array $suffix, bool $keep): array
+    private static function assemble(PolarsTable $x, PolarsTable $y, PolarsDataFrame $X, PolarsDataFrame $Y, PolarsDataFrame $rows, array $pairs, array $suffix, bool $keep): array
     {
         $xKeys = array_column($pairs, 0);
         $yKeys = array_column($pairs, 1);
@@ -341,7 +341,7 @@ final class Joiner
             : throw new InvalidArgumentException("Unknown join comparison '{$op}'; use ==, >=, >, <= or <.");
     }
 
-    private static function checkRelationship(?string $relationship, DataFrame $matches, string $type): void
+    private static function checkRelationship(?string $relationship, PolarsDataFrame $matches, string $type): void
     {
         $first = function (string $side) use ($matches): ?int {
             $multi = $matches->groupBy($side, maintainOrder: true)->len()->filter(col('len')->gt(1));
@@ -367,7 +367,7 @@ final class Joiner
         }
     }
 
-    private static function checkUnmatched(string $unmatched, string $type, DataFrame $matches, DataFrame $X, DataFrame $Y): void
+    private static function checkUnmatched(string $unmatched, string $type, PolarsDataFrame $matches, PolarsDataFrame $X, PolarsDataFrame $Y): void
     {
         if ($unmatched !== 'error') {
             return;

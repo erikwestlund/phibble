@@ -5,7 +5,7 @@
  * Run every docs/examples/*.php and write docs/examples/_<name>.md with the
  * example's code and its actual output, for Quarto to include. Examples run
  * with docs/data as the working directory, after a hidden prelude that
- * imports Frame, Type, SqlTable, the Phibble\ functions (tibble, tribble,
+ * imports DataFrame, Type, SqlTable, the Phibble\ functions (tibble, tribble,
  * as_tibble, enframe, deframe, tbl) and every Phibble\Expr\ helper.
  *
  * Code above a line "// ---" and below a line "// ===" runs but is left out
@@ -33,7 +33,7 @@ $phibble = $short($functions('Phibble'));
 $expr = $short($functions('Phibble\\Expr'));
 sort($phibble);
 sort($expr);
-$prelude = "use Phibble\\Frame;\nuse Phibble\\Type;\nuse Phibble\\Sql\\SqlTable;\n"
+$prelude = "use Phibble\\DataFrame;\nuse Phibble\\Type;\nuse Phibble\\Sql\\SqlTable;\n"
     ."use function Phibble\\{".implode(', ', $phibble)."};\n"
     ."use function Phibble\\Expr\\{".implode(', ', $expr)."};\n";
 

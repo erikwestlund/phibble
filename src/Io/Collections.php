@@ -6,7 +6,7 @@ namespace Phibble\Io;
 
 use InvalidArgumentException;
 use JsonSerializable;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Row;
 use Phibble\Type;
 use RuntimeException;
@@ -25,7 +25,7 @@ final class Collections
      * @param iterable<mixed>|object $collection
      * @param array<string, Type|string> $types
      */
-    public static function read(iterable|object $collection, array $types = []): Frame
+    public static function read(iterable|object $collection, array $types = []): DataFrame
     {
         $items = match (true) {
             is_array($collection) => $collection,
@@ -51,10 +51,10 @@ final class Collections
             };
         }
 
-        return Frame::fromRows($rows, $types);
+        return DataFrame::fromRows($rows, $types);
     }
 
-    public static function write(Frame $frame): object
+    public static function write(DataFrame $frame): object
     {
         if (! class_exists(self::COLLECTION)) {
             throw new RuntimeException(

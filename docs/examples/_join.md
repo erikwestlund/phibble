@@ -1,5 +1,5 @@
 ```php
-$penguins = Frame::fromCsv('penguins.csv');
+$penguins = DataFrame::fromCsv('penguins.csv');
 $islands = tribble(
     ['island', 'area_km2'],
     ['Biscoe', 6.1],

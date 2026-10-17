@@ -10,7 +10,7 @@ use DateTimeZone;
 use InvalidArgumentException;
 use JsonSerializable;
 use Phibble\Contracts\Table;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 use stdClass;
 use Stringable;
@@ -23,7 +23,7 @@ use Stringable;
 final class Json
 {
     /** @param array<string, Type|string> $types */
-    public static function read(string $json, array $types = [], ?string $orient = null): Frame
+    public static function read(string $json, array $types = [], ?string $orient = null): DataFrame
     {
         $data = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         // Decoded again with objects kept: {"0": [1]} and [{"0": 1}] are objects
@@ -43,7 +43,7 @@ final class Json
 
         return match ($orient) {
             'records' => self::records($data, is_array($raw) ? $raw : [], $types),
-            'columns' => Frame::fromColumns($data, $types),
+            'columns' => DataFrame::fromColumns($data, $types),
             default => throw new InvalidArgumentException("orient must be 'records' or 'columns', got '{$orient}'."),
         };
     }
@@ -102,7 +102,7 @@ final class Json
      * @param list<mixed> $raw The same records decoded with objects kept.
      * @param array<string, Type|string> $types
      */
-    private static function records(array $records, array $raw, array $types): Frame
+    private static function records(array $records, array $raw, array $types): DataFrame
     {
         foreach ($records as $i => $record) {
             if (! is_array($record) || ! ($raw[$i] ?? null) instanceof \stdClass) {
@@ -110,6 +110,6 @@ final class Json
             }
         }
 
-        return Frame::fromRows($records, $types);
+        return DataFrame::fromRows($records, $types);
     }
 }

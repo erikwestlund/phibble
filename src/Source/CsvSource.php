@@ -6,7 +6,7 @@ namespace Phibble\Source;
 
 use Generator;
 use InvalidArgumentException;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Io\ColTypes;
 use Phibble\Io\CsvOptions;
 use Phibble\Io\NativeCsv;
@@ -62,7 +62,7 @@ final readonly class CsvSource implements Source
         return new self($stream, $options, false);
     }
 
-    public function read(): Frame
+    public function read(): DataFrame
     {
         $o = $this->options;
         if ($this->path !== null && NativeCsv::available() && NativeCsv::supports($this->path, $o)) {
@@ -88,7 +88,7 @@ final readonly class CsvSource implements Source
         if ($first === null) {
             $this->finish();
 
-            return Frame::fromColumns([]);
+            return DataFrame::fromColumns([]);
         }
 
         [$line, $record] = $first;
@@ -197,7 +197,7 @@ final readonly class CsvSource implements Source
 
         self::warn($problems);
 
-        return Frame::fromColumns($data);
+        return DataFrame::fromColumns($data);
     }
 
     /** @param list<string> $problems */

@@ -6,7 +6,7 @@ namespace Phibble\Bench;
 
 use Closure;
 use Phibble\Contracts\Table;
-use Phibble\Frame;
+use Phibble\DataFrame;
 
 use function Phibble\Expr\{col, cumsum, lag, mean, n, row_number, sum};
 
@@ -49,12 +49,12 @@ final class Workloads
         ];
     }
 
-    /** CSV reading, Frame only. @return array<string, Closure(string): int> */
+    /** CSV reading, DataFrame only. @return array<string, Closure(string): int> */
     public static function csv(): array
     {
         return [
-            'csv_guess' => fn (string $path) => Frame::fromCsv($path)->nrow(),
-            'csv_typed' => fn (string $path) => Frame::fromCsv($path, types: 'iicdT')->nrow(),
+            'csv_guess' => fn (string $path) => DataFrame::fromCsv($path)->nrow(),
+            'csv_typed' => fn (string $path) => DataFrame::fromCsv($path, types: 'iicdT')->nrow(),
         ];
     }
 }

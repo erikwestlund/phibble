@@ -3,7 +3,7 @@ title: "SQL tables"
 ---
 
 `Phibble\Sql\SqlTable` is a table backed by a SQL query, like dbplyr's `tbl()`.
-It implements the same `Table` contract as `Frame`. Verbs called with
+It implements the same `Table` contract as `DataFrame`. Verbs called with
 [expressions](expr.qmd) are compiled into SQL, and no query runs until the
 rows are needed. SQLite, PostgreSQL, and MySQL are supported.
 
@@ -16,7 +16,7 @@ same tables can be opened with `SqlTable::table()` and `SqlTable::query()`.
 and `SqlTable::fromSource($pdoSource)` from a `PdoSource`.
 
 phibble reads the column names when the table is opened. It runs the query
-itself when the rows are needed: `collect()` returns a `Frame`, and `toRows()`,
+itself when the rows are needed: `collect()` returns a `DataFrame`, and `toRows()`,
 `nrow()`, iteration, and printing also run it.
 
 `showQuery()` returns the SQL with `?` placeholders, and `bindings()` returns
@@ -47,8 +47,8 @@ The compiled SQL keeps R's semantics:
 ## When the table falls back to memory
 
 Some arguments have no faithful SQL translation. A `SqlTable` then collects
-the rows and runs the verb in memory, and the verb returns a `Frame`. Results
-match `Frame` in either case. The fallbacks are:
+the rows and runs the verb in memory, and the verb returns a `DataFrame`. Results
+match `DataFrame` in either case. The fallbacks are:
 
 - any PHP closure,
 - `round()`, because SQL's `ROUND` does not round half to even,
@@ -96,13 +96,13 @@ A column declared without a type stores bound values as text, so
 
 ## Known differences
 
-These cases can differ from `Frame`, because the database cannot represent
+These cases can differ from `DataFrame`, because the database cannot represent
 R's result:
 
 - MySQL has no infinity or NaN. Results that are `Inf`, `-Inf`, or `NaN` in
   R, such as `x / 0`, `log(0)`, or `mean()` of no values, are NA in MySQL.
   SQLite stores infinities but has no NaN, so `NaN` is NA there.
-- Integer arithmetic beyond 64 bits fails in the database, where `Frame`
+- Integer arithmetic beyond 64 bits fails in the database, where `DataFrame`
   switches to a double.
 - Joins do not warn about unexpected many-to-many matches.
 - Column names starting with `__phibble_` are reserved for the hidden columns
@@ -129,7 +129,7 @@ source query's rows. For a stored table, add `arrange()` to make it explicit.
 ## Joins
 
 `join()` between two tables on the same PDO connection compiles to a SQL join.
-The output columns follow `Frame::join()`: x's columns, then y's other columns,
+The output columns follow `DataFrame::join()`: x's columns, then y's other columns,
 with `.x` and `.y` suffixes on clashing names. NA keys match each other, as in
 dplyr, through `IS` in SQLite, `IS NOT DISTINCT FROM` in PostgreSQL, and `<=>`
 in MySQL. Pass `naMatches: false` for SQL's usual equality. The order of rows

@@ -1,5 +1,5 @@
 ```php
-$penguins = Frame::fromCsv('penguins.csv');
+$penguins = DataFrame::fromCsv('penguins.csv');
 
 echo $penguins
     ->groupBy(['island'])

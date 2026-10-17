@@ -6,7 +6,7 @@ namespace Phibble\Bench;
 
 use PDO;
 use Phibble\Contracts\Table;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Sql\SqlTable;
 use Phibble\Type;
 
@@ -27,7 +27,7 @@ final class SqliteBackend implements Backend
 
     public function load(string $path): Table
     {
-        $frame = Frame::fromCsv($path);
+        $frame = DataFrame::fromCsv($path);
         $table = basename($path, '.csv');
         $columns = $frame->columns();
         // Typed columns: untyped ones store bound values as TEXT, and SQLite

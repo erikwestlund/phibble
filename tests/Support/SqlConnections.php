@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Sql\SqlTable;
 use Phibble\Type;
 
@@ -26,7 +26,7 @@ function sqlConnections(): array
 }
 
 /** A lazy table holding the frame's rows as inline SELECT ... UNION ALL data. */
-function sqlFrom(PDO $pdo, Frame $frame): SqlTable
+function sqlFrom(PDO $pdo, DataFrame $frame): SqlTable
 {
     $driver = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
     $castFor = fn (Type $type) => match ($type) {

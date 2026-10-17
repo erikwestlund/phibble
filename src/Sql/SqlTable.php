@@ -16,7 +16,7 @@ use Phibble\Expr\Col;
 use Phibble\Expr\Desc;
 use Phibble\Expr\Expr;
 use Phibble\Expr\Lit;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Join;
 use Phibble\Source\PdoSource;
 use Phibble\Source\QuerySource;
@@ -27,7 +27,7 @@ use Phibble\Type;
  * Expr arguments compile to SQL; nothing runs until the rows are needed
  * (collect(), toRows(), nrow(), iteration, printing). A Closure argument,
  * or an expression with no faithful SQL translation, collects the rows
- * and continues in memory, so results always match Frame.
+ * and continues in memory, so results always match DataFrame.
  *
  *     $visits = SqlTable::table($pdo, 'visits');
  *     $visits->filter(col('age')->ge(18))
@@ -211,7 +211,7 @@ final readonly class SqlTable implements Table
 
         return $rows === []
             ? []
-            : Frame::fromRows($rows, $hints, parseStrings: true)->column($name);
+            : DataFrame::fromRows($rows, $hints, parseStrings: true)->column($name);
     }
 
     public function groups(): array
@@ -239,7 +239,7 @@ final readonly class SqlTable implements Table
         return $this->collect()->toColumns();
     }
 
-    public function collect(): Frame
+    public function collect(): DataFrame
     {
         $statement = $this->run($this->render());
         // Build columns straight from positional rows; each column is then
@@ -257,7 +257,7 @@ final readonly class SqlTable implements Table
                 : Infer::fromDatabase($columns[$i], $this->hints[$name] ?? null, $name);
             $columns[$i] = null;
         }
-        $frame = Frame::fromColumns($data);
+        $frame = DataFrame::fromColumns($data);
 
         return $this->groups === [] ? $frame : $frame->groupBy($this->groups);
     }
@@ -473,7 +473,7 @@ final readonly class SqlTable implements Table
      */
     private function summariseCompiled(array $aggregates, ?string $groups, array $baseHints): Table
     {
-        // Each entry must be one value per group; otherwise Frame raises the error.
+        // Each entry must be one value per group; otherwise DataFrame raises the error.
         if (array_any($aggregates, fn (Expr $e) => ! self::isSummary($e))) {
             return $this->collect()->summarise($aggregates, $groups);
         }

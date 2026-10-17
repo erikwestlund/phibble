@@ -1,6 +1,6 @@
 <?php
 
-$penguins = Frame::fromCsv('penguins.csv');
+$penguins = DataFrame::fromCsv('penguins.csv');
 
 $out = $penguins
     ->filter(is_na(col('body_mass'))->not())

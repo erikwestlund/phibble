@@ -13,7 +13,7 @@ use Phibble\Column\Infer;
 /**
  * dplyr 1.1 joins for in-memory frames.
  *
- * @internal Use Frame::join().
+ * @internal Use DataFrame::join().
  */
 final class Join
 {
@@ -24,8 +24,8 @@ final class Join
      * @param array{0: string, 1: string} $suffix
      */
     public static function run(
-        Frame $x,
-        Frame $y,
+        DataFrame $x,
+        DataFrame $y,
         array $by,
         string $type = 'inner',
         array $suffix = ['.x', '.y'],
@@ -34,7 +34,7 @@ final class Join
         string $multiple = 'all',
         ?string $relationship = null,
         string $unmatched = 'drop',
-    ): Frame {
+    ): DataFrame {
         if (! in_array($type, self::TYPES, true)) {
             throw new InvalidArgumentException("Unknown join type '{$type}'. Use one of: ".implode(', ', self::TYPES).'.');
         }
@@ -144,7 +144,7 @@ final class Join
      * @param list<?int> $yRows
      * @param array{0: string, 1: string} $suffix
      */
-    private static function assemble(Frame $x, Frame $y, array $pairs, array $xRows, array $yRows, array $suffix, bool $keep): Frame
+    private static function assemble(DataFrame $x, DataFrame $y, array $pairs, array $xRows, array $yRows, array $suffix, bool $keep): DataFrame
     {
         $xKeyNames = array_column($pairs, 0);
         $yKeyNames = array_column($pairs, 1);
@@ -172,7 +172,7 @@ final class Join
             $columns[$outName] = $y->storage($name)->take($yRows);
         }
 
-        $out = Frame::fromColumns($columns);
+        $out = DataFrame::fromColumns($columns);
         $groups = array_values(array_filter($x->groups(), fn (string $g) => isset($columns[$g])));
 
         return $groups === [] ? $out : $out->groupBy($groups, $x->dropsEmptyGroups());
@@ -347,7 +347,7 @@ final class Join
      * @param list<string> $names
      * @return list<?string>
      */
-    private static function keys(Frame $frame, array $names, bool $naMatches): array
+    private static function keys(DataFrame $frame, array $names, bool $naMatches): array
     {
         $columns = array_map(fn (string $n) => $frame->column($n), $names);
         $keys = [];

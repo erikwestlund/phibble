@@ -13,4 +13,4 @@ $collection = new class
     }
 };
 
-echo Frame::fromCollection($collection);
+echo DataFrame::fromCollection($collection);

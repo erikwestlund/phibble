@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Phibble\Column\TemporalColumn;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Io\NativeCsv;
 
 /**
@@ -37,15 +37,15 @@ function emulatedStatsReadCsv(string $path, array $options): array
             'decimalMark' => $options['decimal_mark'] ?? '.',
             'groupingMark' => $options['grouping_mark'] ?? null,
         ];
-        // The raw header, read as a row of text (a Frame can't hold duplicate names).
-        $width = Frame::fromCsv($path, ...[...$common, 'colNames' => false, 'nMax' => 1])->ncol();
-        $header = $width === 0 ? [] : array_values(Frame::fromCsv($path, ...[...$common, 'colNames' => false, 'nMax' => 1, 'types' => str_repeat('c', $width)])->toRows()[0] ?? []);
+        // The raw header, read as a row of text (a DataFrame can't hold duplicate names).
+        $width = DataFrame::fromCsv($path, ...[...$common, 'colNames' => false, 'nMax' => 1])->ncol();
+        $header = $width === 0 ? [] : array_values(DataFrame::fromCsv($path, ...[...$common, 'colNames' => false, 'nMax' => 1, 'types' => str_repeat('c', $width)])->toRows()[0] ?? []);
         $names = ($options['col_names'] ?? true)
             ? array_map(fn (?string $n) => $n ?? '', $header)
             : array_map(fn (int $i) => 'X'.($i + 1), array_keys($header));
         $codes = $options['types'] ?? [];
         $types = implode('', array_map(fn (int $i) => $codes[$i] ?? '?', array_keys($names)));
-        $frame = Frame::fromCsv($path, ...[...$common, 'types' => $types === '' ? [] : $types, 'nMax' => $options['n_max'] ?? null]);
+        $frame = DataFrame::fromCsv($path, ...[...$common, 'types' => $types === '' ? [] : $types, 'nMax' => $options['n_max'] ?? null]);
         $kept = $frame->columns();
     } finally {
         restore_error_handler();

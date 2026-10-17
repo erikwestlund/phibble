@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 it('reads CSV and infers types from text', function () {
-    $frame = Frame::fromCsvString(<<<'CSV'
+    $frame = DataFrame::fromCsvString(<<<'CSV'
         id,score,ok,day,name,stamp
         1,2.5,true,2024-01-02,Ann,2024-01-02 10:00:00
         2,NA,FALSE,2024-02-29,,2024-01-03T11:30:00Z
@@ -24,7 +24,7 @@ it('reads CSV and infers types from text', function () {
 });
 
 it('guesses dates by shape and turns invalid ones into NA, as readr does', function () {
-    [$frame, $warnings] = quietly(fn () => Frame::fromCsvString("d,code\n2024-02-30,1\n2024-01-01,x\n"));
+    [$frame, $warnings] = quietly(fn () => DataFrame::fromCsvString("d,code\n2024-02-30,1\n2024-01-01,x\n"));
 
     expect($frame->types())->toBe(['d' => Type::Date, 'code' => Type::String])
         ->and($frame->column('d')[0])->toBeNull()
@@ -32,7 +32,7 @@ it('guesses dates by shape and turns invalid ones into NA, as readr does', funct
 });
 
 it('reads CSV with explicit types, custom NA and delimiters', function () {
-    $frame = Frame::fromCsvString("zip;n\n02134;-\n10001;4\n", types: ['zip' => 'string'], delimiter: ';', na: ['-']);
+    $frame = DataFrame::fromCsvString("zip;n\n02134;-\n10001;4\n", types: ['zip' => 'string'], delimiter: ';', na: ['-']);
 
     expect($frame->column('zip'))->toBe(['02134', '10001'])
         ->and($frame->column('n'))->toBe([null, 4]);
@@ -42,12 +42,12 @@ it('reads CSV files and strips a BOM', function () {
     $path = tempnam(sys_get_temp_dir(), 'phibble');
     file_put_contents($path, "\xEF\xBB\xBFa,b\n1,x\n");
 
-    expect(Frame::fromCsv($path)->columns())->toBe(['a', 'b']);
+    expect(DataFrame::fromCsv($path)->columns())->toBe(['a', 'b']);
     unlink($path);
 });
 
 it('pads short CSV rows with NA and warns, as readr does', function () {
-    [$frame, $warnings] = quietly(fn () => Frame::fromCsvString("a,b\n1\n"));
+    [$frame, $warnings] = quietly(fn () => DataFrame::fromCsvString("a,b\n1\n"));
 
     expect($frame->toRows())->toBe([['a' => 1, 'b' => null]])
         ->and($warnings[0])->toContain('row 2: expected 2 columns, got 1');
@@ -63,7 +63,7 @@ function database(): PDO
 }
 
 it('reads from PDO with positional and named bindings', function () {
-    $frame = Frame::fromPdo(database(), 'select * from people where id >= ? order by id', [2]);
+    $frame = DataFrame::fromPdo(database(), 'select * from people where id >= ? order by id', [2]);
 
     expect($frame->nrow())->toBe(2)
         ->and($frame->types())->toBe([
@@ -72,12 +72,12 @@ it('reads from PDO with positional and named bindings', function () {
         ])
         ->and($frame->column('height'))->toBe([null, 1.8]);
 
-    $named = Frame::fromPdo(database(), 'select name from people where name = :name', ['name' => 'Ann']);
+    $named = DataFrame::fromPdo(database(), 'select name from people where name = :name', ['name' => 'Ann']);
     expect($named->column('name'))->toBe(['Ann']);
 });
 
 it('applies explicit types to PDO results', function () {
-    $frame = Frame::fromPdo(database(), 'select active from people', types: ['active' => 'bool']);
+    $frame = DataFrame::fromPdo(database(), 'select active from people', types: ['active' => 'bool']);
 
     expect($frame->column('active'))->toBe([true, false, true]);
 });
@@ -86,12 +86,12 @@ it('parses numeric strings from drivers that return text', function () {
     $pdo = database();
     $pdo->setAttribute(PDO::ATTR_STRINGIFY_FETCHES, true);
 
-    $frame = Frame::fromPdo($pdo, 'select id, height from people');
+    $frame = DataFrame::fromPdo($pdo, 'select id, height from people');
     expect($frame->types())->toBe(['id' => Type::Int, 'height' => Type::Float]);
 });
 
 it('keeps column names for empty PDO results', function () {
-    $frame = Frame::fromPdo(database(), 'select id, name from people where id > 99');
+    $frame = DataFrame::fromPdo(database(), 'select id, name from people where id > 99');
 
     expect($frame->columns())->toBe(['id', 'name'])
         ->and($frame->nrow())->toBe(0);
@@ -179,18 +179,18 @@ final class FakeDoctrineBuilder
 it('reads Laravel query builders and unwraps Eloquent builders', function () {
     $query = new FakeLaravelBuilder(new FakeLaravelConnection(database()));
 
-    expect(Frame::fromQuery($query)->column('name'))->toBe(['Ann', 'Cy'])
-        ->and(Frame::fromQuery(new FakeEloquentBuilder($query))->column('name'))->toBe(['Ann', 'Cy']);
+    expect(DataFrame::fromQuery($query)->column('name'))->toBe(['Ann', 'Cy'])
+        ->and(DataFrame::fromQuery(new FakeEloquentBuilder($query))->column('name'))->toBe(['Ann', 'Cy']);
 });
 
 it('reads Doctrine query builders through PDO or the builder itself', function () {
     $pdo = database();
     $builder = new FakeDoctrineBuilder($pdo);
 
-    expect(Frame::fromQuery($builder, $pdo)->column('id'))->toBe([2])
-        ->and(Frame::fromQuery($builder)->column('id'))->toBe([2]);
+    expect(DataFrame::fromQuery($builder, $pdo)->column('id'))->toBe([2])
+        ->and(DataFrame::fromQuery($builder)->column('id'))->toBe([2]);
 });
 
 it('rejects unknown builders', function () {
-    Frame::fromQuery(new stdClass());
+    DataFrame::fromQuery(new stdClass());
 })->throws(InvalidArgumentException::class, 'Unsupported query builder stdClass.');

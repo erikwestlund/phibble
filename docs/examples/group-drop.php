@@ -1,6 +1,6 @@
 <?php
 
-$penguins = Frame::fromCsv('penguins.csv')
+$penguins = DataFrame::fromCsv('penguins.csv')
     ->asFactor('species')
     ->filter(col('species')->ne('Chinstrap'));
 

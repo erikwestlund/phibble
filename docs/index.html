@@ -272,8 +272,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p>phibble is a port of R’s tibble to PHP, with the readr-style input and output a data frame needs. A <code>Frame</code> holds typed columns, treats <code>null</code> as NA, and never changes in place: every operation returns a new frame.</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> Frame::fromCsv(<span class="st">'penguins.csv'</span>)<span class="ot">;</span></span>
+<p>phibble is a port of R’s tibble to PHP, with the readr-style input and output a data frame needs. A <code>DataFrame</code> holds typed columns, treats <code>null</code> as NA, and never changes in place: every operation returns a new frame.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> DataFrame::fromCsv(<span class="st">'penguins.csv'</span>)<span class="ot">;</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="va">$summary</span> <span class="op">=</span> <span class="va">$penguins</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    -&gt;filter(col(<span class="st">'body_mass'</span>)-&gt;isNa()-&gt;not())</span>
@@ -300,11 +300,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>phibble is the shared table type of a small family of packages for statistics in PHP. The other packages read and return phibble tables:</p>
 <ul>
 <li><strong><a href="https://github.com/erikwestlund/phplyr">phplyr</a></strong> ports dplyr and tidyr as pipe-able functions.</li>
-<li><strong><a href="https://github.com/erikwestlund/php-stats">php-stats</a></strong> is a native extension for statistical models and descriptive statistics. It reads model data with <code>Frame::toModelData()</code>.</li>
+<li><strong><a href="https://github.com/erikwestlund/php-stats">php-stats</a></strong> is a native extension for statistical models and descriptive statistics. It reads model data with <code>DataFrame::toModelData()</code>.</li>
 <li><strong>phpolars</strong> is an optional Polars-backed table.</li>
 <li><strong>cmdstanphp</strong> runs Stan models and will accept phibble frames.</li>
 </ul>
-<p>The packages talk to each other through the <code>Table</code> contract. <code>Frame</code> is the in-memory implementation. <code>SqlTable</code> implements the same contract over a SQL query, so the verbs compile to SQL and run in the database.</p>
+<p>The packages talk to each other through the <code>Table</code> contract. <code>DataFrame</code> is the in-memory implementation. <code>SqlTable</code> implements the same contract over a SQL query, so the verbs compile to SQL and run in the database.</p>
 <section id="install" class="level2">
 <h2 class="anchored" data-anchor-id="install">Install</h2>
 <p>phibble needs PHP 8.5, which adds the <code>|&gt;</code> pipe operator.</p>

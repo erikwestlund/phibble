@@ -9,7 +9,7 @@ use Phibble\Join;
 
 /**
  * Joins two SqlTables on the same connection in SQL, with the column
- * layout and NA matching of Frame::join(). Row order is unspecified, as
+ * layout and NA matching of DataFrame::join(). Row order is unspecified, as
  * with any SQL join; arrange() afterwards if it matters.
  *
  * @internal

@@ -5,7 +5,7 @@ set_error_handler(function (int $level, string $message): bool {
     return true;
 });
 
-$frame = Frame::fromColumns([
+$frame = DataFrame::fromColumns([
     'x' => [2.7, -2.7, '3.9', 'abc'],
     'flag' => ['TRUE', 'T', 'yes', '0'],
     'n' => [1.0, 0.1 + 0.2, 1e5, 1 / 3],

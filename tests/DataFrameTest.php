@@ -5,13 +5,13 @@ declare(strict_types=1);
 use Phibble\Column\FactorColumn;
 use Phibble\Contracts\Table;
 use Phibble\Exception\ColumnNotFound;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Row;
 use Phibble\Type;
 
 it('builds from rows and round-trips', function () {
     $rows = [['a' => 1, 'b' => 'x'], ['a' => 2, 'b' => 'y']];
-    $frame = Frame::fromRows($rows);
+    $frame = DataFrame::fromRows($rows);
 
     expect($frame)->toBeInstanceOf(Table::class)
         ->and($frame->columns())->toBe(['a', 'b'])
@@ -23,21 +23,21 @@ it('builds from rows and round-trips', function () {
 });
 
 it('fills missing keys with NA and keeps first-appearance column order', function () {
-    $frame = Frame::fromRows([['a' => 1], ['b' => 2.5, 'a' => 3]]);
+    $frame = DataFrame::fromRows([['a' => 1], ['b' => 2.5, 'a' => 3]]);
 
     expect($frame->columns())->toBe(['a', 'b'])
         ->and($frame->column('b'))->toBe([null, 2.5]);
 });
 
 it('builds from columns and rejects ragged columns', function () {
-    $frame = Frame::fromColumns(['x' => [1.0, 2.0], 'y' => [true, false]]);
+    $frame = DataFrame::fromColumns(['x' => [1.0, 2.0], 'y' => [true, false]]);
     expect($frame->types())->toBe(['x' => Type::Float, 'y' => Type::Bool]);
 
-    Frame::fromColumns(['x' => [1, 2], 'y' => [1]]);
+    DataFrame::fromColumns(['x' => [1, 2], 'y' => [1]]);
 })->throws(InvalidArgumentException::class, "Column 'y' has 1 values; expected 2.");
 
 it('infers types from PHP values', function () {
-    $frame = Frame::fromColumns([
+    $frame = DataFrame::fromColumns([
         'f' => [1, 2.5, null],
         'i' => [1, null, 3],
         'b' => [true, false, null],
@@ -55,7 +55,7 @@ it('infers types from PHP values', function () {
 });
 
 it('accepts explicit types', function () {
-    $frame = Frame::fromColumns(['x' => [1, 2], 'g' => ['b', 'a']], types: ['x' => 'float', 'g' => Type::Factor]);
+    $frame = DataFrame::fromColumns(['x' => [1, 2], 'g' => ['b', 'a']], types: ['x' => 'float', 'g' => Type::Factor]);
 
     expect($frame->column('x'))->toBe([1.0, 2.0])
         ->and($frame->type('g'))->toBe(Type::Factor)
@@ -63,7 +63,7 @@ it('accepts explicit types', function () {
 });
 
 it('turns values it cannot cast into NA with a warning, as R does', function () {
-    [$frame, $warnings] = quietly(fn () => Frame::fromColumns(['x' => ['abc', '2']], types: ['x' => 'int']));
+    [$frame, $warnings] = quietly(fn () => DataFrame::fromColumns(['x' => ['abc', '2']], types: ['x' => 'int']));
 
     expect($frame->column('x'))->toBe([null, 2])
         ->and($warnings)->toBe(["NAs introduced by coercion to int in column 'x' (1 value)."]);
@@ -115,7 +115,7 @@ it('uses explicit factor levels and turns unknown values into NA', function () {
 });
 
 it('sorts numeric factor levels numerically', function () {
-    $frame = Frame::fromColumns(['n' => [10, 9, 100]])->asFactor('n');
+    $frame = DataFrame::fromColumns(['n' => [10, 9, 100]])->asFactor('n');
 
     expect($frame->levels('n'))->toBe(['9', '10', '100']);
 });

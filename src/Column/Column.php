@@ -8,7 +8,7 @@ use Countable;
 use Phibble\Type;
 
 /**
- * Column storage. Frame only talks to columns through this interface, so
+ * Column storage. DataFrame only talks to columns through this interface, so
  * another backend (for example phpolars) can supply its own storage.
  *
  * @internal The interface may change before 1.0.

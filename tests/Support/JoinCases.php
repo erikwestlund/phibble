@@ -2,32 +2,32 @@
 
 declare(strict_types=1);
 
-use Phibble\Frame;
+use Phibble\DataFrame;
 
 /*
- * join_by reference cases shared by the Frame and SqlTable tests. Expected
+ * join_by reference cases shared by the DataFrame and SqlTable tests. Expected
  * output is dplyr 1.2's, written by tests/r/joins.R. between(), within()
  * and overlaps() are given in their expanded form, as phplyr sends them.
  */
 
-function joinByX(): Frame
+function joinByX(): DataFrame
 {
-    return Frame::fromColumns(['id' => [1, 2, 3, 4], 't' => [5.0, 10.0, null, 20.0], 'g' => ['a', 'a', 'b', 'b']]);
+    return DataFrame::fromColumns(['id' => [1, 2, 3, 4], 't' => [5.0, 10.0, null, 20.0], 'g' => ['a', 'a', 'b', 'b']]);
 }
 
-function joinByY(): Frame
+function joinByY(): DataFrame
 {
-    return Frame::fromColumns(['t' => [4.0, 5.0, 5.0, 12.0, null], 'g' => ['a', 'a', 'a', 'b', 'b'], 'v' => [1, 2, 3, 4, 5]]);
+    return DataFrame::fromColumns(['t' => [4.0, 5.0, 5.0, 12.0, null], 'g' => ['a', 'a', 'a', 'b', 'b'], 'v' => [1, 2, 3, 4, 5]]);
 }
 
-function intervalX(): Frame
+function intervalX(): DataFrame
 {
-    return Frame::fromColumns(['id' => [1, 2, 3], 'lo' => [1.0, 5.0, 10.0], 'hi' => [4.0, 8.0, 12.0]]);
+    return DataFrame::fromColumns(['id' => [1, 2, 3], 'lo' => [1.0, 5.0, 10.0], 'hi' => [4.0, 8.0, 12.0]]);
 }
 
-function intervalY(): Frame
+function intervalY(): DataFrame
 {
-    return Frame::fromColumns(['k' => [1, 2, 3], 'start' => [2.0, 6.0, 11.0], 'end' => [3.0, 9.0, 20.0]]);
+    return DataFrame::fromColumns(['k' => [1, 2, 3], 'start' => [2.0, 6.0, 11.0], 'end' => [3.0, 9.0, 20.0]]);
 }
 
 /** @return array<string, array{0: Closure, 1: Closure, 2: array, 3: string, 4: array}> name => [x, y, by, type, options] */

@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 use Phibble\Expr\Expr;
-use Phibble\Frame;
+use Phibble\DataFrame;
 
 use function Phibble\Expr\{all, any, as_string, between, case_when, coalesce, col, consecutive_id, cumall, cumany, cummax, cummean, cumsum, cume_dist, dense_rank, desc, first, if_else, iqr, is_na, lag, last, lead, lit, log, max, mean, median, min, min_rank, n, n_distinct, na_if, nth, ntile, paste, paste0, percent_rank, quantile, round, row_number, sd, str_detect, str_length, str_lower, str_replace, str_replace_all, str_sub, str_trim, sum, var_};
 
-function exprFrame(): Frame
+function exprFrame(): DataFrame
 {
-    return Frame::fromColumns([
+    return DataFrame::fromColumns([
         'g' => ['a', 'b', 'a', 'b', 'a', 'b', null],
         'x' => [3.0, 1.0, null, 4.0, 1.0, 5.0, 9.0],
         'i' => [1, 2, 3, 4, 5, 6, 7],
@@ -37,7 +37,7 @@ function expected(string $case): array
 }
 
 /** Mutate with a temporary literal column holding $values. */
-function withValues(array $values, string $name = 'v'): Frame
+function withValues(array $values, string $name = 'v'): DataFrame
 {
     return exprFrame()->withColumn($name, $values);
 }

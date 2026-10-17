@@ -3,7 +3,7 @@ title: "Expressions"
 ---
 
 `Phibble\Expr` describes a computation over columns as a tree of objects. The
-in-memory `Frame` evaluates the tree, `SqlTable` compiles it to SQL, and
+in-memory `DataFrame` evaluates the tree, `SqlTable` compiles it to SQL, and
 phpolars maps it to Polars expressions. An expression gives the same result on
 each backend because every backend implements the same list of functions with
 R's semantics.

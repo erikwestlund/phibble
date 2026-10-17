@@ -1,6 +1,6 @@
 <?php
 
-$frame = Frame::fromColumns([
+$frame = DataFrame::fromColumns([
     'logical' => [true, false, null],
     'whole' => [1, 2, null],
     'mixed' => [1, 2.5, null],

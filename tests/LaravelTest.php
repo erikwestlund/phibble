@@ -6,7 +6,7 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Laravel\PhibbleServiceProvider;
 use Phibble\Sql\SqlTable;
 
@@ -58,17 +58,17 @@ it('runs Eloquent queries lazily in the database with phibble()', function () {
 it('applies global scopes such as soft deletes', function () {
     expect(LaravelTestPatient::query()->phibble()->nrow())->toBe(4)
         ->and(LaravelTestPatient::withTrashed()->phibble()->nrow())->toBe(5)
-        ->and(Frame::fromQuery(LaravelTestPatient::query())->nrow())->toBe(4);
+        ->and(DataFrame::fromQuery(LaravelTestPatient::query())->nrow())->toBe(4);
 });
 
-it('adds toFrame() to builders and collections', function () {
-    $frame = Capsule::table('patients')->whereNull('deleted_at')->orderBy('id')->toFrame();
+it('adds toDataFrame() to builders and collections', function () {
+    $frame = Capsule::table('patients')->whereNull('deleted_at')->orderBy('id')->toDataFrame();
 
-    expect($frame)->toBeInstanceOf(Frame::class)
+    expect($frame)->toBeInstanceOf(DataFrame::class)
         ->and($frame->column('age'))->toBe([34, 61, 45, 52])
-        ->and(LaravelTestPatient::query()->orderBy('id')->toFrame()->column('clinic'))->toBe(['a', 'a', 'b', 'b'])
-        ->and(LaravelTestPatient::query()->orderBy('id')->get()->toFrame()->column('age'))->toBe([34, 61, 45, 52])
-        ->and((new Collection([['x' => 1], ['x' => 2]]))->toFrame()->column('x'))->toBe([1, 2]);
+        ->and(LaravelTestPatient::query()->orderBy('id')->toDataFrame()->column('clinic'))->toBe(['a', 'a', 'b', 'b'])
+        ->and(LaravelTestPatient::query()->orderBy('id')->get()->toDataFrame()->column('age'))->toBe([34, 61, 45, 52])
+        ->and((new Collection([['x' => 1], ['x' => 2]]))->toDataFrame()->column('x'))->toBe([1, 2]);
 });
 
 it('works on the base query builder', function () {

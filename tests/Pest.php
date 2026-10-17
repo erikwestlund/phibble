@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Phibble\Frame;
+use Phibble\DataFrame;
 
 require_once __DIR__.'/Support/ExprCases.php';
 require_once __DIR__.'/Support/JoinCases.php';
@@ -17,9 +17,9 @@ uses()->beforeEach(function () {
     }
 })->in('Polars');
 
-function penguins(): Frame
+function penguins(): DataFrame
 {
-    return Frame::fromRows([
+    return DataFrame::fromRows([
         ['species' => 'Adelie', 'island' => 'Torgersen', 'mass' => 3750.0, 'year' => 2007],
         ['species' => 'Adelie', 'island' => 'Biscoe', 'mass' => 3800.0, 'year' => 2008],
         ['species' => 'Gentoo', 'island' => 'Biscoe', 'mass' => 5000.0, 'year' => 2007],

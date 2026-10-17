@@ -17,8 +17,8 @@ echo $t->mutate(['y' => Phibble\Expr\round(col('x'))]);
 
 ```{.text .output}
 Phibble\Sql\SqlTable
-Phibble\Frame
-Phibble\Frame
+Phibble\DataFrame
+Phibble\DataFrame
 # A tibble: 2 × 3
      id     x     y
   <int> <dbl> <dbl>

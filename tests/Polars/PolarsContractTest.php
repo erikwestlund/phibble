@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Phibble\Exception\ColumnNotFound;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 use Phibble\Polars\PolarsTable;
 
@@ -13,17 +13,17 @@ use function Phibble\Expr\{col, mean, n};
 
 function joinXPt(): PolarsTable
 {
-    return pt(Frame::fromColumns(['k' => [1.0, 2.0, null, 2.0], 'a' => ['x1', 'x2', 'x3', 'x4'], 'v' => [1, 2, 3, 4]]));
+    return pt(DataFrame::fromColumns(['k' => [1.0, 2.0, null, 2.0], 'a' => ['x1', 'x2', 'x3', 'x4'], 'v' => [1, 2, 3, 4]]));
 }
 
 function joinYPt(): PolarsTable
 {
-    return pt(Frame::fromColumns(['k' => [2.0, 3.0, null, 2.0], 'b' => ['y1', 'y2', 'y3', 'y4'], 'v' => [11, 12, 13, 14]]));
+    return pt(DataFrame::fromColumns(['k' => [2.0, 3.0, null, 2.0], 'b' => ['y1', 'y2', 'y3', 'y4'], 'v' => [11, 12, 13, 14]]));
 }
 
 function penguinsPt(): PolarsTable
 {
-    return pt(Frame::fromRows([
+    return pt(DataFrame::fromRows([
         ['species' => 'Adelie', 'island' => 'Torgersen', 'mass' => 3750.0, 'year' => 2007],
         ['species' => 'Adelie', 'island' => 'Biscoe', 'mass' => 3800.0, 'year' => 2008],
         ['species' => 'Gentoo', 'island' => 'Biscoe', 'mass' => 5000.0, 'year' => 2007],
@@ -59,15 +59,15 @@ it('keeps both key sets with keep', function () {
 });
 
 it('joins on differently named keys and suffixes clashes like dplyr', function () {
-    $x = pt(Frame::fromColumns(['id' => [1, 2], 'k' => [3, 4]]));
-    $y = pt(Frame::fromColumns(['key' => [1, 1], 'k' => [9, 8]]));
+    $x = pt(DataFrame::fromColumns(['id' => [1, 2], 'k' => [3, 4]]));
+    $y = pt(DataFrame::fromColumns(['key' => [1, 1], 'k' => [9, 8]]));
 
     expect($x->join($y, [['id', 'key']], 'left')->toRows())->toBe([
         ['id' => 1, 'k.x' => 3, 'k.y' => 9],
         ['id' => 1, 'k.x' => 3, 'k.y' => 8],
         ['id' => 2, 'k.x' => 4, 'k.y' => null],
     ])
-        ->and(pt(Frame::fromColumns(['k' => [1], 'v' => [1]]))->join(pt(Frame::fromColumns(['v' => [1], 'k' => [1]])), [['k', 'v']], 'left')->columns())
+        ->and(pt(DataFrame::fromColumns(['k' => [1], 'v' => [1]]))->join(pt(DataFrame::fromColumns(['v' => [1], 'k' => [1]])), [['k', 'v']], 'left')->columns())
         ->toBe(['k', 'v', 'k.y']);
 });
 
@@ -97,8 +97,8 @@ it('handles multiple, naMatches, semi, anti and cross', function () {
 });
 
 it('matches 1 with 1.0 and factors with strings by label', function () {
-    $x = pt(Frame::fromColumns(['k' => [1, 2], 'g' => ['a', 'b']])->asFactor('g'));
-    $y = pt(Frame::fromColumns(['k' => [1.0, 2.0], 'g' => ['b', 'a'], 'w' => [10, 20]]));
+    $x = pt(DataFrame::fromColumns(['k' => [1, 2], 'g' => ['a', 'b']])->asFactor('g'));
+    $y = pt(DataFrame::fromColumns(['k' => [1.0, 2.0], 'g' => ['b', 'a'], 'w' => [10, 20]]));
 
     expect($x->join($y, ['k'], 'left')->column('w'))->toBe([10, 20])
         ->and($x->join($y, ['g'], 'left')->column('w'))->toBe([20, 10]);
@@ -109,7 +109,7 @@ it('keeps x grouping through joins', function () {
 });
 
 it('sorts groups like dplyr: NA last, factors by level', function () {
-    $frame = Frame::fromColumns(['g' => ['b', 'a', null, 'b'], 'x' => [1, 2, 3, 4]]);
+    $frame = DataFrame::fromColumns(['g' => ['b', 'a', null, 'b'], 'x' => [1, 2, 3, 4]]);
     $counts = native(fn () => pt($frame)->groupBy(['g'])->summarise(['n' => n()]));
 
     expect($counts->toRows())->toBe([['g' => 'a', 'n' => 1], ['g' => 'b', 'n' => 2], ['g' => null, 'n' => 1]])
@@ -118,16 +118,16 @@ it('sorts groups like dplyr: NA last, factors by level', function () {
 });
 
 it('iterates groups in sorted order with ungrouped tables', function () {
-    $groups = iterator_to_array(pt(Frame::fromColumns(['g' => ['b', 'a', null, 'b'], 'x' => [1, 2, 3, 4]]))->groupBy(['g'])->eachGroup());
+    $groups = iterator_to_array(pt(DataFrame::fromColumns(['g' => ['b', 'a', null, 'b'], 'x' => [1, 2, 3, 4]]))->groupBy(['g'])->eachGroup());
 
     expect(array_column($groups, 'key'))->toBe([['g' => 'a'], ['g' => 'b'], ['g' => null]])
         ->and($groups[1]['table']->column('x'))->toBe([1, 4])
         ->and($groups[1]['table']->groups())->toBe([]);
 });
 
-it('runs closures by falling back to a Frame, keeping groups', function () {
-    $grouped = pt(Frame::fromColumns(['g' => ['a', 'b', 'a', 'b', 'a'], 'x' => [1, 2, 3, 4, 5]]))->groupBy(['g']);
-    $out = $grouped->mutateGroups(['cs' => fn (Frame $t) => array_map(fn ($i) => array_sum(array_slice($t->column('x'), 0, $i + 1)), array_keys($t->column('x')))]);
+it('runs closures by falling back to a DataFrame, keeping groups', function () {
+    $grouped = pt(DataFrame::fromColumns(['g' => ['a', 'b', 'a', 'b', 'a'], 'x' => [1, 2, 3, 4, 5]]))->groupBy(['g']);
+    $out = $grouped->mutateGroups(['cs' => fn (DataFrame $t) => array_map(fn ($i) => array_sum(array_slice($t->column('x'), 0, $i + 1)), array_keys($t->column('x')))]);
 
     expect($out)->toBeInstanceOf(PolarsTable::class)
         ->and($out->column('cs'))->toBe([1, 2, 4, 6, 9])
@@ -145,9 +145,9 @@ it('takes rows by index, with null giving an NA row', function () {
         ->and(fn () => penguinsPt()->take([99]))->toThrow(InvalidArgumentException::class);
 });
 
-it('works rowwise through the Frame fallback', function () {
-    $frame = pt(Frame::fromColumns(['id' => ['a', 'b'], 'x' => [1, 4], 'y' => [3, 2]]))->rowwise(['id']);
-    $summary = $frame->summarise(['m' => fn (Frame $r) => max($r->column('x')[0], $r->column('y')[0])]);
+it('works rowwise through the DataFrame fallback', function () {
+    $frame = pt(DataFrame::fromColumns(['id' => ['a', 'b'], 'x' => [1, 4], 'y' => [3, 2]]))->rowwise(['id']);
+    $summary = $frame->summarise(['m' => fn (DataFrame $r) => max($r->column('x')[0], $r->column('y')[0])]);
 
     expect($frame->isRowwise())->toBeTrue()
         ->and($frame->groups())->toBe(['id'])
@@ -157,7 +157,7 @@ it('works rowwise through the Frame fallback', function () {
 });
 
 it('keeps types and round-trips through collect', function () {
-    $frame = Frame::fromColumns([
+    $frame = DataFrame::fromColumns([
         'i' => [1, null], 'f' => [1.5, null], 'b' => [true, null], 's' => ['x', null],
         'd' => [new DateTimeImmutable('2024-01-02', new DateTimeZone('UTC')), null],
     ])->asFactor('s');
@@ -190,7 +190,7 @@ it('mutates with lists, scalars and later entries seeing earlier ones', function
         ->and($out->column('avg')[0])->toBe(4487.5);
 });
 
-// join_by cases (dplyr 1.2) shared with phibble's Frame and SqlTable tests.
+// join_by cases (dplyr 1.2) shared with phibble's DataFrame and SqlTable tests.
 
 dataset('join_by', fn () => joinByCases());
 
@@ -211,7 +211,7 @@ it('refuses keep: false with comparisons', function () {
 
 it('honours summarise .groups and groupBy(drop: false)', function () {
     $grouped = penguinsPt()->groupBy(['species', 'year']);
-    $levels = pt(Frame::fromColumns(['g' => ['a', 'a'], 'x' => [1, 2]])->fctLevels('g', ['a', 'b']));
+    $levels = pt(DataFrame::fromColumns(['g' => ['a', 'a'], 'x' => [1, 2]])->fctLevels('g', ['a', 'b']));
 
     expect($grouped->summarise(['n' => n()], 'keep')->groups())->toBe(['species', 'year'])
         ->and($grouped->summarise(['n' => n()], 'drop')->groups())->toBe([])
@@ -221,7 +221,7 @@ it('honours summarise .groups and groupBy(drop: false)', function () {
 });
 
 it('lists group rows in group order', function () {
-    $t = pt(Frame::fromColumns(['g' => ['b', 'a', null, 'b'], 'x' => [1, 2, 3, 4]]));
+    $t = pt(DataFrame::fromColumns(['g' => ['b', 'a', null, 'b'], 'x' => [1, 2, 3, 4]]));
 
     expect($t->groupBy(['g'])->groupRows())->toBe([
         ['key' => ['g' => 'a'], 'rows' => [1]],
@@ -234,7 +234,7 @@ it('lists group rows in group order', function () {
 });
 
 it('ranks and orders factors by level, as phibble v0.1.0 does', function () {
-    $frame = Frame::fromColumns(['f' => ['a', 'b', 'c', 'b'], 'x' => [1, 2, 3, 4]])->fctLevels('f', ['c', 'b', 'a']);
+    $frame = DataFrame::fromColumns(['f' => ['a', 'b', 'c', 'b'], 'x' => [1, 2, 3, 4]])->fctLevels('f', ['c', 'b', 'a']);
 
     expect(native(fn () => pt($frame)->mutate(['r' => Phibble\Expr\min_rank(col('f'))]))->column('r'))
         ->toBe($frame->mutate(['r' => Phibble\Expr\min_rank(col('f'))])->column('r'))
@@ -243,10 +243,17 @@ it('ranks and orders factors by level, as phibble v0.1.0 does', function () {
 });
 
 it('creates Polars tables with polars()', function () {
-    $frame = Frame::fromColumns(['g' => ['a', 'b', 'a'], 'x' => [1, 2, 3]]);
+    $frame = DataFrame::fromColumns(['g' => ['a', 'b', 'a'], 'x' => [1, 2, 3]]);
     $out = Phibble\polars($frame)->groupBy(['g'])->summarise(['n' => Phibble\Expr\n()]);
 
     expect(Phibble\polars($frame))->toBeInstanceOf(Phibble\Polars\PolarsTable::class)
         ->and($out->collect()->toRows())->toBe($frame->groupBy(['g'])->summarise(['n' => Phibble\Expr\n()])->toRows())
         ->and(Phibble\polars([['a' => 1]])->collect()->column('a'))->toBe([1]);
 });
+
+it('keeps list-columns that Polars stores exactly and refuses named arrays with different keys', function () {
+    $same = DataFrame::fromColumns(['id' => [1, 2], 'x' => [['a' => 1, 'b' => 2], ['a' => 3, 'b' => 4]], 'y' => [[1, 2], [3]]]);
+    expect(PolarsTable::fromTable($same)->collect()->toRows())->toBe($same->toRows());
+
+    PolarsTable::fromTable(DataFrame::fromColumns(['id' => [1, 2], 'x' => [['a' => 1], ['b' => 2]]]));
+})->throws(InvalidArgumentException::class, "List-column `x` can't be stored in Polars");

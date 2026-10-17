@@ -6,7 +6,7 @@ namespace Phibble\Bench;
 
 use Phibble\Bench\Backend;
 use Phibble\Contracts\Table;
-use Phibble\Frame;
+use Phibble\DataFrame;
 
 /**
  * PolarsTable for phibble's shared benchmark runner (bin/bench). Data is
@@ -22,6 +22,6 @@ final class PolarsBackend implements Backend
 
     public function load(string $path): Table
     {
-        return PolarsTable::fromTable(Frame::fromCsv($path));
+        return PolarsTable::fromTable(DataFrame::fromCsv($path));
     }
 }

@@ -14,10 +14,10 @@ use Phibble\Exception\ColumnNotFound;
 use Phibble\Expr\Col;
 use Phibble\Expr\Desc;
 use Phibble\Expr\Expr as PhibbleExpr;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Row;
 use Phibble\Type;
-use Phpolars\DataFrame;
+use Phpolars\DataFrame as PolarsDataFrame;
 use Phpolars\Expr;
 use Phpolars\LazyFrame;
 use Phpolars\Series;
@@ -29,7 +29,7 @@ use function Phpolars\{all, all_horizontal, any_horizontal, col, concat, lit, wh
  *
  * Verbs that take column names or Phibble\Expr run in Polars. Verbs given a
  * PHP closure cannot run on Polars threads, so they materialise a
- * Phibble\Frame, run there, and convert the result back.
+ * Phibble\DataFrame, run there, and convert the result back.
  *
  * Factor columns are held as strings in Polars; their levels travel with
  * the table so that collect() and group ordering keep them.
@@ -41,7 +41,7 @@ final class PolarsTable implements Table
      * @param array<string, array{levels: list<string>, ordered: bool}> $factors
      */
     private function __construct(
-        private readonly DataFrame $df,
+        private readonly PolarsDataFrame $df,
         private readonly array $groups = [],
         private readonly bool $rowwise = false,
         private readonly array $factors = [],
@@ -49,7 +49,7 @@ final class PolarsTable implements Table
     ) {}
 
     /** Wrap a Polars frame; a LazyFrame is collected. */
-    public static function fromPolars(DataFrame|LazyFrame $df): self
+    public static function fromPolars(PolarsDataFrame|LazyFrame $df): self
     {
         return new self($df instanceof LazyFrame ? $df->collect() : $df);
     }
@@ -100,7 +100,7 @@ final class PolarsTable implements Table
                 $factors[$name] = ['levels' => $storage->levels(), 'ordered' => $storage instanceof FactorColumn && $storage->isOrdered()];
             }
         }
-        $df = DataFrame::fromDict($columns, schema: $schema);
+        $df = PolarsDataFrame::fromDict($columns, schema: $schema);
         if ($temporal !== []) {
             $casts = [];
             foreach ($temporal as $name => $dtype) {
@@ -108,17 +108,36 @@ final class PolarsTable implements Table
             }
             $df = $df->withColumns($casts);
         }
+        self::checkListColumns($frame, $df);
 
         return new self($df, $frame->groups(), $frame->isRowwise(), $factors, $frame->dropsEmptyGroups());
     }
 
+    /**
+     * Polars stores named arrays as structs, and a struct column has every key
+     * in every row. Named arrays with different keys would come back with
+     * extra NA entries, so such list-columns are refused instead of changed.
+     */
+    private static function checkListColumns(DataFrame $frame, PolarsDataFrame $df): void
+    {
+        foreach ($frame->types() as $name => $type) {
+            if ($type === Type::List && $df->select([$name])->toDict(asSeries: false)[$name] != $frame->column($name)) {
+                throw new InvalidArgumentException(
+                    "List-column `{$name}` can't be stored in Polars without changing its values. "
+                    .'Polars stores named arrays as structs, so named arrays with different keys gain each other\'s keys. '
+                    .'Keep this table as a DataFrame.'
+                );
+            }
+        }
+    }
+
     /** The underlying Polars frame. */
-    public function polars(): DataFrame
+    public function polars(): PolarsDataFrame
     {
         return $this->df;
     }
 
-    private function with(DataFrame $df, ?array $groups = null, ?bool $rowwise = null, ?array $factors = null, ?bool $drop = null): static
+    private function with(PolarsDataFrame $df, ?array $groups = null, ?bool $rowwise = null, ?array $factors = null, ?bool $drop = null): static
     {
         $factors ??= $this->factors;
         $columns = array_flip($df->columns());
@@ -136,18 +155,18 @@ final class PolarsTable implements Table
     /**
      * With groupBy(drop: false), a factor key has a group for every level,
      * even empty ones. Polars only sees observed groups, so those verbs run
-     * on a Frame.
+     * on a DataFrame.
      */
     private function keepsEmptyGroups(): bool
     {
         return ! $this->dropGroups && array_any($this->groups, fn (string $g) => isset($this->factors[$g]));
     }
 
-    /** How many verbs fell back to an in-memory Frame in this process. */
+    /** How many verbs fell back to an in-memory DataFrame in this process. */
     public static int $fallbacks = 0;
 
-    /** Run a verb on an in-memory Frame and bring the result back. */
-    private function viaFrame(Closure $verb): static
+    /** Run a verb on an in-memory DataFrame and bring the result back. */
+    private function viaDataFrame(Closure $verb): static
     {
         self::$fallbacks++;
 
@@ -299,7 +318,7 @@ final class PolarsTable implements Table
         return $columns;
     }
 
-    public function collect(): Frame
+    public function collect(): DataFrame
     {
         $columns = $this->phibbleColumns();
         $types = [];
@@ -315,7 +334,7 @@ final class PolarsTable implements Table
                 $types[$name] = $type;
             }
         }
-        $frame = Frame::fromColumns($columns, $types);
+        $frame = DataFrame::fromColumns($columns, $types);
         if ($this->rowwise) {
             return $frame->rowwise($this->groups);
         }
@@ -340,14 +359,14 @@ final class PolarsTable implements Table
         try {
             return $this->filterNative($predicate);
         } catch (Unsupported) {
-            return $this->viaFrame(fn (Frame $f) => $f->filter($predicate));
+            return $this->viaDataFrame(fn (DataFrame $f) => $f->filter($predicate));
         }
     }
 
     private function filterNative(Closure|PhibbleExpr $predicate): static
     {
         if ($predicate instanceof Closure || $this->rowwise || $this->keepsEmptyGroups()) {
-            return $this->viaFrame(fn (Frame $f) => $f->filter($predicate));
+            return $this->viaDataFrame(fn (DataFrame $f) => $f->filter($predicate));
         }
 
         $translator = $this->translator();
@@ -359,7 +378,7 @@ final class PolarsTable implements Table
 
     public function filterGroups(Closure $predicate): static
     {
-        return $this->viaFrame(fn (Frame $f) => $f->filterGroups($predicate));
+        return $this->viaDataFrame(fn (DataFrame $f) => $f->filterGroups($predicate));
     }
 
     public function mutate(array $columns): static
@@ -367,14 +386,14 @@ final class PolarsTable implements Table
         try {
             return $this->mutateNative($columns);
         } catch (Unsupported) {
-            return $this->viaFrame(fn (Frame $f) => $f->mutate($columns));
+            return $this->viaDataFrame(fn (DataFrame $f) => $f->mutate($columns));
         }
     }
 
     private function mutateNative(array $columns): static
     {
         if ($this->rowwise || $this->keepsEmptyGroups() || array_any($columns, fn ($v) => $v instanceof Closure)) {
-            return $this->viaFrame(fn (Frame $f) => $f->mutate($columns));
+            return $this->viaDataFrame(fn (DataFrame $f) => $f->mutate($columns));
         }
         $df = $this->df;
         $factors = $this->factors;
@@ -406,7 +425,7 @@ final class PolarsTable implements Table
 
     public function mutateGroups(array $columns): static
     {
-        return $this->viaFrame(fn (Frame $f) => $f->mutateGroups($columns));
+        return $this->viaDataFrame(fn (DataFrame $f) => $f->mutateGroups($columns));
     }
 
     public function rename(array $map): static
@@ -430,7 +449,7 @@ final class PolarsTable implements Table
         try {
             return $this->arrangeNative($keys);
         } catch (Unsupported) {
-            return $this->viaFrame(fn (Frame $f) => $f->arrange($keys));
+            return $this->viaDataFrame(fn (DataFrame $f) => $f->arrange($keys));
         }
     }
 
@@ -539,14 +558,14 @@ final class PolarsTable implements Table
         try {
             return $this->summariseNative($aggregates, $groups);
         } catch (Unsupported) {
-            return $this->viaFrame(fn (Frame $f) => $f->summarise($aggregates, $groups));
+            return $this->viaDataFrame(fn (DataFrame $f) => $f->summarise($aggregates, $groups));
         }
     }
 
     private function summariseNative(array $aggregates, ?string $groups): static
     {
         if ($this->rowwise || $this->keepsEmptyGroups() || array_any($aggregates, fn ($v) => $v instanceof Closure)) {
-            return $this->viaFrame(fn (Frame $f) => $f->summarise($aggregates, $groups));
+            return $this->viaDataFrame(fn (DataFrame $f) => $f->summarise($aggregates, $groups));
         }
         if (! in_array($groups, [null, 'drop_last', 'drop', 'keep', 'rowwise'], true)) {
             throw new InvalidArgumentException("summarise() .groups must be drop_last, drop, keep or rowwise, not '{$groups}'.");
@@ -610,7 +629,7 @@ final class PolarsTable implements Table
         if ($indices === []) {
             return $this->with($this->df->head(0));
         }
-        $rows = DataFrame::fromDict(['__row' => array_values($indices)], schema: ['__row' => 'UInt32']);
+        $rows = PolarsDataFrame::fromDict(['__row' => array_values($indices)], schema: ['__row' => 'UInt32']);
         $out = $rows->join($this->df->withRowIndex('__row'), on: '__row', how: 'left', maintainOrder: 'left')->drop('__row');
 
         return $this->with($out);

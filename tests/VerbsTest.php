@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Row;
 use Phibble\Type;
 
@@ -32,7 +32,7 @@ it('filters rows, treating NA as false', function () {
 it('filters within groups', function () {
     $frame = penguins()
         ->groupBy(['species'])
-        ->filter(fn (Row $r, Frame $g) => $r->year === max($g->column('year')));
+        ->filter(fn (Row $r, DataFrame $g) => $r->year === max($g->column('year')));
 
     expect($frame->column('year'))->toBe([2008, 2009, 2008])
         ->and($frame->groups())->toBe(['species']);
@@ -57,7 +57,7 @@ it('mutates with closures, lists and scalars, in order', function () {
 it('mutates within groups', function () {
     $frame = penguins()
         ->groupBy(['species'])
-        ->mutate(['n' => fn (Row $r, Frame $g) => $g->nrow()]);
+        ->mutate(['n' => fn (Row $r, DataFrame $g) => $g->nrow()]);
 
     expect($frame->column('n'))->toBe([2, 2, 2, 1, 2]);
 });
@@ -121,8 +121,8 @@ it('summarises per group and drops the last grouping level', function () {
         ->dropNa()
         ->groupBy(['island', 'species'])
         ->summarise([
-            'n' => fn (Frame $g) => $g->nrow(),
-            'mass' => fn (Frame $g) => $mean($g->column('mass')),
+            'n' => fn (DataFrame $g) => $g->nrow(),
+            'mass' => fn (DataFrame $g) => $mean($g->column('mass')),
         ]);
 
     expect($result->toRows())->toBe([
@@ -134,7 +134,7 @@ it('summarises per group and drops the last grouping level', function () {
 });
 
 it('summarises an ungrouped table to one row', function () {
-    $result = penguins()->summarise(['n' => fn (Frame $g) => $g->nrow()]);
+    $result = penguins()->summarise(['n' => fn (DataFrame $g) => $g->nrow()]);
 
     expect($result->toRows())->toBe([['n' => 5]]);
 });
@@ -173,9 +173,9 @@ it('handles empty frames', function () {
 
 it('works with the pipe operator', function () {
     $result = penguins()
-        |> (fn (Frame $f) => $f->filter(fn (Row $r) => $r->mass !== null))
-        |> (fn (Frame $f) => $f->arrange([['mass', 'desc']]))
-        |> (fn (Frame $f) => $f->head(1));
+        |> (fn (DataFrame $f) => $f->filter(fn (Row $r) => $r->mass !== null))
+        |> (fn (DataFrame $f) => $f->arrange([['mass', 'desc']]))
+        |> (fn (DataFrame $f) => $f->head(1));
 
     expect($result->column('mass'))->toBe([5400.0]);
 });
@@ -183,12 +183,12 @@ it('works with the pipe operator', function () {
 it('concatenates tables, keeping shared types and filling missing columns', function () {
     $a = penguins()->asFactor('species')->head(2);
     $b = penguins()->asFactor('species')->slice(2)->select(['species', 'mass']);
-    $stacked = Frame::concat([$a, $b]);
+    $stacked = DataFrame::concat([$a, $b]);
 
     expect($stacked->nrow())->toBe(5)
         ->and($stacked->type('species'))->toBe(Type::Factor)
         ->and($stacked->levels('species'))->toBe(['Adelie', 'Chinstrap', 'Gentoo'])
         ->and($stacked->type('year'))->toBe(Type::Int)
         ->and($stacked->column('year'))->toBe([2007, 2008, null, null, null])
-        ->and(Frame::concat([])->nrow())->toBe(0);
+        ->and(DataFrame::concat([])->nrow())->toBe(0);
 });

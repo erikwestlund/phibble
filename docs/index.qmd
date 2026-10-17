@@ -4,7 +4,7 @@ subtitle: "A typed data frame for PHP 8.5"
 ---
 
 phibble is a port of R's tibble to PHP, with the readr-style input and output a
-data frame needs. A `Frame` holds typed columns, treats `null` as NA, and never
+data frame needs. A `DataFrame` holds typed columns, treats `null` as NA, and never
 changes in place: every operation returns a new frame.
 
 {{< include examples/_tour.md >}}
@@ -16,11 +16,11 @@ in PHP. The other packages read and return phibble tables:
   pipe-able functions.
 - **[php-stats](https://github.com/erikwestlund/php-stats)** is a native
   extension for statistical models and descriptive statistics. It reads model
-  data with `Frame::toModelData()`.
+  data with `DataFrame::toModelData()`.
 - **phpolars** is an optional Polars-backed table.
 - **cmdstanphp** runs Stan models and will accept phibble frames.
 
-The packages talk to each other through the `Table` contract. `Frame` is the
+The packages talk to each other through the `Table` contract. `DataFrame` is the
 in-memory implementation. `SqlTable` implements the same contract over a SQL
 query, so the verbs compile to SQL and run in the database.
 

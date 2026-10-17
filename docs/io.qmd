@@ -4,9 +4,9 @@ title: "Reading and writing data"
 
 ## CSV files
 
-`Frame::fromCsv()` reads delimited text the way readr's `read_csv()` and
+`DataFrame::fromCsv()` reads delimited text the way readr's `read_csv()` and
 `read_delim()` do. It takes a path (files ending in `.gz` are decompressed) or
-an open stream. `Frame::fromCsvString()` reads from a string.
+an open stream. `DataFrame::fromCsvString()` reads from a string.
 
 readr's options are named arguments in camelCase:
 
@@ -89,20 +89,20 @@ The options are `delimiter`, `na`, `append`, `colNames`, `quote` (`'needed'`,
 ## JSON
 
 `toJson()` writes a list of records, and `toJson('columns')` writes an object of
-columns. NA is written as `null` and kept in every record. `Frame::fromJson()`
+columns. NA is written as `null` and kept in every record. `DataFrame::fromJson()`
 reads either shape and detects which one it has.
 
 {{< include examples/_json.md >}}
 
 ## Databases
 
-`Frame::fromPdo()` runs a query with positional or named bindings and loads the
+`DataFrame::fromPdo()` runs a query with positional or named bindings and loads the
 result. Drivers that return numbers as text, as MySQL's does, are handled by
 parsing all-text columns with the CSV guessing rules.
 
 {{< include examples/_pdo.md >}}
 
-`Frame::fromQuery()` loads a query builder without depending on its library:
+`DataFrame::fromQuery()` loads a query builder without depending on its library:
 
 - A Laravel query builder, Eloquent builder, or relation is read through
   `toSql()`, `getBindings()`, and its connection's PDO object.
@@ -115,7 +115,7 @@ To keep a query in the database and run verbs there, use a
 
 ## Laravel collections
 
-`Frame::fromCollection()` reads any object with an `all()` or `toArray()`
+`DataFrame::fromCollection()` reads any object with an `all()` or `toArray()`
 method, such as a Laravel `Collection`. The items may be arrays, objects, or
 Eloquent models. `toCollection()` returns an `Illuminate\Support\Collection` of
 row arrays and throws when Laravel is not installed.

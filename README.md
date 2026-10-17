@@ -1,7 +1,7 @@
 # phibble
 
 phibble is a port of R's tibble to PHP 8.5, with readr-style input and output.
-A `Frame` holds typed columns, treats `null` as NA, and returns a new frame
+A `DataFrame` holds typed columns, treats `null` as NA, and returns a new frame
 from every operation. It is the shared table type for
 [phplyr](https://github.com/erikwestlund/phplyr),
 [php-stats](https://github.com/erikwestlund/php-stats), phpolars, and
@@ -20,10 +20,10 @@ phibble needs PHP 8.5 and its PDO extension.
 ## Example
 
 ```php
-use Phibble\Frame;
+use Phibble\DataFrame;
 use function Phibble\Expr\{col, mean, n};
 
-$penguins = Frame::fromCsv('penguins.csv');
+$penguins = DataFrame::fromCsv('penguins.csv');
 
 echo $penguins
     ->filter(col('body_mass')->isNa()->not())
@@ -59,9 +59,9 @@ echo $penguins
   lubridate basics.
 - **SQL tables:** `SqlTable` compiles verbs to SQL for SQLite, PostgreSQL, and
   MySQL, like dbplyr. Anything SQL cannot compute exactly runs in memory, so
-  results match `Frame`.
-- **Laravel:** `->toFrame()` and `->phibble()` on queries and collections.
-- **Backends:** `Frame` (in memory), `SqlTable` (databases), and `PolarsTable`
+  results match `DataFrame`.
+- **Laravel:** `->toDataFrame()` and `->phibble()` on queries and collections.
+- **Backends:** `DataFrame` (in memory), `SqlTable` (databases), and `PolarsTable`
   (Polars, with the php_polars extension) implement one Table contract, so the
   same pipeline runs on each.
 

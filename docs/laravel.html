@@ -244,7 +244,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#from-a-collection-or-query-to-a-frame" id="toc-from-a-collection-or-query-to-a-frame" class="nav-link active" data-scroll-target="#from-a-collection-or-query-to-a-frame">From a collection or query to a Frame</a></li>
+  <li><a href="#from-a-collection-or-query-to-a-dataframe" id="toc-from-a-collection-or-query-to-a-dataframe" class="nav-link active" data-scroll-target="#from-a-collection-or-query-to-a-dataframe">From a collection or query to a DataFrame</a></li>
   <li><a href="#queries-that-stay-in-the-database" id="toc-queries-that-stay-in-the-database" class="nav-link" data-scroll-target="#queries-that-stay-in-the-database">Queries that stay in the database</a></li>
   <li><a href="#with-phplyr" id="toc-with-phplyr" class="nav-link" data-scroll-target="#with-phplyr">With phplyr</a></li>
   <li><a href="#charts-with-phiz" id="toc-charts-with-phiz" class="nav-link" data-scroll-target="#charts-with-phiz">Charts with phiz</a></li>
@@ -276,17 +276,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 <p>phibble works with Laravel without configuration. Its service provider is registered by package discovery, and it adds two kinds of macro:</p>
 <ul>
-<li><code>-&gt;toFrame()</code> on collections and query builders runs the query and returns an in-memory <code>Frame</code>.</li>
+<li><code>-&gt;toDataFrame()</code> on collections and query builders runs the query and returns an in-memory <code>DataFrame</code>.</li>
 <li><code>-&gt;phibble()</code> on query builders, Eloquent builders, and relations returns a lazy <code>SqlTable</code> on the query’s connection. Verbs given expressions compile to SQL, so grouping and summarising run in the database.</li>
 </ul>
 <p>Laravel is not a dependency. The examples on this page use Eloquent with an in-memory SQLite database that holds the <code>penguins</code> data, through a model with a <code>measured()</code> scope that keeps rows with a body mass.</p>
-<section id="from-a-collection-or-query-to-a-frame" class="level2">
-<h2 class="anchored" data-anchor-id="from-a-collection-or-query-to-a-frame">From a collection or query to a Frame</h2>
-<p><code>toFrame()</code> builds a frame from the rows of a collection or a query. Column types are inferred from the values, as for <code>Frame::fromRows()</code>.</p>
+<section id="from-a-collection-or-query-to-a-dataframe" class="level2">
+<h2 class="anchored" data-anchor-id="from-a-collection-or-query-to-a-dataframe">From a collection or query to a DataFrame</h2>
+<p><code>toDataFrame()</code> builds a frame from the rows of a collection or a query. Column types are inferred from the values, as for <code>DataFrame::fromRows()</code>.</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">$frame</span> <span class="op">=</span> Penguin::query()</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    -&gt;where(<span class="st">'year'</span><span class="ot">,</span> <span class="dv">2009</span>)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    -&gt;get()</span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    -&gt;toFrame()<span class="ot">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    -&gt;toDataFrame()<span class="ot">;</span></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$frame</span>-&gt;select([<span class="st">'species'</span><span class="ot">,</span> <span class="st">'island'</span><span class="ot">,</span> <span class="st">'body_mass'</span>])-&gt;head(<span class="dv">3</span>)<span class="ot">;</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <pre class="text output"><code># A tibble: 3 × 3
@@ -295,7 +295,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 1 Adelie  Biscoe      3725
 2 Adelie  Biscoe      4725
 3 Adelie  Biscoe      3075</code></pre>
-<p>A collection of models becomes rows of their attributes. Eloquent casts and accessors apply only when the models are loaded first, as in the example above; <code>Penguin::query()-&gt;toFrame()</code> reads the rows directly.</p>
+<p>A collection of models becomes rows of their attributes. Eloquent casts and accessors apply only when the models are loaded first, as in the example above; <code>Penguin::query()-&gt;toDataFrame()</code> reads the rows directly.</p>
 </section>
 <section id="queries-that-stay-in-the-database" class="level2">
 <h2 class="anchored" data-anchor-id="queries-that-stay-in-the-database">Queries that stay in the database</h2>
@@ -342,7 +342,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 1 Biscoe    Gentoo         6300
 2 Dream     Chinstrap      4800
 3 Torgersen Adelie         4700</code></pre>
-<p>Expressions that SQL cannot evaluate exactly as R does, and any PHP closure, make the table collect its rows and continue in memory. The result is then a <code>Frame</code>, and the values are the same as if the whole pipeline had run in memory. The <a href="./sql.html">SQL tables</a> page lists these cases.</p>
+<p>Expressions that SQL cannot evaluate exactly as R does, and any PHP closure, make the table collect its rows and continue in memory. The result is then a <code>DataFrame</code>, and the values are the same as if the whole pipeline had run in memory. The <a href="./sql.html">SQL tables</a> page lists these cases.</p>
 </section>
 <section id="with-phplyr" class="level2">
 <h2 class="anchored" data-anchor-id="with-phplyr">With phplyr</h2>

@@ -281,7 +281,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<p><code>Phibble\Expr</code> describes a computation over columns as a tree of objects. The in-memory <code>Frame</code> evaluates the tree, <code>SqlTable</code> compiles it to SQL, and phpolars maps it to Polars expressions. An expression gives the same result on each backend because every backend implements the same list of functions with R’s semantics.</p>
+<p><code>Phibble\Expr</code> describes a computation over columns as a tree of objects. The in-memory <code>DataFrame</code> evaluates the tree, <code>SqlTable</code> compiles it to SQL, and phpolars maps it to Polars expressions. An expression gives the same result on each backend because every backend implements the same list of functions with R’s semantics.</p>
 <p>A PHP closure can only be run. An expression can also be inspected, translated, and serialized. phibble’s verbs accept either, and a backend that cannot run a closure itself loads the rows and runs it in memory.</p>
 <section id="building-expressions" class="level2">
 <h2 class="anchored" data-anchor-id="building-expressions">Building expressions</h2>
@@ -393,7 +393,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>summarise()</code> needs one value per group. Anything else throws a <code>LengthException</code>.</li>
 <li><code>arrange()</code> sorts by expressions over the whole table, ignoring groups. Wrap a key in <code>desc()</code> to sort it in descending order.</li>
 </ul>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> Frame::fromCsv(<span class="st">'penguins.csv'</span>)<span class="ot">;</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> DataFrame::fromCsv(<span class="st">'penguins.csv'</span>)<span class="ot">;</span></span>
 <span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="va">$out</span> <span class="op">=</span> <span class="va">$penguins</span></span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    -&gt;filter(is_na(col(<span class="st">'body_mass'</span>))-&gt;not())</span>
@@ -421,7 +421,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 4 Gentoo         6050  1.93     2 large 
 5 Chinstrap      4550  2.13     2 medium
 6 Chinstrap      4800  2.78     1 medium</code></pre>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> Frame::fromCsv(<span class="st">'penguins.csv'</span>)<span class="ot">;</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode php code-with-copy"><code class="sourceCode php"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="va">$penguins</span> <span class="op">=</span> DataFrame::fromCsv(<span class="st">'penguins.csv'</span>)<span class="ot">;</span></span>
 <span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="kw">echo</span> <span class="va">$penguins</span></span>
 <span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    -&gt;groupBy([<span class="st">'island'</span>])</span>

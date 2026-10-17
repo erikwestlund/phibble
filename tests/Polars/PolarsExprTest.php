@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 use Phibble\Expr\Expr;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Polars\PolarsTable;
 
 use function Phibble\Expr\{col, cumsum, desc, lag, mean, round, row_number, str_lower};
@@ -18,7 +18,7 @@ it('matches dplyr for mutate expressions in Polars', function (Closure $frame, E
     if ($case === 'round') {
         $values = [0.5, 1.5, 2.5, -0.5, 2.675, 0.125, 1234.5];
         $digits = [0, 0, 0, 0, 2, 2, -1];
-        $out = array_map(fn ($v, $d) => native(fn () => pt(Frame::fromColumns(['v' => [$v]]))->mutate(['out' => round(col('v'), digits: $d)]))->column('out')[0], $values, $digits);
+        $out = array_map(fn ($v, $d) => native(fn () => pt(DataFrame::fromColumns(['v' => [$v]]))->mutate(['out' => round(col('v'), digits: $d)]))->column('out')[0], $values, $digits);
     } else {
         $out = native(fn () => pt($frame())->mutate(['out' => $expr]))->column('out');
     }

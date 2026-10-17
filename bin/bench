@@ -27,13 +27,13 @@ foreach ([dirname(__DIR__).'/vendor/autoload.php', dirname(__DIR__, 3).'/autoloa
     }
 }
 // The bench classes are autoload-dev, so load them directly when installed as a dependency.
-foreach (['Backend', 'FrameBackend', 'SqliteBackend', 'Workloads'] as $class) {
+foreach (['Backend', 'DataFrameBackend', 'SqliteBackend', 'Workloads'] as $class) {
     if (! class_exists("Phibble\\Bench\\{$class}") && ! interface_exists("Phibble\\Bench\\{$class}")) {
         require_once dirname(__DIR__)."/bench/src/{$class}.php";
     }
 }
 
-use Phibble\Bench\FrameBackend;
+use Phibble\Bench\DataFrameBackend;
 use Phibble\Bench\SqliteBackend;
 use Phibble\Bench\Workloads;
 
@@ -86,7 +86,7 @@ if ($backendName === 'frame') {
 }
 
 $backend = match ($backendName) {
-    'frame' => new FrameBackend(),
+    'frame' => new DataFrameBackend(),
     'sqlite' => new SqliteBackend(),
     default => class_exists($backendName) && is_subclass_of($backendName, Phibble\Bench\Backend::class)
         ? new $backendName()

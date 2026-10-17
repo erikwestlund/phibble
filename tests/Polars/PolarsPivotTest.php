@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Polars\PolarsTable;
 
 // tidyr 1.3.2 reference cases from phibble's tests/fixtures/pivot/cases.json.
@@ -28,7 +28,7 @@ dataset('polars pivot cases', fn () => array_map(fn ($c) => [$c], array_keys(piv
 
 it('matches tidyr pivot specs on PolarsTable', function (string $name) {
     $case = pivotCasesPt()[$name];
-    $table = pt(Frame::fromRows($case['data']));
+    $table = pt(DataFrame::fromRows($case['data']));
     $args = $case['args'];
     if (isset($args['idColumns'])) {
         $args['idColumns'] = (array) $args['idColumns'];

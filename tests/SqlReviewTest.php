@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use Phibble\Expr\Expr;
 use Phibble\Expr\Lit;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Sql\SqlTable;
 
 use function Phibble\Expr\{as_int, col, desc, exp, first, log, max, mean, min, n, near, sqrt, str_trim, sum, var_};
@@ -12,7 +12,7 @@ use function Phibble\Expr\{as_int, col, desc, exp, first, log, max, mean, min, n
 /*
  * Regression tests for the independent review of SqlTable and Expr before
  * v0.1.0. Each runs a pipeline on SqlTable and on the same rows collected
- * into a Frame, and requires the same result (or the same exception).
+ * into a DataFrame, and requires the same result (or the same exception).
  */
 function viaBoth(PDO $pdo, string $sql, Closure $pipeline): array
 {
@@ -61,7 +61,7 @@ dataset('review cases', function () {
     ];
 });
 
-it('matches Frame after the review fixes', function (string $sql, Closure $pipeline, Closure $connect) {
+it('matches DataFrame after the review fixes', function (string $sql, Closure $pipeline, Closure $connect) {
     [$frame, $sqlResult] = viaBoth($connect(), $sql, $pipeline);
 
     expect($sqlResult)->toBe($frame);
@@ -120,7 +120,7 @@ it('parses named bindings around comments and MySQL escapes', function () {
 });
 
 it('compares strictly in in() and trims Unicode spaces, as R does', function () {
-    $f = Frame::fromColumns(['s' => ['1.0', 'abc', "\u{00a0}x\u{3000}"]]);
+    $f = DataFrame::fromColumns(['s' => ['1.0', 'abc', "\u{00a0}x\u{3000}"]]);
     $out = $f->mutate(['in1' => col('s')->isIn(['1']), 'inT' => col('s')->isIn([true]), 't' => str_trim(col('s'))]);
 
     expect($out->column('in1'))->toBe([false, false, false])
@@ -136,7 +136,7 @@ it('keeps microseconds when serialising datetime literals', function () {
 });
 
 it('ranks and orders factors by level, as dplyr does', function () {
-    $f = Frame::fromColumns(['k' => ['lo', 'hi', 'mid'], 'v' => [1, 2, 3]])->asOrdered('k', ['lo', 'mid', 'hi']);
+    $f = DataFrame::fromColumns(['k' => ['lo', 'hi', 'mid'], 'v' => [1, 2, 3]])->asOrdered('k', ['lo', 'mid', 'hi']);
     $out = $f->mutate([
         'r' => Phibble\Expr\min_rank(col('k')),
         'rd' => Phibble\Expr\min_rank(desc(col('k'))),
@@ -151,14 +151,14 @@ it('ranks and orders factors by level, as dplyr does', function () {
 });
 
 it('divides to a double, as R does', function () {
-    $out = Frame::fromColumns(['x' => [1, 3]])->mutate(['s' => 4])->mutate(['q' => sum(col('x'))->div(col('s')), 'h' => col('x')->div(1)]);
+    $out = DataFrame::fromColumns(['x' => [1, 3]])->mutate(['s' => 4])->mutate(['q' => sum(col('x'))->div(col('s')), 'h' => col('x')->div(1)]);
 
     expect($out->column('q'))->toBe([1.0, 1.0])
         ->and($out->column('h'))->toBe([1.0, 3.0]);
 });
 
 it('gives NA for empty fixed patterns, as stringr does', function () {
-    $out = Frame::fromColumns(['s' => ['abc']])->mutate([
+    $out = DataFrame::fromColumns(['s' => ['abc']])->mutate([
         'c' => Phibble\Expr\str_count(col('s'), Phibble\Expr\fixed('')),
         'd' => Phibble\Expr\str_detect(col('s'), Phibble\Expr\fixed(''), negate: true),
         'r' => Phibble\Expr\str_replace_all(col('s'), Phibble\Expr\fixed(''), 'x'),

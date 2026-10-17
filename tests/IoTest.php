@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Io\CsvWriter;
 use Phibble\NameRepair;
 use Phibble\Type;
@@ -65,7 +65,7 @@ function withCsvReader(string $reader, Closure $fn): mixed
 
 it('reads CSV like readr', function (array $case, string $reader) {
     $expected = json_decode((string) file_get_contents(IO_FIXTURES."/expected/{$case['name']}.json"), true);
-    [$frame, $warnings] = withCsvReader($reader, fn () => quietly(fn () => Frame::fromCsv(IO_FIXTURES.'/'.$case['file'], ...$case['php'])));
+    [$frame, $warnings] = withCsvReader($reader, fn () => quietly(fn () => DataFrame::fromCsv(IO_FIXTURES.'/'.$case['file'], ...$case['php'])));
 
     expect($frame->columns())->toBe($expected['names'])
         ->and(count($warnings) > 0)->toBe($expected['problems'] > 0);
@@ -105,7 +105,7 @@ it('reads CSV like readr', function (array $case, string $reader) {
 
 it('writes CSV like readr', function () {
     $expected = json_decode((string) file_get_contents(IO_FIXTURES.'/expected/write.json'), true);
-    $frame = Frame::fromCsv(IO_FIXTURES.'/write.csv');
+    $frame = DataFrame::fromCsv(IO_FIXTURES.'/write.csv');
 
     expect($frame->toCsv())->toBe($expected['csv'])
         ->and($frame->toCsv(quote: 'all'))->toBe($expected['csv_all'])
@@ -129,7 +129,7 @@ it('formats doubles like write_csv', function () {
 // ---------------------------------------------------------------------
 
 it('keeps the original fromCsv and fromCsvString signatures working', function () {
-    $frame = Frame::fromCsvString("zip;n\n02134;-\n10001;4\n", ['zip' => 'string'], ';', ['-']);
+    $frame = DataFrame::fromCsvString("zip;n\n02134;-\n10001;4\n", ['zip' => 'string'], ';', ['-']);
 
     expect($frame->column('zip'))->toBe(['02134', '10001'])
         ->and($frame->column('n'))->toBe([null, 4]);
@@ -139,12 +139,12 @@ it('reads from streams and gzip files', function () {
     $stream = fopen('php://memory', 'r+');
     fwrite($stream, "a,b\n1,x\n");
     rewind($stream);
-    $fromStream = Frame::fromCsv($stream);
+    $fromStream = DataFrame::fromCsv($stream);
     fclose($stream);
 
     $path = tempnam(sys_get_temp_dir(), 'phibble').'.csv.gz';
     file_put_contents($path, gzencode("a,b\n1,x\n2,y\n"));
-    $fromGzip = Frame::fromCsv($path);
+    $fromGzip = DataFrame::fromCsv($path);
     unlink($path);
 
     expect($fromStream->toRows())->toBe([['a' => 1, 'b' => 'x']])
@@ -153,21 +153,21 @@ it('reads from streams and gzip files', function () {
 
 it('drops trailing comments and trims what is left', function () {
     // readr leaves "2 " here and so reads y as text; phibble trims after the comment.
-    $frame = Frame::fromCsvString("x,y\n1,2 # trailing\n3,4\n", comment: '#');
+    $frame = DataFrame::fromCsvString("x,y\n1,2 # trailing\n3,4\n", comment: '#');
 
     expect($frame->column('y'))->toBe([2, 4]);
 });
 
 it('honours backslash escapes and unquoted files', function () {
-    $escaped = Frame::fromCsvString("a,b\n\"say \\\"hi\\\"\",2\n", escapeBackslash: true, escapeDouble: false);
-    $unquoted = Frame::fromCsvString("a,b\n\"x\",1\n", quote: '');
+    $escaped = DataFrame::fromCsvString("a,b\n\"say \\\"hi\\\"\",2\n", escapeBackslash: true, escapeDouble: false);
+    $unquoted = DataFrame::fromCsvString("a,b\n\"x\",1\n", quote: '');
 
     expect($escaped->column('a'))->toBe(['say "hi"'])
         ->and($unquoted->column('a'))->toBe(['"x"']);
 });
 
 it('reads values with grouping and decimal marks', function () {
-    $frame = Frame::fromCsvString("a;b\n1.234,5;7\n", delimiter: ';', decimalMark: ',');
+    $frame = DataFrame::fromCsvString("a;b\n1.234,5;7\n", delimiter: ';', decimalMark: ',');
 
     expect($frame->column('a'))->toBe([1234.5]);
 });
@@ -175,8 +175,8 @@ it('reads values with grouping and decimal marks', function () {
 it('accepts col_types as name specs, positions and factor levels', function () {
     $csv = "g,x,y\nb,1,2\na,3,4\n";
 
-    $named = Frame::fromCsvString($csv, ['g' => ['factor', 'levels' => ['b', 'a'], 'ordered' => true], 'x' => 'double']);
-    $positional = Frame::fromCsvString($csv, ['f', 'skip', Type::Float]);
+    $named = DataFrame::fromCsvString($csv, ['g' => ['factor', 'levels' => ['b', 'a'], 'ordered' => true], 'x' => 'double']);
+    $positional = DataFrame::fromCsvString($csv, ['f', 'skip', Type::Float]);
 
     expect($named->levels('g'))->toBe(['b', 'a'])
         ->and($named->isOrdered('g'))->toBeTrue()
@@ -187,16 +187,16 @@ it('accepts col_types as name specs, positions and factor levels', function () {
 });
 
 it('rejects col_types that do not fit the data', function () {
-    Frame::fromCsvString("a,b\n1,2\n", 'iii');
+    DataFrame::fromCsvString("a,b\n1,2\n", 'iii');
 })->throws(InvalidArgumentException::class, '3 letters; the data has 2 columns');
 
 it('rejects col_select names that do not exist', function () {
-    Frame::fromCsvString("a,b\n1,2\n", select: ['c']);
+    DataFrame::fromCsvString("a,b\n1,2\n", select: ['c']);
 })->throws(InvalidArgumentException::class, "unknown column 'c'");
 
 it('reads empty input and header-only files', function () {
-    $empty = Frame::fromCsvString('');
-    $header = Frame::fromCsvString("a,b\n");
+    $empty = DataFrame::fromCsvString('');
+    $header = DataFrame::fromCsvString("a,b\n");
 
     expect($empty->ncol())->toBe(0)
         ->and($header->columns())->toBe(['a', 'b'])
@@ -235,7 +235,7 @@ it('checks unique names', function (array $names, string $message) {
 // ---------------------------------------------------------------------
 
 it('writes, appends and round-trips CSV files', function () {
-    $frame = Frame::fromColumns([
+    $frame = DataFrame::fromColumns([
         'x' => [1.5, null],
         'g' => ['a', 'b'],
         'd' => [new DateTimeImmutable('2024-01-02 10:00:00', new DateTimeZone('America/New_York')), null],
@@ -245,12 +245,12 @@ it('writes, appends and round-trips CSV files', function () {
     $frame->writeCsv($path, append: true);
 
     expect(file_get_contents($path))->toBe("x,g,d\n1.5,a,2024-01-02T15:00:00Z\nNA,b,NA\n1.5,a,2024-01-02T15:00:00Z\nNA,b,NA\n")
-        ->and(Frame::fromCsv($path)->nrow())->toBe(4);
+        ->and(DataFrame::fromCsv($path)->nrow())->toBe(4);
     unlink($path);
 });
 
 it('writes with other delimiters, quoting, escapes and line endings', function () {
-    $frame = Frame::fromColumns(['s' => ['a;b', 'say "x"', 'ok']]);
+    $frame = DataFrame::fromColumns(['s' => ['a;b', 'say "x"', 'ok']]);
 
     expect($frame->toCsv(delimiter: ';'))->toBe("s\n\"a;b\"\n\"say \"\"x\"\"\"\nok\n")
         ->and($frame->toCsv(quote: 'none'))->toBe("s\na;b\nsay \"\"x\"\"\nok\n")
@@ -259,7 +259,7 @@ it('writes with other delimiters, quoting, escapes and line endings', function (
 });
 
 it('refuses to write list-columns to CSV', function () {
-    Frame::fromColumns(['l' => [[1, 2]]])->toCsv();
+    DataFrame::fromColumns(['l' => [[1, 2]]])->toCsv();
 })->throws(InvalidArgumentException::class, "Column 'l' is a list-column");
 
 // ---------------------------------------------------------------------
@@ -268,7 +268,7 @@ it('refuses to write list-columns to CSV', function () {
 
 it('writes JSON records and columns like jsonlite', function () {
     // jsonlite::toJSON(df, dataframe = "rows"/"columns", na = "null", Date = "ISO8601")
-    $frame = Frame::fromColumns([
+    $frame = DataFrame::fromColumns([
         'n' => [1.5, null], 'i' => [1, null], 'l' => [true, null], 's' => ['a', null], 'f' => ['x', null],
         'd' => [new DateTimeImmutable('2024-01-02'), null],
     ], types: ['f' => 'factor', 'd' => 'date']);
@@ -282,21 +282,21 @@ it('writes JSON records and columns like jsonlite', function () {
 });
 
 it('writes datetimes in UTC, non-finite numbers as null and nested frames as JSON', function () {
-    $frame = Frame::fromColumns([
+    $frame = DataFrame::fromColumns([
         't' => [new DateTimeImmutable('2024-01-02 10:00:00.25+02:00')],
         'x' => [NAN],
-        'nested' => [Frame::fromColumns(['a' => [1, 2]])],
+        'nested' => [DataFrame::fromColumns(['a' => [1, 2]])],
     ]);
 
     expect($frame->toJson())->toBe('[{"t":"2024-01-02T08:00:00.25Z","x":null,"nested":[{"a":1},{"a":2}]}]')
         ->and($frame->toJson('columns'))->toBe('{"t":["2024-01-02T08:00:00.25Z"],"x":[null],"nested":[{"a":[1,2]}]}')
-        ->and(Frame::fromColumns([])->toJson('columns'))->toBe('{}')
-        ->and(Frame::fromColumns([])->toJson())->toBe('[]');
+        ->and(DataFrame::fromColumns([])->toJson('columns'))->toBe('{}')
+        ->and(DataFrame::fromColumns([])->toJson())->toBe('[]');
 });
 
 it('reads JSON records and columns', function () {
-    $records = Frame::fromJson('[{"a":1,"b":"x"},{"a":2.5,"c":[1,2]}]');
-    $columns = Frame::fromJson('{"a":[1,2],"b":["2024-01-02",null]}', types: ['b' => 'date']);
+    $records = DataFrame::fromJson('[{"a":1,"b":"x"},{"a":2.5,"c":[1,2]}]');
+    $columns = DataFrame::fromJson('{"a":[1,2],"b":["2024-01-02",null]}', types: ['b' => 'date']);
 
     expect($records->columns())->toBe(['a', 'b', 'c'])
         ->and($records->column('a'))->toBe([1.0, 2.5])
@@ -304,18 +304,18 @@ it('reads JSON records and columns', function () {
         ->and($records->type('c'))->toBe(Type::List)
         ->and($columns->type('b'))->toBe(Type::Date)
         ->and($columns->column('a'))->toBe([1, 2])
-        ->and(Frame::fromJson('[]')->nrow())->toBe(0);
+        ->and(DataFrame::fromJson('[]')->nrow())->toBe(0);
 });
 
 it('round-trips JSON', function () {
-    $frame = Frame::fromColumns(['a' => [1, null, 3], 's' => ['x', 'y', null]]);
+    $frame = DataFrame::fromColumns(['a' => [1, null, 3], 's' => ['x', 'y', null]]);
 
-    expect(Frame::fromJson($frame->toJson())->toRows())->toBe($frame->toRows())
-        ->and(Frame::fromJson($frame->toJson('columns'))->toRows())->toBe($frame->toRows());
+    expect(DataFrame::fromJson($frame->toJson())->toRows())->toBe($frame->toRows())
+        ->and(DataFrame::fromJson($frame->toJson('columns'))->toRows())->toBe($frame->toRows());
 });
 
 it('rejects JSON that is not a table', function (string $json) {
-    expect(fn () => Frame::fromJson($json))->toThrow(InvalidArgumentException::class);
+    expect(fn () => DataFrame::fromJson($json))->toThrow(InvalidArgumentException::class);
 })->with(['scalar' => ['5'], 'mixed object' => ['{"a":[1],"b":2}'], 'list of scalars' => ['[1,2]']]);
 
 // ---------------------------------------------------------------------
@@ -334,21 +334,21 @@ it('reads collections of arrays, models and plain objects', function () {
     $plain->id = 3;
     $plain->name = 'Cy';
 
-    $frame = Frame::fromCollection(new Illuminate\Support\Collection([['id' => 1, 'name' => 'Ann'], $model, $plain]));
+    $frame = DataFrame::fromCollection(new Illuminate\Support\Collection([['id' => 1, 'name' => 'Ann'], $model, $plain]));
 
     expect($frame->toRows())->toBe([
         ['id' => 1, 'name' => 'Ann'], ['id' => 2, 'name' => 'Bo'], ['id' => 3, 'name' => 'Cy'],
     ])
-        ->and(Frame::fromCollection(new ArrayIterator([['a' => 1]]))->nrow())->toBe(1)
-        ->and(Frame::fromCollection([['a' => '2024-01-02']], ['a' => 'date'])->type('a'))->toBe(Type::Date);
+        ->and(DataFrame::fromCollection(new ArrayIterator([['a' => 1]]))->nrow())->toBe(1)
+        ->and(DataFrame::fromCollection([['a' => '2024-01-02']], ['a' => 'date'])->type('a'))->toBe(Type::Date);
 });
 
 it('rejects collections of scalars', function () {
-    Frame::fromCollection([1, 2]);
+    DataFrame::fromCollection([1, 2]);
 })->throws(InvalidArgumentException::class, 'each item must be an array or object');
 
 it('returns a Laravel collection of rows', function () {
-    $collection = Frame::fromColumns(['a' => [1, 2]])->toCollection();
+    $collection = DataFrame::fromColumns(['a' => [1, 2]])->toCollection();
 
     expect($collection)->toBeInstanceOf(Illuminate\Support\Collection::class)
         ->and($collection->all())->toBe([['a' => 1], ['a' => 2]]);
@@ -362,14 +362,14 @@ it('uses the native reader only when available, supported and not disabled', fun
         return emulatedStatsReadCsv($path, $options);
     });
     try {
-        Frame::fromCsv(IO_FIXTURES.'/guess.csv');
+        DataFrame::fromCsv(IO_FIXTURES.'/guess.csv');
         $native = $calls;
 
         putenv('PHIBBLE_NATIVE_CSV=0');
-        Frame::fromCsv(IO_FIXTURES.'/guess.csv');
+        DataFrame::fromCsv(IO_FIXTURES.'/guess.csv');
         putenv('PHIBBLE_NATIVE_CSV');
 
-        Frame::fromCsv(IO_FIXTURES.'/guess.csv', delimiter: '::');
+        DataFrame::fromCsv(IO_FIXTURES.'/guess.csv', delimiter: '::');
     } catch (Throwable) {
         // A two-byte delimiter may not parse this file; only the routing matters here.
     } finally {
@@ -382,8 +382,8 @@ it('uses the native reader only when available, supported and not disabled', fun
 });
 
 it('reads a byte-order mark before a quoted header and CR line endings, as readr does', function () {
-    $bom = Frame::fromCsvString("\xEF\xBB\xBF\"id\",\"x\"\n1,2\n");
-    $cr = Frame::fromCsvString("a,b\r1,2\r3,4\r");
+    $bom = DataFrame::fromCsvString("\xEF\xBB\xBF\"id\",\"x\"\n1,2\n");
+    $cr = DataFrame::fromCsvString("a,b\r1,2\r3,4\r");
 
     expect($bom->columns())->toBe(['id', 'x'])
         ->and($cr->toColumns())->toBe(['a' => [1, 3], 'b' => [2, 4]]);

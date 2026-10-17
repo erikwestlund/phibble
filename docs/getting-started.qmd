@@ -8,7 +8,7 @@ The examples on this site import the frame class and phibble's functions like
 this:
 
 ```php
-use Phibble\Frame;
+use Phibble\DataFrame;
 use function Phibble\{tibble, tribble};
 use function Phibble\Expr\{col, desc, mean, n};
 ```
@@ -33,13 +33,13 @@ easier to read for small literal tables:
 
 {{< include examples/_tribble.md >}}
 
-`Frame::fromRows()` takes a list of associative arrays. Keys missing from a row
-are NA. `Frame::fromColumns()` takes an array of columns and accepts explicit
+`DataFrame::fromRows()` takes a list of associative arrays. Keys missing from a row
+are NA. `DataFrame::fromColumns()` takes an array of columns and accepts explicit
 types.
 
 {{< include examples/_from-rows.md >}}
 
-`Frame::fromCsv()` reads a CSV file and guesses each column's type. The
+`DataFrame::fromCsv()` reads a CSV file and guesses each column's type. The
 [input and output guide](io.qmd) covers its options.
 
 ## Printing
@@ -76,7 +76,7 @@ partially.
 
 ## Verbs
 
-Frames have the dplyr verbs as methods: `select()`, `filter()`, `mutate()`,
+DataFrames have the dplyr verbs as methods: `select()`, `filter()`, `mutate()`,
 `rename()`, `arrange()`, `groupBy()`, `summarise()`, `distinct()`, `slice()`,
 `head()`, and `join()`. Each returns a new frame.
 
@@ -106,7 +106,7 @@ group's rows:
 {{< include examples/_grouped.md >}}
 
 A row closure receives the row's group as its second argument:
-`fn (Row $r, Frame $group) => ...`.
+`fn (Row $r, DataFrame $group) => ...`.
 
 By default, groups are the combinations that occur in the data. With
 `groupBy($names, drop: false)`, as with dplyr's `.drop = FALSE`, a factor key

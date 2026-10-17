@@ -38,7 +38,7 @@ use Stringable;
 /**
  * A typed, immutable, in-memory data frame.
  */
-final readonly class Frame implements Table, ArrayAccess, Stringable
+final readonly class DataFrame implements Table, ArrayAccess, Stringable
 {
     /**
      * @param array<string, Column> $data
@@ -352,7 +352,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
      * tribble(): a frame written row by row. Pass the column names, then
      * either one list per row or the cells in row order.
      *
-     *     Frame::tribble(['x', 'y'], [1, 'a'], [2, 'b']);
+     *     DataFrame::tribble(['x', 'y'], [1, 'a'], [2, 'b']);
      *
      * @param list<string> $names
      */
@@ -578,12 +578,12 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
 
     public function offsetSet(mixed $offset, mixed $value): never
     {
-        throw new \LogicException('Frames are immutable. Use mutate() or withColumn().');
+        throw new \LogicException('DataFrames are immutable. Use mutate() or withColumn().');
     }
 
     public function offsetUnset(mixed $offset): never
     {
-        throw new \LogicException('Frames are immutable. Use select() to drop columns.');
+        throw new \LogicException('DataFrames are immutable. Use select() to drop columns.');
     }
 
     private function position(string $name): int
@@ -1239,7 +1239,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             }
         }
         $names = NameRepair::repair($names, 'unique');
-        $out = Frame::fromColumns(array_combine($names, $columns));
+        $out = DataFrame::fromColumns(array_combine($names, $columns));
         // The result keeps the first table's grouping, as bind_cols() does.
         $groups = $frames === [] ? [] : array_values(array_intersect($frames[0]->groups, $names));
 
@@ -1310,10 +1310,10 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
             $table = match (true) {
                 $value === null => null,
                 $value instanceof Table => $value->collect(),
-                is_array($value) && $value !== [] && array_is_list($value) && is_array($value[0]) => Frame::fromRows($value),
-                is_array($value) && array_is_list($value) => Frame::fromColumns([$name => $value]),
-                is_array($value) => Frame::fromRows([$value]),
-                default => Frame::fromColumns([$name => [$value]]),
+                is_array($value) && $value !== [] && array_is_list($value) && is_array($value[0]) => DataFrame::fromRows($value),
+                is_array($value) && array_is_list($value) => DataFrame::fromColumns([$name => $value]),
+                is_array($value) => DataFrame::fromRows([$value]),
+                default => DataFrame::fromColumns([$name => [$value]]),
             };
             if ($table === null || $table->nrow() === 0) {
                 if ($keepEmpty) {
@@ -1330,8 +1330,8 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
         $tables = array_values(array_filter($parts, fn ($p) => $p !== null));
         // An empty row is an NA row of the combined columns, so types and
         // factor levels carry over.
-        $empty = $tables === [] ? Frame::fromColumns([]) : Frame::concat($tables)->ungroup()->take([null]);
-        $stacked = Frame::concat(array_map(fn ($p) => $p ?? $empty, $parts) ?: [Frame::fromColumns([])]);
+        $empty = $tables === [] ? DataFrame::fromColumns([]) : DataFrame::concat($tables)->ungroup()->take([null]);
+        $stacked = DataFrame::concat(array_map(fn ($p) => $p ?? $empty, $parts) ?: [DataFrame::fromColumns([])]);
 
         $data = [];
         foreach ($this->data as $column => $storage) {
@@ -1900,7 +1900,7 @@ final readonly class Frame implements Table, ArrayAccess, Stringable
      */
     private function groupIndex(): array
     {
-        // Frames are immutable, so each frame's index is computed once.
+        // DataFrames are immutable, so each frame's index is computed once.
         static $cache = null;
         $cache ??= new \WeakMap();
 

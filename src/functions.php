@@ -3,39 +3,39 @@
 declare(strict_types=1);
 
 /*
- * tibble-style constructors. Each is a thin wrapper over a Frame method:
+ * tibble-style constructors. Each is a thin wrapper over a DataFrame method:
  *
  *     $df = tibble(x: [1, 2, 3], y: fn ($t) => array_map(fn ($x) => $x * 2, $t['x']));
  */
 
 namespace Phibble;
 
-/** tibble(): columns as named arguments. See Frame::tibble(). */
-function tibble(mixed ...$columns): Frame
+/** tibble(): columns as named arguments. See DataFrame::tibble(). */
+function tibble(mixed ...$columns): DataFrame
 {
-    return Frame::tibble($columns);
+    return DataFrame::tibble($columns);
 }
 
-/** tribble(): column names, then rows. See Frame::tribble(). */
-function tribble(array $names, mixed ...$cells): Frame
+/** tribble(): column names, then rows. See DataFrame::tribble(). */
+function tribble(array $names, mixed ...$cells): DataFrame
 {
-    return Frame::tribble($names, ...$cells);
+    return DataFrame::tribble($names, ...$cells);
 }
 
-/** as_tibble(): see Frame::asTibble(). */
-function as_tibble(mixed $data, string $nameRepair = 'check_unique'): Frame
+/** as_tibble(): see DataFrame::asTibble(). */
+function as_tibble(mixed $data, string $nameRepair = 'check_unique'): DataFrame
 {
-    return Frame::asTibble($data, $nameRepair);
+    return DataFrame::asTibble($data, $nameRepair);
 }
 
-/** enframe(): see Frame::enframe(). */
-function enframe(array $values, ?string $name = 'name', string $value = 'value'): Frame
+/** enframe(): see DataFrame::enframe(). */
+function enframe(array $values, ?string $name = 'name', string $value = 'value'): DataFrame
 {
-    return Frame::enframe($values, $name, $value);
+    return DataFrame::enframe($values, $name, $value);
 }
 
-/** deframe(): see Frame::deframe(). */
-function deframe(Frame $frame): array
+/** deframe(): see DataFrame::deframe(). */
+function deframe(DataFrame $frame): array
 {
     return $frame->deframe();
 }
@@ -58,7 +58,7 @@ function tbl(\PDO $pdo, string $from, array $bindings = []): Sql\SqlTable
  * polars(): a table backed by Polars (requires the php_polars extension).
  * Takes any Table, or anything as_tibble() accepts.
  *
- *     polars(Frame::fromCsv('sales.csv'))->filter(col('units')->gt(0));
+ *     polars(DataFrame::fromCsv('sales.csv'))->filter(col('units')->gt(0));
  */
 function polars(mixed $data): Polars\PolarsTable
 {
@@ -66,5 +66,5 @@ function polars(mixed $data): Polars\PolarsTable
         throw new \RuntimeException('polars() needs the php_polars extension (erikwestlund/phpolars).');
     }
 
-    return Polars\PolarsTable::fromTable($data instanceof Contracts\Table ? $data : Frame::asTibble($data));
+    return Polars\PolarsTable::fromTable($data instanceof Contracts\Table ? $data : DataFrame::asTibble($data));
 }

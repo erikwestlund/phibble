@@ -1,6 +1,6 @@
 <?php
 
-$penguins = Frame::fromCsv('penguins.csv');
+$penguins = DataFrame::fromCsv('penguins.csv');
 
 $heavy = $penguins
     ->select(['species', 'island', 'body_mass', 'year'])

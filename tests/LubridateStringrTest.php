@@ -5,7 +5,7 @@ declare(strict_types=1);
 use Phibble\CalendarDate;
 use Phibble\Expr\Clock;
 use Phibble\Expr\Expr;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 use function Phibble\Expr\{ceiling_date, col, day, days, difftime, dmy, fixed, floor_date, force_tz, hour, hours, lit, mdy, minute, minutes, month, months, now, parse_date_time, quarter, regex, round_date, second, str_count, str_detect, str_ends, str_extract, str_extract_all, str_length, str_pad, str_replace, str_replace_all, str_split, str_split_i, str_squish, str_starts, str_to_title, str_to_upper, str_trunc, today, wday, weeks, with_tz, yday, year, years, ymd, ymd_hms};
@@ -32,7 +32,7 @@ it('keeps dates as dates through expressions', function () {
 it('reads the clock through today() and now()', function () {
     Clock::freeze(new DateTimeImmutable('2024-05-06 23:30:00', new DateTimeZone('UTC')));
     try {
-        $out = Frame::fromColumns(['x' => [1]])->mutate(['d' => today(), 'nz' => today(tz: 'Pacific/Auckland'), 'n' => now()]);
+        $out = DataFrame::fromColumns(['x' => [1]])->mutate(['d' => today(), 'nz' => today(tz: 'Pacific/Auckland'), 'n' => now()]);
         expect($out->column('d')[0]->format('Y-m-d'))->toBe('2024-05-06')
             ->and($out->column('nz')[0]->format('Y-m-d'))->toBe('2024-05-07')
             ->and($out->type('d'))->toBe(Type::Date)

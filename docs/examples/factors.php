@@ -1,6 +1,6 @@
 <?php
 
-$penguins = Frame::fromCsv('penguins.csv')->asFactor('species');
+$penguins = DataFrame::fromCsv('penguins.csv')->asFactor('species');
 
 echo json_encode($penguins->levels('species')), "\n";
 echo json_encode(array_slice($penguins->storage('species')->codes(), 150, 5)), "\n";

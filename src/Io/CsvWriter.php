@@ -7,7 +7,7 @@ namespace Phibble\Io;
 use DateTimeInterface;
 use DateTimeZone;
 use InvalidArgumentException;
-use Phibble\Frame;
+use Phibble\DataFrame;
 use Phibble\Type;
 
 /**
@@ -18,7 +18,7 @@ use Phibble\Type;
 final class CsvWriter
 {
     public static function format(
-        Frame $frame,
+        DataFrame $frame,
         string $delimiter = ',',
         string $na = 'NA',
         bool $colNames = true,

@@ -1,8 +1,8 @@
 <?php
 
-$penguins = Frame::fromCsv('penguins.csv')->asFactor('species');
+$penguins = DataFrame::fromCsv('penguins.csv')->asFactor('species');
 
-$show = fn (string $label, Frame $f) => print(\str_pad($label, 26).json_encode($f->levels('species'))."\n");
+$show = fn (string $label, DataFrame $f) => print(\str_pad($label, 26).json_encode($f->levels('species'))."\n");
 
 $show('sorted (default)', $penguins);
 $show('fctRelevel Gentoo', $penguins->fctRelevel('species', ['Gentoo']));

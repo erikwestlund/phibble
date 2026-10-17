@@ -1,5 +1,5 @@
 ```php
-$penguins = Frame::fromCsv('penguins.csv')->dropNa(['body_mass']);
+$penguins = DataFrame::fromCsv('penguins.csv')->dropNa(['body_mass']);
 
 $centered = $penguins
     ->groupBy(['species'])

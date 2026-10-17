@@ -47,7 +47,7 @@ final class Evaluator
     {
         $this->n = $table->nrow();
         $this->column = $table->column(...);
-        if ($table instanceof \Phibble\Frame) {
+        if ($table instanceof \Phibble\DataFrame) {
             $this->sortKeys = function (string $name) use ($table): ?array {
                 $storage = $table->storage($name);
 
